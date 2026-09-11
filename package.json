@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "icon": "node scripts/generate-icon.mjs",
     "test": "vitest run"
   },
   "dependencies": {
