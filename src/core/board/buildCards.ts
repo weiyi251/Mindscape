@@ -18,7 +18,7 @@
 
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
-import { nextCardId } from '@/core/id'
+import { nextCardId } from '@/core/utils/id'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
 import type { DirEntry } from '@/core/storage/StorageProvider'
 import { layoutGrid } from './grid'

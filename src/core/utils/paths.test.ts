@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import { basenameOf, dirnameOf, joinPath } from '@/core/paths'
+import { basenameOf, dirnameOf, joinPath } from '@/core/utils/paths'
 
 describe('joinPath', () => {
   it('Windows 风格：用反斜杠拼', () => {

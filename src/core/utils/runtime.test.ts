@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DESKTOP_ONLY_MESSAGE, assertDesktopRuntime, isDesktopRuntime } from '@/core/runtime'
+import { DESKTOP_ONLY_MESSAGE, assertDesktopRuntime, isDesktopRuntime } from '@/core/utils/runtime'
 
 afterEach(() => {
   vi.unstubAllGlobals()

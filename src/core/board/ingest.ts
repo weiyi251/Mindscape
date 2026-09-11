@@ -16,7 +16,7 @@
 
 import type { Card, Partition } from '@/core/types'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
-import { joinPath } from '@/core/paths'
+import { joinPath } from '@/core/utils/paths'
 
 /** 空白落点目标子文件夹名（8.1） */
 export const UNCLASSIFIED_DIR = '未分类'

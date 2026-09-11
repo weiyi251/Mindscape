@@ -17,7 +17,7 @@
 // ============================================================================
 
 import type { Card } from '@/core/types'
-import { nextCardId } from '@/core/id'
+import { nextCardId } from '@/core/utils/id'
 import { DEFAULT_GRID_OPTIONS, layoutGrid } from './grid'
 import type { GridOptions } from './grid'
 

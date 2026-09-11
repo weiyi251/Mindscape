@@ -30,7 +30,7 @@ import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
 import { Canvas } from '@/canvas/Canvas'
 import type { CanvasApi } from '@/canvas/Canvas'
-import { isDesktopRuntime } from '@/core/runtime'
+import { isDesktopRuntime } from '@/core/utils/runtime'
 import { getViewportSnapshot, resetViewportSnapshot, setViewportSnapshot } from '@/canvas/viewportSnapshot'
 import type { ViewportState } from '@/canvas/interaction/coordinates'
 import { useBoardStore } from '@/core/store/boardStore'
@@ -65,12 +65,12 @@ import { registerAction } from '@/core/registry/actionRegistry'
 import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
-import { nextCardId, nextConnectionId } from '@/core/id'
-import { applyTheme, loadTheme, saveTheme, toggleTheme } from '@/core/theme'
-import type { Theme } from '@/core/theme'
+import { nextCardId, nextConnectionId } from '@/core/utils/id'
+import { applyTheme, loadTheme, saveTheme, toggleTheme } from '@/core/utils/theme'
+import type { Theme } from '@/core/utils/theme'
 import { zCardSchema } from '@/core/types'
 import type { Card, Connection } from '@/core/types'
-import { basenameOf, joinPath, relativePathOf } from '@/core/paths'
+import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
 import { cardSizeForImage } from '@/core/board/cardSize'
 import { cardTypeFor, isImageFile } from '@/core/board/imageTypes'
 import { setCardAsset } from '@/core/board/cardAssets'
@@ -1608,7 +1608,7 @@ export function Board() {
         <Button variant={removedView ? 'default' : 'outline'} onClick={handleToggleRemovedView} className="shrink-0">
           {removedView ? '返回画布' : `显示已移除${removed.length > 0 ? `（${removed.length}）` : ''}`}
         </Button>
-        {/* 深 / 浅主题切换（2026-09-11 用户裁决）：偏好由 core/theme.ts 记忆 */}
+        {/* 深 / 浅主题切换（2026-09-11 用户裁决）：偏好由 core/utils/theme.ts 记忆 */}
         <Button
           variant="outline"
           className="shrink-0"

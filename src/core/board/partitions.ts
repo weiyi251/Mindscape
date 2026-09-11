@@ -23,7 +23,7 @@
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'
-import { nextPartitionId } from '@/core/id'
+import { nextPartitionId } from '@/core/utils/id'
 
 /** 不生成分区框的特殊目录（第六章）。以 `.` 开头的隐藏目录一并排除 */
 export const PARTITION_RESERVED_NAMES = ['.mindscape', '_已移除'] as const

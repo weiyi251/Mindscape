@@ -8,7 +8,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from '@/App'
-import { applyTheme, loadTheme } from '@/core/theme'
+import { applyTheme, loadTheme } from '@/core/utils/theme'
 import '@/styles/globals.css'
 
 // 渲染前恢复上次的主题偏好，避免深色用户启动时闪一帧浅色

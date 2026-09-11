@@ -41,8 +41,8 @@ import type {
   Space,
 } from '@/core/types'
 import { DATA_VERSION, createEmptyLayout, parseLayout } from '@/core/types'
-import { dedupeIds } from '@/core/id'
-import { joinPath } from '@/core/paths'
+import { dedupeIds } from '@/core/utils/id'
+import { joinPath } from '@/core/utils/paths'
 import { StorageError } from '@/core/storage/StorageProvider'
 import type { DirEntry, StorageProvider } from '@/core/storage/StorageProvider'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'

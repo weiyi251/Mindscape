@@ -18,7 +18,7 @@ import { useEffect } from 'react'
 import { Board } from '@/pages/Board'
 import { DesktopRequired } from '@/pages/DesktopRequired'
 import { SpaceList } from '@/pages/SpaceList'
-import { isDesktopRuntime } from '@/core/runtime'
+import { isDesktopRuntime } from '@/core/utils/runtime'
 import { useSpacesStore } from '@/core/store/spacesStore'
 
 export default function App() {

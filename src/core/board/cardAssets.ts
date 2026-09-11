@@ -17,7 +17,7 @@
 // ============================================================================
 
 import type { Card } from '@/core/types'
-import { joinPath } from '@/core/paths'
+import { joinPath } from '@/core/utils/paths'
 import type { ThumbnailBatchResult } from './thumbnails'
 
 export interface CardAsset {

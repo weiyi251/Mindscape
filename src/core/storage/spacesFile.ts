@@ -26,7 +26,7 @@ import { copyFile, exists, readTextFile, rename, writeTextFile } from '@tauri-ap
 import { createEmptySpacesFile, parseSpacesFile } from '@/core/types'
 import type { Space, SpacesFile } from '@/core/types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
-import { assertDesktopRuntime } from '@/core/runtime'
+import { assertDesktopRuntime } from '@/core/utils/runtime'
 
 /** 应用数据目录名（%APPDATA%\Mindscape） */
 export const SPACES_DIR_NAME = 'Mindscape'

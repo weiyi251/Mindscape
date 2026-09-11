@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import { nowIsoSeconds } from '@/core/time'
+import { nowIsoSeconds } from '@/core/utils/time'
 
 describe('nowIsoSeconds', () => {
   it('输出 4.1 示例的格式（秒级、本地时间、无 Z 后缀）', () => {

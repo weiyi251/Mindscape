@@ -8,7 +8,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-import { nextSpaceId, nextCardId, nextPartitionId, dedupeIds } from '@/core/id'
+import { nextSpaceId, nextCardId, nextPartitionId, dedupeIds } from '@/core/utils/id'
 
 describe('nextSpaceId', () => {
   it('空列表返回 sp_001（与 4.1 示例一致）', () => {

@@ -22,7 +22,7 @@ import type { ReactNode } from 'react'
 
 import type { Card, CoreCardType } from '@/core/types'
 import { CORE_CARD_TYPES } from '@/core/types'
-import { toAssetUrl } from '@/core/media'
+import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath, getCardThumbnailPath } from '@/core/board/cardAssets'
 import { tagsOfMeta } from '@/core/commands/impl/setCardMeta'
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'

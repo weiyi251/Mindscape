@@ -14,7 +14,7 @@
 
 import type { Command } from '../types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
-import { joinPath } from '@/core/paths'
+import { joinPath } from '@/core/utils/paths'
 
 export interface RenamePartitionDelta {
   partitionId: string

@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { invoke } from '@tauri-apps/api/core'
-import { assertDesktopRuntime } from '@/core/runtime'
+import { assertDesktopRuntime } from '@/core/utils/runtime'
 import {
   StorageError,
   type BatchMoveResult,

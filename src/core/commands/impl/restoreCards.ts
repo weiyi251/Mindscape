@@ -30,7 +30,7 @@
 import type { Card, RemovedEntry } from '@/core/types'
 import type { Command } from '../types'
 import type { DirEntry, MovePair, StorageProvider } from '@/core/storage/StorageProvider'
-import { joinPath } from '@/core/paths'
+import { joinPath } from '@/core/utils/paths'
 import { REMOVE_BATCH_ASYNC_LIMIT } from './removeCards'
 import { collectThumbnails } from '@/core/board/thumbnails'
 import { registerCardAssets } from '@/core/board/cardAssets'

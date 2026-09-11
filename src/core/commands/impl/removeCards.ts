@@ -27,7 +27,7 @@
 import type { Card, Connection, RemovedEntry } from '@/core/types'
 import type { Command } from '../types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
-import { joinPath, relativePathOf } from '@/core/paths'
+import { joinPath, relativePathOf } from '@/core/utils/paths'
 import { runWithConcurrency } from '@/core/board/thumbnails'
 
 /** 被移除文件在 `_已移除` 下的相对路径：保留原文件夹结构（7.1） */
