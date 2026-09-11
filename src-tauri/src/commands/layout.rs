@@ -42,13 +42,17 @@ pub const LAYOUT_CORRUPT_MARKER: &str = "布局文件损坏";
 ///
 /// 此处刻意返回完整结构而非最小 `{"version":1}`：read_layout 的调用方未必经过
 /// zod 补默认值，返回完整结构才能让命令自身是自洽的。
+///
+/// version 取自 [`SUPPORTED_LAYOUT_VERSION`] 而非字面量，避免升级数据版本时两处漏改。
 pub fn empty_layout_json() -> String {
-    concat!(
-        r#"{"version":1,"#,
-        r#""canvas":{"zoom":1.0,"offsetX":0.0,"offsetY":0.0},"#,
-        r#""cards":[],"partitions":[],"connections":[],"removed":[],"extensions":{}}"#
+    format!(
+        concat!(
+            r#"{{"version":{},"#,
+            r#""canvas":{{"zoom":1.0,"offsetX":0.0,"offsetY":0.0}},"#,
+            r#""cards":[],"partitions":[],"connections":[],"removed":[],"extensions":{{}}}}"#
+        ),
+        SUPPORTED_LAYOUT_VERSION
     )
-    .to_string()
 }
 
 fn layout_dir(space_path: &str) -> PathBuf {
