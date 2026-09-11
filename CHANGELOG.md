@@ -78,5 +78,5 @@
 - 缩略图采用无损 WebP，照片类缩略图体积约为 JPEG q80 的 2 ~ 4 倍
 - 早期版本存在卡片 id 撞号，加载时会自动重编号修复；被重编号卡片上的原有连线端点可能失配（渲染层有兜底，不会崩溃）
 
-[Unreleased]: https://github.com/weiyi251/mindscape-canvas/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/weiyi251/mindscape-canvas/releases/tag/v0.1.0
+[Unreleased]: https://github.com/weiyi251/Mindscape/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/weiyi251/Mindscape/releases/tag/v0.1.0
