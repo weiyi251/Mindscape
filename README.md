@@ -67,7 +67,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 ## 环境要求
 
 - Node.js ≥ 20 LTS
-- pnpm ≥ 9
+- pnpm ≥ 10（`pnpm-workspace.yaml` 采用 pnpm 10+ 的配置格式；本仓库开发与 CI 均使用 11）
 - Rust ≥ 1.75 stable（Windows 目标 `x86_64-pc-windows-msvc`）
 - Windows 上的 MSVC 构建工具（Visual Studio Build Tools 的「使用 C++ 的桌面开发」工作负载）
 - WebView2 运行时（Windows 10/11 已内置）
