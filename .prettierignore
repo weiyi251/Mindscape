@@ -1,0 +1,7 @@
+# Prettier 忽略清单：构建产物、依赖、锁文件与 Markdown 文档
+dist
+node_modules
+src-tauri/target
+src-tauri/gen
+pnpm-lock.yaml
+*.md

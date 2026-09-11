@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Mindscape 主窗口能力声明（对应 17.10）。注：17.10 原文写的 fs:allow-read / fs:allow-write 在 Tauri v2 中不存在，实际标识符为 fs:read-files / fs:write-files + fs:scope；$DATA 即 Windows 的 %APPDATA%，用于读写 %APPDATA%\\Mindscape\\spaces.json",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "dialog:default",
+    "fs:read-files",
+    "fs:write-files",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$DATA/Mindscape/**" }]
+    },
+    "opener:allow-open-path"
+  ]
+}

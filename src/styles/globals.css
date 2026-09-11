@@ -1,0 +1,109 @@
+/**
+ * 全局样式与主题变量。
+ * 配色严格取自开发计划书第十二章：米白背景 / 纯白卡片 / 苔绿主色 / 岩灰绿次色 / 陶土橙强调。
+ * 这里以 shadcn/ui 的 HSL CSS 变量约定表达，供 tailwind.config.js 消费。
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* 背景 #F5F3EF（米白，像描图纸）*/
+    --background: 40 23% 95%;
+    /* 文字 #2C3330（近黑）*/
+    --foreground: 154 7% 19%;
+
+    /* 卡片底 #FFFFFF（纯白）*/
+    --card: 0 0% 100%;
+    --card-foreground: 154 7% 19%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 154 7% 19%;
+
+    /* 主色 #5A7D6A（苔绿）*/
+    --primary: 147 16% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    /* 次色 #8B9B8E（岩灰绿）*/
+    --secondary: 131 7% 58%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* 强调 #C4703E（陶土橙，仅用于重要操作）*/
+    --accent: 22 53% 51%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 65% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --muted: 40 15% 91%;
+    --muted-foreground: 140 6% 42%;
+
+    --border: 40 12% 85%;
+    --input: 40 12% 85%;
+    --ring: 147 16% 42%;
+
+    --radius: 0.5rem;
+  }
+
+  /*
+   * 深色模式（2026-09-11 用户裁决：界面太亮，新增深 / 浅主题切换）。
+   * 与浅色的米白暖调保持同一气质：暖炭底 + 同族苔绿主色，
+   * 全部经语义变量生效（bg-background / bg-card / border-border 等），
+   * 组件层无需写 dark: 前缀。开关与偏好记忆见 core/theme.ts。
+   */
+  .dark {
+    /* 背景：暖炭（比纯黑柔和，长时间看图不刺眼） */
+    --background: 40 9% 12%;
+    --foreground: 40 14% 88%;
+
+    /* 卡片底：略亮一档的暖灰，与背景分层 */
+    --card: 40 8% 17%;
+    --card-foreground: 40 14% 88%;
+
+    --popover: 40 8% 17%;
+    --popover-foreground: 40 14% 88%;
+
+    /* 主色：苔绿提亮一档，保证深底上的对比度 */
+    --primary: 147 18% 55%;
+    --primary-foreground: 154 12% 10%;
+
+    /* 次色：岩灰绿压暗 */
+    --secondary: 131 8% 42%;
+    --secondary-foreground: 0 0% 95%;
+
+    /* 强调：陶土橙提亮 */
+    --accent: 22 58% 58%;
+    --accent-foreground: 0 0% 12%;
+
+    --destructive: 0 58% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --muted: 40 6% 22%;
+    --muted-foreground: 140 7% 66%;
+
+    --border: 40 6% 28%;
+    --input: 40 6% 28%;
+    --ring: 147 18% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* 桌面应用：禁用文本选中与橡皮筋滚动，避免拖拽画布时误选文字 */
+    -webkit-user-select: none;
+    user-select: none;
+    overflow: hidden;
+  }
+}

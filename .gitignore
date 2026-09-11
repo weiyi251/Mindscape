@@ -1,0 +1,41 @@
+# ============================================================================
+# .gitignore —— 内容取自开发计划书 17.9，并额外补充两行（见文末「补充」）
+# ============================================================================
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+src-tauri/target/
+
+# Tauri
+src-tauri/gen/
+
+# Local data & personal paths
+.mindscape/
+*.local
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+
+# --- 补充（17.9 未列出，但对应第十六章「个人信息误提交」风险项）---
+# 本机的 Agent 工作区数据（含记忆、日志、临时诊断脚本），属个人数据，不得开源
+.workbuddy/
+.tmp-tools/
+
+# Vite 打包 vite.config.ts 时生成的临时文件；进程被强制结束时会残留
+vite.config.ts.timestamp-*.mjs

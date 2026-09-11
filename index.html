@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mindscape 脑海空间</title>
+    <!-- 防止「黑屏无信息」：兜底层自带内联样式，不依赖 Tailwind / 任何构建产物 -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #f5f3ef;
+      }
+      #boot-fallback {
+        box-sizing: border-box;
+        height: 100%;
+        padding: 48px 40px;
+        font: 14px/1.9 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+        color: #2c3330;
+      }
+      #boot-fallback h1 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      #boot-fallback p {
+        margin: 0 0 8px;
+      }
+      #boot-fallback pre {
+        margin: 12px 0 0;
+        padding: 12px 14px;
+        max-height: 40vh;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        background: #ffffff;
+        border: 1px solid #ddd8cf;
+        border-radius: 8px;
+        font: 12px/1.7 ui-monospace, Consolas, monospace;
+        color: #8a3d1c;
+      }
+      #boot-fallback ul {
+        margin: 12px 0 0;
+        padding-left: 20px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root">
+      <!--
+        Boot fallback: React replaces this node on mount.
+        If it stays visible, the frontend bundle never executed.
+      -->
+      <div id="boot-fallback">
+        <h1>Mindscape 正在启动…</h1>
+        <p>若这段文字一直停留，说明前端资源没有加载成功（而不是应用崩溃）。</p>
+        <ul>
+          <li>请确认终端里的 <code>pnpm tauri dev</code> 仍在运行，且未出现红色报错</li>
+          <li>确认终端输出的地址是 <code>http://localhost:1420</code></li>
+          <li>把本页信息或终端报错一并反馈，即可定位原因</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      // ----------------------------------------------------------------------
+      // Startup diagnostics.
+      // Any script error / unhandled rejection is rendered into the page so a
+      // blank window always carries an actionable message instead of nothing.
+      // Plain ES5 on purpose: it must run even if the module bundle fails.
+      // ----------------------------------------------------------------------
+      ;(function () {
+        var reported = false
+
+        function show(title, detail) {
+          if (reported) return
+          reported = true
+          var host = document.getElementById('boot-fallback') || document.body
+          if (!host) return
+          if (host.id !== 'boot-fallback') {
+            var box = document.createElement('div')
+            box.id = 'boot-fallback'
+            host.appendChild(box)
+            host = box
+          }
+          host.innerHTML =
+            '<h1>' +
+            title +
+            '</h1>' +
+            '<p>Mindscape 前端启动失败。错误原文如下：</p>' +
+            '<pre></pre>'
+          host.querySelector('pre').textContent = String(detail)
+        }
+
+        window.addEventListener('error', function (event) {
+          var target = event && event.target
+          // Resource-level failures (script/img/link) bubble without `message`.
+          if (target && target !== window && target.tagName) {
+            show('资源加载失败', target.tagName + ' → ' + (target.src || target.href))
+            return
+          }
+          show(
+            '脚本运行出错',
+            (event && event.message ? event.message : '未知错误') +
+              '\n' +
+              (event && event.filename ? event.filename + ':' + event.lineno : '')
+          )
+        })
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event && event.reason
+          show('Promise 未处理的拒绝', reason && reason.stack ? reason.stack : reason)
+        })
+      })()
+    </script>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

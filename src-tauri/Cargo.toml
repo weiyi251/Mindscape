@@ -1,0 +1,47 @@
+[package]
+name = "mindscape-canvas"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "mindscape_canvas_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# protocol-asset：启用 assetProtocol（17.10）以通过 tauri:// 通道直接显示本地图片。
+# tauri-build 会校验 Cargo.toml 的 feature 与 tauri.conf.json 的 security.assetProtocol 一致，
+# 缺这个 feature 会直接编译失败。
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 缩略图与图片尺寸读取（17.5 指定）。只启用需要的解码器以缩短编译时间；
+# webp 用于缩略图输出（image crate 仅支持无损 WebP 编码，见 T1.4 的决策记录）。
+image = { version = "0.25", default-features = false, features = [
+    "jpeg",
+    "png",
+    "webp",
+    "gif",
+    "bmp",
+] }
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

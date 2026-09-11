@@ -1,0 +1,16 @@
+# pnpm 设置
+# （pnpm 10+ 起，原本写在 package.json "pnpm" 字段里的设置迁移到本文件；
+#   pnpm 11 遇到被拦截的构建脚本时会自动生成此文件）
+#
+# nodeLinker: hoisted
+#   本机环境下创建符号链接 / junction 会被静默丢弃，导致 pnpm 默认的 isolated
+#   布局只留下空目录（例如 node_modules/vite 为空），任何工具都无法运行。
+#   改成 hoisted 平铺布局后不再依赖符号链接。
+#
+# allowBuilds
+#   pnpm 10+ 默认拦截依赖的构建脚本。esbuild 必须执行 postinstall 才能落盘其
+#   原生二进制，否则 Vite 无法启动。这里只放行 esbuild。
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
