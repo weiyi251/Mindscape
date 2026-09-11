@@ -1,0 +1,73 @@
+# Mindscape CI — 代码质量门
+#
+# 覆盖两条独立链路：
+#   前端：类型检查 → 单元测试 → 代码规范 → 生产构建（ubuntu，快）
+#   Rust：单元测试（windows，与开发机目标平台一致，免装 WebView 系统依赖）
+#
+# 本工作流不产出安装包。发布构建需要签名与版本号策略，另行处理。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: 前端 · 类型检查 / 测试 / 构建
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 类型检查
+        run: pnpm typecheck
+
+      - name: 单元测试
+        run: pnpm test
+
+      - name: 代码规范
+        run: pnpm lint
+
+      - name: 生产构建
+        run: pnpm build
+
+  rust:
+    name: Rust · 单元测试
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Rust 稳定版工具链
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存 cargo 构建产物
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: 单元测试
+        working-directory: src-tauri
+        run: cargo test

@@ -40,9 +40,6 @@ export type CoreCardType = (typeof CORE_CARD_TYPES)[number]
  */
 export const SPACE_TYPE_PRESETS = ['项目', '参考素材', '灵感库', '课题', '归档'] as const
 
-/** Default root folder suggested when creating a space (decision 13). */
-export const DEFAULT_ROOT_DIR = 'D:\\Mindscape'
-
 // ---------------------------------------------------------------------------
 // 4.2 layout.json
 // ---------------------------------------------------------------------------
