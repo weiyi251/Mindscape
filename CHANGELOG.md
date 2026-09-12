@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-12
+
 ### 新增
 
 - **应用内检查更新** —— 集成 Tauri updater：启动时静默检查（只有真的发现新版本才提示），
@@ -96,5 +98,6 @@
 - 缩略图采用无损 WebP，照片类缩略图体积约为 JPEG q80 的 2 ~ 4 倍
 - 早期版本存在卡片 id 撞号，加载时会自动重编号修复；被重编号卡片上的原有连线端点可能失配（渲染层有兜底，不会崩溃）
 
-[Unreleased]: https://github.com/weiyi251/Mindscape/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/weiyi251/Mindscape/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/weiyi251/Mindscape/releases/tag/v0.2.0
 [0.1.0]: https://github.com/weiyi251/Mindscape/releases/tag/v0.1.0
