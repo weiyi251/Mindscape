@@ -734,9 +734,10 @@ export function Board() {
   }, [])
 
   /**
-   * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」）：
+   * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」；
+   * 2026-09-13 用户裁决：未分组文件直接放空间主目录，不再创建「未分类」文件夹）：
    *   · 当前选中了分区框（按下分区即选中，见 Canvas）→ 该分区对应的子文件夹；
-   *   · 否则 → `未分类\`。
+   *   · 否则 → 空间主目录（根目录）。
    * ⚠️ 不再看视口中心落在哪个分区 —— 落点猜测正是「有时未分类、有时别的文件夹」
    * 的根源；指定目标的显式路径（分区右键粘贴 / 空白右键粘贴）不走这里。
    */
@@ -755,7 +756,7 @@ export function Board() {
       }
     }
     return {
-      destDir: joinPath(space.folderPath, UNCLASSIFIED_DIR),
+      destDir: space.folderPath,
       partitionId: null,
       groupName: null,
     }
@@ -774,7 +775,8 @@ export function Board() {
       setActionError(null)
 
       try {
-        // 落盘目标（2026-09-12 用户裁决）：选中分区 → 该分区；否则 → 未分类。
+        // 落盘目标（2026-09-12 用户裁决；2026-09-13 起未分组直接落空间主目录）：
+        // 选中分区 → 该分区；否则 → 空间根目录。
         // 卡片仍出现在视口中心（粘贴没有指针位置），但归哪个文件夹不再靠落点猜。
         const dest = resolvePasteDestination()
         if (!dest) return
@@ -838,7 +840,7 @@ export function Board() {
 
       const dest =
         destOverride ??
-        // Ctrl+V（2026-09-12 用户裁决）：选中分区 → 该分区；否则 → 未分类（确定性规则）
+        // Ctrl+V（2026-09-12 用户裁决）：选中分区 → 该分区；否则 → 空间主目录（确定性规则）
         resolvePasteDestination()
       if (!dest) return
 
@@ -1333,7 +1335,8 @@ export function Board() {
 
   /**
    * 移动卡片到文件夹（2026-09-12 用户裁决「画布内切换图片所属文件夹」）：
-   * 弹出二级菜单列出全部分区 + `未分类`；选定后走 moveCardToFolder 命令 ——
+   * 弹出二级菜单列出全部分区 + `未分类`（= 空间主目录，2026-09-13 起「未分类」
+   * 不再是物理文件夹）；选定后走 moveCardToFolder 命令 ——
    * 物理文件 moveFile + 卡片 filePath / originalPath / group 更新 +
    * 目标分区扩框，undo 全部还原。文件列表与画布显示经 store 同步刷新。
    */
@@ -1384,13 +1387,15 @@ export function Board() {
       }
 
       const items: ContextMenuItemData[] = [
-        // 未分类（当前已在未分类时跳过 —— 移到原地没有意义；空间根目录的文件可以移入）
-        ...(currentFolder !== UNCLASSIFIED_DIR
+        // 「未分类」= 空间主目录（2026-09-13 用户裁决：不再是物理「未分类」文件夹）。
+        // 文件已在根目录时跳过（移到原地没有意义）；旧版留在 `未分类\` 里的文件
+        // 也会列出这一项 —— 用户点它即把文件移出旧文件夹、回到空间主目录
+        ...(currentFolder !== ''
           ? [
               {
                 id: `${CARD_ACTION.move}:unclassified`,
                 label: UNCLASSIFIED_DIR,
-                run: () => move(UNCLASSIFIED_DIR, undefined, null),
+                run: () => move('', undefined, null),
               },
             ]
           : []),
@@ -1602,7 +1607,7 @@ export function Board() {
           },
           // 应用内剪贴板非空时：空白处也可直接粘贴。
           // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
-          // 分区的文件夹，点在空白归 `未分类`（与 Ctrl+V 的「选中分区/未分类」规则区分开）
+          // 分区的文件夹，点在空白归空间主目录（2026-09-13 起「未分类」不再是文件夹）
           ...(copiedCards.length > 0
             ? [
                 {

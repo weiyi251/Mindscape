@@ -3,7 +3,7 @@
 // 「移动卡片到文件夹」命令（2026-09-12 用户裁决：画布内切换图片所属文件夹）。
 //
 // 与「移除卡片」（removeCards.ts）同一条铁律：**视图 + 文件一起动** ——
-// 物理文件 moveFile 到目标文件夹（未分类 / 某分区对应的子文件夹），
+// 物理文件 moveFile 到目标位置（空间根目录 / 某分区对应的子文件夹），
 // 卡片的 filePath / originalPath / group 同步更新；undo 时文件移回原位、
 // 字段原样还原（含目标分区被扩大的包围盒），不允许出现「画布显示 A 处、
 // 硬盘躺在 B 处」的状态。
@@ -30,7 +30,7 @@ export interface CardFileRefUpdate {
   id: string
   filePath: string
   originalPath: string
-  /** undefined = 移出所有分区（未分类 / 空间根目录） */
+  /** undefined = 移出所有分区（文件回到空间主目录） */
   group: string | undefined
 }
 
@@ -57,9 +57,11 @@ export function currentTopFolderOf(filePath: string): string {
  * 创建「移动卡片到文件夹」命令。
  *
  * @param card            被移动的卡片（filePath 非空，调用方保证）
- * @param targetFolderRel 目标文件夹相对空间根的路径（如 `旅行` 或 `未分类`）
- * @param targetGroupName 目标分区名；未分类 / 空间根传 undefined
- * @param targetPartition 目标分区对象（用于扩包围盒）；未分类传 null
+ * @param targetFolderRel 目标文件夹相对空间根的路径（如 `旅行`）；**空串 = 空间根目录**
+ *                        （2026-09-13 用户裁决：「未分类」不再是物理文件夹，
+ *                        移出分区就是移回空间主目录）
+ * @param targetGroupName 目标分区名；移到空间根传 undefined
+ * @param targetPartition 目标分区对象（用于扩包围盒）；移到空间根传 null
  */
 export function createMoveCardToFolderCommand(
   card: Card,

@@ -137,11 +137,11 @@ describe('createMoveCardToFolderCommand', () => {
     ])
   })
 
-  it('do：移到未分类 → group 清空、不触发分区矩形', async () => {
+  it('do：移到「未分类」（空间根目录）→ group 清空、不触发分区矩形', async () => {
     const { context, moves, updates, partitionRects } = setup()
     const command = createMoveCardToFolderCommand(
       card('c_001', '旅行/c.jpg'),
-      '未分类',
+      '', // 2026-09-13 用户裁决：「未分类」= 空间主目录，targetFolderRel 传空串
       undefined,
       null,
       context,
@@ -149,9 +149,9 @@ describe('createMoveCardToFolderCommand', () => {
 
     await command.do()
 
-    expect(moves[0].to).toBe('D:\\空间\\未分类\\c.jpg')
+    expect(moves[0].to).toBe('D:\\空间\\c.jpg')
     expect(updates).toEqual([
-      [{ id: 'c_001', filePath: '未分类/c.jpg', originalPath: '未分类/c.jpg', group: undefined }],
+      [{ id: 'c_001', filePath: 'c.jpg', originalPath: 'c.jpg', group: undefined }],
     ])
     expect(partitionRects).toHaveLength(0)
   })

@@ -82,8 +82,8 @@ describe('addCards 命令（T3.4 / T3.6 / T3.8）', () => {
     const command = createAddCardsCommand(
       {
         cards: [makeCard('c_001', 10, 10)],
-        createdFiles: ['E:\\sp\\未分类\\图.png'],
-        sources: [{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp\\未分类' }],
+        createdFiles: ['E:\\sp\\图.png'],
+        sources: [{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp' }],
       },
       deps,
     )
@@ -91,7 +91,7 @@ describe('addCards 命令（T3.4 / T3.6 / T3.8）', () => {
     await command.do()
     expect(added).toEqual(['c_001'])
     await command.undo()
-    expect(deleted).toEqual(['E:\\sp\\未分类\\图.png'])
+    expect(deleted).toEqual(['E:\\sp\\图.png'])
     expect(removed).toEqual(['c_001'])
   })
 
@@ -100,8 +100,8 @@ describe('addCards 命令（T3.4 / T3.6 / T3.8）', () => {
     const command = createAddCardsCommand(
       {
         cards: [makeCard('c_001')],
-        createdFiles: ['E:\\sp\\未分类\\图.png'],
-        sources: [{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp\\未分类' }],
+        createdFiles: ['E:\\sp\\图.png'],
+        sources: [{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp' }],
       },
       deps,
     )
@@ -110,7 +110,7 @@ describe('addCards 命令（T3.4 / T3.6 / T3.8）', () => {
     await command.undo()
     expect(copied).toHaveLength(0)
     await command.do() // redo
-    expect(copied).toEqual([{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp\\未分类' }])
+    expect(copied).toEqual([{ src: 'C:\\Users\\x\\图.png', destDir: 'E:\\sp' }])
   })
 
   it('粘贴（src 为空）：redo 无法重建剪贴板，跳过重建不报错', async () => {
@@ -118,8 +118,8 @@ describe('addCards 命令（T3.4 / T3.6 / T3.8）', () => {
     const command = createAddCardsCommand(
       {
         cards: [makeCard('c_001')],
-        createdFiles: ['E:\\sp\\未分类\\粘贴-20260911-1400.png'],
-        sources: [{ src: '', destDir: 'E:\\sp\\未分类' }],
+        createdFiles: ['E:\\sp\\粘贴-20260911-1400.png'],
+        sources: [{ src: '', destDir: 'E:\\sp' }],
       },
       deps,
     )
@@ -155,9 +155,9 @@ describe('ingest 落点规则（T3.7 / T3.8）', () => {
     })
   })
 
-  it('落点在空白 → 未分类，分区为空', () => {
+  it('落点在空白 → 空间主目录，分区为空（2026-09-13：不再创建「未分类」文件夹）', () => {
     const dest = resolveDropDestination({ x: 0, y: 0 }, [PARTITION], SPACE)
-    expect(dest.destDir).toBe('E:\\sp\\未分类')
+    expect(dest.destDir).toBe('E:\\sp')
     expect(dest.partitionId).toBeNull()
     expect(dest.groupName).toBeNull()
   })

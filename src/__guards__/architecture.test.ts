@@ -76,7 +76,9 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 可拆的状态逻辑已抽进 core/hooks/useCardSearch.ts
   // 便签行内编辑（2026-09-13，用户要求）：弹窗版 handleEditNoteCard 换成 handleCommitNote +
   // 菜单「备注」对便签改走 beginNoteEdit，净 +6 行
-  'src/pages/Board.tsx': 2030,
+  // 「未分类」规则调整（2026-09-13，用户要求）：不再创建物理「未分类」文件夹，
+  // 未分组文件直接落空间主目录——菜单项改写 + 过滤条件与注释更新，净 +5 行
+  'src/pages/Board.tsx': 2035,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
