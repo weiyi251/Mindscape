@@ -16,7 +16,6 @@ import { assertDesktopRuntime } from '@/core/utils/runtime'
 import {
   StorageError,
   type BatchMoveResult,
-  type CopiedImage,
   type DirEntry,
   type ImageSize,
   type MovePair,
@@ -26,12 +25,12 @@ import {
 
 /**
  * 方法名 → Rust 命令名对照表。
- * 与 17.5「Rust 侧命令清单」一一对应（共 14 个），由 LocalFolderProvider.test.ts 守护。
+ * 与 17.5「Rust 侧命令清单」一一对应（copy_image_with_thumbnail 已随方案 A 移除，
+ * make_thumbnail 保留但前端不再调用），由 LocalFolderProvider.test.ts 守护。
  */
 export const STORAGE_COMMANDS = {
   listDir: 'list_dir',
   copyFile: 'copy_file',
-  copyImageWithThumbnail: 'copy_image_with_thumbnail',
   moveFile: 'move_file',
   moveFiles: 'move_files',
   renameDir: 'rename_dir',
@@ -74,10 +73,6 @@ export class LocalFolderProvider implements StorageProvider {
     return call<string>(STORAGE_COMMANDS.copyFile, { src, destDir })
   }
 
-  copyImageWithThumbnail(src: string, destDir: string): Promise<CopiedImage> {
-    return call<CopiedImage>(STORAGE_COMMANDS.copyImageWithThumbnail, { src, destDir })
-  }
-
   moveFile(src: string, dest: string): Promise<string> {
     return call<string>(STORAGE_COMMANDS.moveFile, { src, dest })
   }
@@ -116,6 +111,7 @@ export class LocalFolderProvider implements StorageProvider {
   }
 
   makeThumbnail(src: string, spacePath: string): Promise<ThumbInfo> {
+    // ⚠️ 方案 A 后前端无调用点；保留以维持与 Rust 命令一一对应（回退保命符）
     return call<ThumbInfo>(STORAGE_COMMANDS.makeThumbnail, { src, spacePath })
   }
 

@@ -1,33 +1,37 @@
 // ============================================================================
 // 模块说明（中文）
-// 批量缩略图的单元测试。对应 T1.4 验收标准：
-//   「首次进空间生成缩略图；二次进入直接读缓存（验 thumbnails/ 目录）」
-//   —— 缓存判定在 Rust 侧，前端这层保证的是「每张图都被请求了一次、失败不拖垮整体」。
+// 批量读取图片尺寸的单元测试。对应方案 A（2026-09-12 用户裁决）：
+//   卡片宽高比改由 read_image_size（只读图头）获得，不再生成缩略图。
+//   前端这层保证的是「每张图都被请求了一次、失败不拖垮整体」。
 //
 // 同时守护 17.11 反模式 9（一次性加载所有原图）：并发必须被限住。
 //
-// 实现任务：T1.4（阶段一）。
+// 实现任务：T1.4（阶段一，原为缩略图批量）→ 2026-09-12 重构为尺寸批量读取。
 // ============================================================================
 
 import { describe, it, expect } from 'vitest'
 
 import {
-  DEFAULT_THUMBNAIL_CONCURRENCY,
-  collectThumbnails,
+  DEFAULT_IMAGE_CONCURRENCY,
+  collectImageSizes,
   imageEntries,
   runWithConcurrency,
-} from '@/core/board/thumbnails'
-import type { DirEntry, StorageProvider, ThumbInfo } from '@/core/storage/StorageProvider'
+} from '@/core/board/imageSizes'
+import type { DirEntry, ImageSize, StorageProvider } from '@/core/storage/StorageProvider'
 
 function entry(name: string, isDir = false): DirEntry {
   return { name, path: `D:\\空间\\${name}`, isDir, size: 1024, modifiedAt: 1 }
 }
 
-/** 只实现 makeThumbnail 的假 provider */
-function thumbProvider(
-  impl: (src: string) => Promise<ThumbInfo>,
+function size(width: number, height: number): ImageSize {
+  return { width, height }
+}
+
+/** 只实现 readImageSize 的假 provider */
+function sizeProvider(
+  impl: (src: string) => Promise<ImageSize>,
 ): StorageProvider {
-  return { makeThumbnail: impl } as unknown as StorageProvider
+  return { readImageSize: impl } as unknown as StorageProvider
 }
 
 describe('imageEntries', () => {
@@ -92,66 +96,64 @@ describe('runWithConcurrency', () => {
   })
 })
 
-describe('collectThumbnails', () => {
-  it('每张图片各调一次 make_thumbnail，结果按文件名归位', async () => {
+describe('collectImageSizes', () => {
+  it('每张图片各调一次 read_image_size，结果按文件名归位', async () => {
     const called: string[] = []
-    const provider = thumbProvider(async (src) => {
+    const provider = sizeProvider(async (src) => {
       called.push(src)
-      return { path: `${src}.webp`, width: 800, height: 600 }
+      return size(4000, 3000)
     })
 
-    const result = await collectThumbnails(
+    const result = await collectImageSizes(
       [entry('a.jpg'), entry('b.png'), entry('总平面.pdf')],
-      'D:\\空间',
       provider,
     )
 
     expect(called.sort()).toEqual(['D:\\空间\\a.jpg', 'D:\\空间\\b.png'])
-    expect(result.byName.get('a.jpg')).toEqual({ path: 'D:\\空间\\a.jpg.webp', width: 800, height: 600 })
+    expect(result.byName.get('a.jpg')).toEqual({ width: 4000, height: 3000 })
     expect(result.failed.size).toBe(0)
   })
 
   it('单张失败不影响其余图片，失败原因记入 failed', async () => {
-    const provider = thumbProvider(async (src) => {
-      if (src.endsWith('bad.jpg')) throw new Error('解码图片失败：损坏的文件')
-      return { path: `${src}.webp`, width: 100, height: 100 }
+    const provider = sizeProvider(async (src) => {
+      if (src.endsWith('bad.jpg')) throw new Error('读取图片尺寸失败：损坏的文件')
+      return size(100, 100)
     })
 
-    const result = await collectThumbnails(
+    const result = await collectImageSizes(
       [entry('ok.jpg'), entry('bad.jpg'), entry('also-ok.png')],
-      'D:\\空间',
       provider,
     )
 
     expect([...result.byName.keys()].sort()).toEqual(['also-ok.png', 'ok.jpg'])
-    expect(result.failed.get('bad.jpg')).toBe('解码图片失败：损坏的文件')
+    expect(result.failed.get('bad.jpg')).toBe('读取图片尺寸失败：损坏的文件')
   })
 
   it('非 Error 抛出物也能归一化成可展示文本', async () => {
-    const provider = thumbProvider(async () => {
+    const provider = sizeProvider(async () => {
       throw '字符串错误'
     })
 
-    const result = await collectThumbnails([entry('a.jpg')], 'D:\\空间', provider)
+    const result = await collectImageSizes([entry('a.jpg')], provider)
     expect(result.failed.get('a.jpg')).toBe('字符串错误')
   })
 
   it('目录里没有图片 → 不调用 provider', async () => {
     let called = 0
-    const provider = thumbProvider(async () => {
+    const provider = sizeProvider(async () => {
       called += 1
-      return { path: '', width: 0, height: 0 }
+      return size(0, 0)
     })
 
-    const result = await collectThumbnails([entry('a.pdf'), entry('sub', true)], 'D:\\空间', provider)
+    const result = await collectImageSizes([entry('a.pdf'), entry('sub', true)], provider)
 
     expect(called).toBe(0)
     expect(result.byName.size).toBe(0)
   })
 
-  it('provider 未实现 makeThumbnail（精简假实现）→ 返回空结果而不抛错', async () => {
+  it('provider 未实现 readImageSize（精简假实现）→ 返回空结果而不抛错', async () => {
     const provider = { listDir: async () => [] } as unknown as StorageProvider
-    const result = await collectThumbnails([entry('a.jpg')], 'D:\\空间', provider)
+    const result = await collectImageSizes([entry('a.jpg')], provider)
 
     expect(result.byName.size).toBe(0)
     expect(result.failed.size).toBe(0)
@@ -160,34 +162,33 @@ describe('collectThumbnails', () => {
   it('并发数可配置，且不超过默认上限', async () => {
     let running = 0
     let peak = 0
-    const provider = thumbProvider(async () => {
+    const provider = sizeProvider(async () => {
       running += 1
       peak = Math.max(peak, running)
       await new Promise((resolve) => setTimeout(resolve, 1))
       running -= 1
-      return { path: 'x.webp', width: 1, height: 1 }
+      return size(1, 1)
     })
 
-    await collectThumbnails(
+    await collectImageSizes(
       Array.from({ length: 12 }, (_, i) => entry(`ref-${i}.jpg`)),
-      'D:\\空间',
       provider,
       { concurrency: 3 },
     )
 
     expect(peak).toBeLessThanOrEqual(3)
-    expect(DEFAULT_THUMBNAIL_CONCURRENCY).toBeGreaterThanOrEqual(1)
+    expect(DEFAULT_IMAGE_CONCURRENCY).toBeGreaterThanOrEqual(1)
   })
 
-  it('cache 语义：同一批图片再调一次仍逐张请求（缓存命中由 Rust 侧决定）', async () => {
+  it('尺寸读取是无缓存的纯查询：同一批图片再调一次仍逐张请求', async () => {
     let calls = 0
-    const provider = thumbProvider(async (src) => {
+    const provider = sizeProvider(async () => {
       calls += 1
-      return { path: `${src}.webp`, width: 10, height: 10 }
+      return size(10, 10)
     })
 
-    await collectThumbnails([entry('a.jpg')], 'D:\\空间', provider)
-    await collectThumbnails([entry('a.jpg')], 'D:\\空间', provider)
+    await collectImageSizes([entry('a.jpg')], provider)
+    await collectImageSizes([entry('a.jpg')], provider)
 
     expect(calls).toBe(2)
   })

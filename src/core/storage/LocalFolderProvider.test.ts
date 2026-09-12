@@ -18,12 +18,12 @@ import { LocalFolderProvider, STORAGE_COMMANDS } from './LocalFolderProvider'
 /** 17.5「Rust 侧命令清单」全文，逐条抄录作为守护基准。
  *  T3 阶段在清单外新增 2 个辅助命令（delete_file / write_file_bytes，
  *  先例同 T2.6 的 rename_dir —— 文档允许「补命令」但不允许改签名），
- *  因此守护基准分为「17.5 原文 14 个」与「实现全量 16 个」两层。 */
+ *  因此守护基准分为「17.5 原文（含方案 A 修订）」与「实现全量」两层。
+ *  ⚠️ 2026-09-12 方案 A：copy_image_with_thumbnail 随缩略图下线从清单移除。 */
 const COMMANDS_FROM_DOC_17_5 = [
   // fs_ops.rs
   'list_dir',
   'copy_file',
-  'copy_image_with_thumbnail',
   'move_file',
   'move_files',
   'rename_dir',
@@ -48,13 +48,13 @@ const COMMANDS_IMPLEMENTED = [
 ] as const
 
 describe('StorageProvider ↔ 17.5 命令一一对应', () => {
-  it('对照表必须完整覆盖 17.5 原文列出的 14 个命令', () => {
+  it('对照表必须完整覆盖 17.5 原文列出的命令（含方案 A 修订）', () => {
     for (const command of COMMANDS_FROM_DOC_17_5) {
       expect(Object.values(STORAGE_COMMANDS)).toContain(command)
     }
   })
 
-  it('对照表与实现全量一致（17.5 的 14 个 + 新增 2 个）', () => {
+  it('对照表与实现全量一致（17.5 清单 + 新增 2 个）', () => {
     expect([...Object.values(STORAGE_COMMANDS)].sort()).toEqual(
       [...COMMANDS_IMPLEMENTED].sort()
     )
@@ -103,7 +103,6 @@ describe('替换实现不影响上层', () => {
       dirExists: () => Promise.resolve(true),
       readLayout: () => Promise.resolve(layoutJson),
       copyFile: notImplemented('copyFile'),
-      copyImageWithThumbnail: notImplemented('copyImageWithThumbnail'),
       moveFile: notImplemented('moveFile'),
       moveFiles: notImplemented('moveFiles'),
       renameDir: notImplemented('renameDir'),

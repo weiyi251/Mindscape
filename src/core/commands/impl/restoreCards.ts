@@ -13,7 +13,7 @@
 //
 // 【恢复后的卡片数据】已移除视图里的卡片 filePath 指向 `_已移除\…`，
 //   恢复时必须把 filePath **和 originalPath 一起**改回原位置，并重新登记资源表
-//   （cardAssets 的缩略图 / 原图绝对路径），否则：
+//   （cardAssets 的原图绝对路径），否则：
 //     · filePath 不改 → 放回画布的卡片会读到已失效的 `_已移除` 路径（图裂）；
 //     · originalPath 不改 → 复制 / 粘贴按它取源路径，拼出 `_已移除\…` → 「不是文件」。
 //
@@ -29,10 +29,9 @@
 
 import type { Card, RemovedEntry } from '@/core/types'
 import type { Command } from '../types'
-import type { DirEntry, MovePair, StorageProvider } from '@/core/storage/StorageProvider'
+import type { MovePair, StorageProvider } from '@/core/storage/StorageProvider'
 import { joinPath } from '@/core/utils/paths'
 import { REMOVE_BATCH_ASYNC_LIMIT } from './removeCards'
-import { collectThumbnails } from '@/core/board/thumbnails'
 import { registerCardAssets } from '@/core/board/cardAssets'
 
 export interface RestoreCardsContext {
@@ -127,21 +126,13 @@ export function createRestoreCardsCommand(
     return { restored, failed }
   }
 
-  /** 重新登记资源表：恢复后的图片卡片按原路径取缩略图 / 原图（缩略图已存在则直接复用） */
-  const reregisterAssets = async (restoredCards: readonly Card[]): Promise<void> => {
+  /** 重新登记资源表：恢复后的图片卡片按原位置拼出原图绝对路径（方案 A：无缩略图依赖） */
+  const reregisterAssets = (restoredCards: readonly Card[]): void => {
     const imageCards = restoredCards.filter((card) => card.type === 'image' && card.filePath !== '')
     if (imageCards.length === 0) return
 
-    const fakeEntries: DirEntry[] = imageCards.map((card) => ({
-      name: card.filePath,
-      path: joinPath(context.spacePath, card.filePath),
-      isDir: false,
-      size: 0,
-      modifiedAt: null,
-    }))
-    const thumbs = await collectThumbnails(fakeEntries, context.spacePath, context.provider)
     // ⚠️ 必须在 applyRestore（写 store）之前完成，渲染时才能读到正确路径
-    registerCardAssets(imageCards, context.spacePath, thumbs)
+    registerCardAssets(imageCards, context.spacePath)
   }
 
   return {
@@ -157,7 +148,7 @@ export function createRestoreCardsCommand(
         context.onNotice?.(`已恢复 ${restored.length} 张，以下恢复失败：${failed.join('；')}`)
       }
 
-      await reregisterAssets(restored)
+      reregisterAssets(restored)
 
       context.applyRestore({
         cards: restored,

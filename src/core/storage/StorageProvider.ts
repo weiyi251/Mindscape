@@ -5,7 +5,7 @@
 // 上层业务（画布、卡片、分区框、命令系统）只依赖本接口，不直接调用 Tauri invoke。
 // 将来接入云盘 / 服务器时，只需新增一个实现（如 CloudProvider），上层代码一行不改。
 //
-// 接口方法与 17.5「Rust 侧命令清单」严格一一对应（共 14 个），
+// 接口方法与 17.5「Rust 侧命令清单」对应（copy_image_with_thumbnail 已随方案 A 移除），
 // 对应关系由 LocalFolderProvider.ts 的 STORAGE_COMMANDS 表显式列出，并有单元测试守护。
 //
 // 约定：
@@ -41,15 +41,7 @@ export interface BatchMoveResult {
   failed: { path: string; reason: string }[]
 }
 
-/** 复制图片的结果（同时带出缩略图路径） */
-export interface CopiedImage {
-  /** 实际写入的项目内路径 */
-  path: string
-  /** 缩略图路径；未生成时为 null */
-  thumbnailPath: string | null
-}
-
-/** 缩略图信息 */
+/** 缩略图信息（make_thumbnail 的返回值；方案 A 下该命令保留但前端不再调用） */
 export interface ThumbInfo {
   path: string
   width: number
@@ -98,8 +90,6 @@ export interface StorageProvider {
   listDir(path: string): Promise<DirEntry[]>
   /** 复制文件；目标已存在则自动重命名为 xxx_1。返回实际写入的完整路径 */
   copyFile(src: string, destDir: string): Promise<string>
-  /** 复制图片并同时生成缩略图（已存在则跳过）。用于拖入 / 粘贴 */
-  copyImageWithThumbnail(src: string, destDir: string): Promise<CopiedImage>
   /** 移动文件（移除到 _已移除、以及恢复，都用它）。自动创建目标目录，重名自动加后缀 */
   moveFile(src: string, dest: string): Promise<string>
   /** 批量移动；返回成功与失败清单 */
@@ -128,7 +118,10 @@ export interface StorageProvider {
   writeLayout(spacePath: string, json: string): Promise<void>
 
   // ---- thumbnail.rs · 缩略图 ----
-  /** 生成 / 复用缩略图（长边 800px、webp 质量 80） */
+  /**
+   * ⚠️ 方案 A（2026-09-12 用户裁决：空间文件夹内不再生成缩略图）后前端不再调用。
+   * 方法保留以维持「接口 ↔ Rust 命令」一一对应，回退时无需改接口。
+   */
   makeThumbnail(src: string, spacePath: string): Promise<ThumbInfo>
 
   // ---- system.rs · 系统集成 ----

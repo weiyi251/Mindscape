@@ -7,16 +7,17 @@
 //   create_dir                —— 创建目录（不存在时）
 //   dir_exists                —— 检测目录是否存在
 //   copy_file                 —— 复制文件到目标目录（重名自动加 _1）
-//   copy_image_with_thumbnail —— 复制图片并同时生成缩略图（拖入 / 粘贴用）
 //   move_file                 —— 移动文件到目标完整路径（自动建目录 + 重名加后缀）
 //   move_files                —— 批量移动，返回成功 / 失败清单
 //
-// 【T2.1 的两处实现取舍】（17.5 未写明，按文档精神定）
-//   1. 重名策略：`名称.ext` 已存在 → `名称_1.ext` → `名称_2.ext`…（第 8.1 节示例），
-//      尝试上限 MAX_CONFLICT_ATTEMPTS 次后改用「名称_时间戳」兜底，绝不覆盖已有文件。
-//   2. copy_image_with_thumbnail 的签名里没有 space_path，因此「缩略图存哪个空间」由
-//      目标目录**向上查找最近的 .mindscape 目录**决定（17.7 规定缩略图存空间内）。
-//      找不到空间时仍完成复制，只是 thumbnail_path 返回 null —— 复制成功不该被打断。
+// 【历史注记】copy_image_with_thumbnail（复制图片并生成缩略图）已于 2026-09-12
+//   随「方案 A：空间文件夹内不再生成缩略图，卡片直接加载原图」的用户裁决移除 ——
+//   图片复制与普通文件复制已无差别，前端统一走 copy_file。
+//   thumbnail.rs 的 make_thumbnail 命令保留未删（回退保命符）。
+//
+// 【T2.1 的实现取舍】（17.5 未写明，按文档精神定）
+//   重名策略：`名称.ext` 已存在 → `名称_1.ext` → `名称_2.ext`…（第 8.1 节示例），
+//   尝试上限 MAX_CONFLICT_ATTEMPTS 次后改用「名称_时间戳」兜底，绝不覆盖已有文件。
 //
 // 铁律（17.5）：
 //   - 所有命令返回 Result<T, String>，错误信息用中文，可直接展示给用户
@@ -203,16 +204,6 @@ pub struct BatchMoveResult {
     pub failed: Vec<MoveFailure>,
 }
 
-/// 复制图片的结果（同时带出缩略图路径）
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CopiedImage {
-    /// 实际写入的完整路径（可能与请求的文件名不同 —— 重名时加过后缀）
-    pub path: String,
-    /// 缩略图路径；无法生成时为 null（例如目标不在任何空间内，或文件不是图片）
-    pub thumbnail_path: Option<String>,
-}
-
 /// 把文件名拆成「主干 + 扩展名」，用于生成 `名称_1.ext`。
 ///
 /// 只按最后一个 `.` 切分（`渲染.tar.gz` → `渲染.tar` + `gz`），与资源管理器的
@@ -301,50 +292,6 @@ pub fn copy_file(src: String, dest_dir: String) -> Result<String, String> {
     })?;
 
     Ok(target.to_string_lossy().into_owned())
-}
-
-/// 复制图片，并同时在其所属空间生成缩略图（拖入 / 粘贴用，第 8.1 / 8.2 节）。
-///
-/// 缩略图生成失败**不影响复制结果** —— 复制成功是主任务，缩略图只是加速显示；
-/// 卡片渲染层对「没有缩略图」已有兜底（T1.4）。
-#[tauri::command]
-pub fn copy_image_with_thumbnail(
-    src: String,
-    dest_dir: String,
-) -> Result<CopiedImage, String> {
-    let copied = copy_file(src, dest_dir.clone())?;
-
-    let thumbnail_path = find_space_root(Path::new(&dest_dir)).and_then(|space| {
-        crate::commands::thumbnail::make_thumbnail(
-            copied.clone(),
-            space.to_string_lossy().into_owned(),
-        )
-        .ok()
-        .map(|info| info.path)
-    });
-
-    Ok(CopiedImage {
-        path: copied,
-        thumbnail_path,
-    })
-}
-
-/// 从给定目录向上查找最近的「空间根」。
-///
-/// 判定依据：该目录下存在 `.mindscape` 数据目录（第 3 章约定）。
-/// 空间根一定有它 —— T1.4 首次进入空间时就会创建。
-pub fn find_space_root(dir: &Path) -> Option<PathBuf> {
-    let mut current = Some(dir);
-    while let Some(path) = current {
-        if path
-            .join(crate::commands::thumbnail::DATA_DIR)
-            .is_dir()
-        {
-            return Some(path.to_path_buf());
-        }
-        current = path.parent();
-    }
-    None
 }
 
 /// 移动文件到目标完整路径。
@@ -867,75 +814,6 @@ mod tests {
         let result = move_files(vec![]).unwrap();
         assert!(result.succeeded.is_empty());
         assert!(result.failed.is_empty());
-    }
-
-    #[test]
-    fn find_space_root_walks_up_to_mindscape_dir() {
-        let space = unique_dir("space-root");
-        let nested = space.join("参考资料").join("深层");
-        fs::create_dir_all(&nested).unwrap();
-
-        // 尚无 .mindscape → 找不到空间
-        assert_eq!(find_space_root(&nested), None);
-
-        fs::create_dir_all(space.join(".mindscape")).unwrap();
-        assert_eq!(find_space_root(&nested), Some(space.clone()));
-
-        cleanup(&space);
-    }
-
-    #[test]
-    fn copy_image_with_thumbnail_generates_webp_inside_space() {
-        let space = unique_dir("copy-thumb");
-        fs::create_dir_all(space.join(".mindscape")).unwrap();
-
-        // 源图放在空间外，模拟「从桌面拖入」
-        let outside = unique_dir("copy-thumb-src");
-        let source = outside.join("风景.png");
-        image::RgbaImage::from_pixel(1200, 900, image::Rgba([90, 125, 106, 255]))
-            .save(&source)
-            .unwrap();
-
-        let dest_dir = space.join("未分类");
-        let copied = copy_image_with_thumbnail(
-            source.to_string_lossy().into_owned(),
-            dest_dir.to_string_lossy().into_owned(),
-        )
-        .unwrap();
-
-        assert!(PathBuf::from(&copied.path).is_file());
-        assert!(copied.path.ends_with("风景.png"));
-
-        let thumb = copied.thumbnail_path.expect("应生成缩略图");
-        assert!(thumb.ends_with(".webp"));
-        assert!(
-            PathBuf::from(&thumb).starts_with(space.join(".mindscape").join("thumbnails")),
-            "缩略图应落在空间内，实际：{thumb}"
-        );
-
-        cleanup(&space);
-        cleanup(&outside);
-    }
-
-    #[test]
-    fn copy_image_with_thumbnail_still_copies_when_outside_any_space() {
-        let root = unique_dir("copy-no-space");
-        let source = root.join("图.png");
-        image::RgbaImage::from_pixel(64, 64, image::Rgba([1, 2, 3, 255]))
-            .save(&source)
-            .unwrap();
-
-        let dest_dir = root.join("out");
-        let copied = copy_image_with_thumbnail(
-            source.to_string_lossy().into_owned(),
-            dest_dir.to_string_lossy().into_owned(),
-        )
-        .unwrap();
-
-        assert!(PathBuf::from(&copied.path).is_file(), "复制必须成功");
-        assert_eq!(copied.thumbnail_path, None, "无空间时缩略图应为 null");
-
-        cleanup(&root);
     }
 
     // ---- T3.6 / T3.8 acceptance: delete_file / write_file_bytes ----

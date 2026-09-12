@@ -29,7 +29,6 @@ pub fn run() {
             commands::fs_ops::create_dir,
             commands::fs_ops::dir_exists,
             commands::fs_ops::copy_file,
-            commands::fs_ops::copy_image_with_thumbnail,
             commands::fs_ops::move_file,
             commands::fs_ops::move_files,
             commands::fs_ops::rename_dir,
