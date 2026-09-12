@@ -23,14 +23,58 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { SettingsPanel } from '@/components/ui/settings-panel'
-import { PlusIcon, SettingsIcon } from '@/components/ui/icons'
-import { SPACE_TYPE_PRESETS } from '@/core/types'
+import { ImportIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons'
+import { SPACE_TYPE_PRESETS, parseLayout } from '@/core/types'
+import type { Space } from '@/core/types'
 import { useTheme } from '@/core/hooks/useTheme'
+import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
+import {
+  EXPORTED_LAYOUT_FILE,
+  adoptExportedLayout,
+  exportedLayoutExists,
+  localLayoutStore,
+  removeExportedLayout,
+} from '@/core/storage/appLayoutStore'
 import { alertDialog, confirmDialog } from '@/core/utils/nativeDialogs'
+import { basenameOf } from '@/core/utils/paths'
 import { useSpacesStore } from '@/core/store/spacesStore'
 
 /** 自定义类型的哨兵值（选中它时展开输入框） */
 const CUSTOM_TYPE = '__custom__'
+
+/**
+ * 把导入文件夹里的导出布局收进软件目录（P1-2）。
+ * 顺序：先收内容（校验通过才落地），再问是否移除源文件夹里的那份 ——
+ * 内容已经在软件目录里了，移除与否都不丢数据，所以交给用户决定（守铁律③「不静默删除」）。
+ */
+async function importLayoutInto(spaceId: string, sourceDir: string): Promise<void> {
+  const result = await adoptExportedLayout(localStorageProvider, spaceId, sourceDir)
+
+  if (result === 'invalid') {
+    await alertDialog(
+      `「${EXPORTED_LAYOUT_FILE}」不是合法的布局文件，已忽略。空间已经建好，画布会重新铺开。`,
+      '导入空间',
+    )
+    return
+  }
+
+  const shouldRemove = await confirmDialog(
+    `布局已导入到软件目录。\n\n是否从「${basenameOf(sourceDir)}」里永久删除 ${EXPORTED_LAYOUT_FILE}？` +
+      '\n\n（布局内容已经保存好了，删掉不影响使用；需要时可以用「导出布局」再生成一份）',
+    '导入空间',
+  )
+  if (!shouldRemove) return
+
+  try {
+    await removeExportedLayout(localStorageProvider, sourceDir)
+  } catch (error) {
+    await alertDialog(
+      `移除 ${EXPORTED_LAYOUT_FILE} 失败（${error instanceof Error ? error.message : String(error)}），` +
+        '可以手动删掉它，不影响已经导入的布局。',
+      '导入空间',
+    )
+  }
+}
 
 /** 把 `2026-09-10T11:30:00` 显示成 `2026-09-10 11:30` */
 function formatTimestamp(value: string): string {
@@ -60,6 +104,8 @@ export function SpaceList() {
   const [folderPath, setFolderPath] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** 导入空间时选中的源文件夹（里面有 mindscape-layout.json）；null 表示普通新建 */
+  const [layoutSource, setLayoutSource] = useState<string | null>(null)
 
   const effectiveType = typeChoice === CUSTOM_TYPE ? customType.trim() : typeChoice
 
@@ -69,6 +115,7 @@ export function SpaceList() {
     setCustomType('')
     setFolderPath('')
     setFormError(null)
+    setLayoutSource(null)
   }, [])
 
   const handlePickFolder = useCallback(async () => {
@@ -78,7 +125,10 @@ export function SpaceList() {
         multiple: false,
         title: '选择空间文件夹',
       })
-      if (typeof selected === 'string') setFolderPath(selected)
+      if (typeof selected === 'string') {
+        setFolderPath(selected)
+        setLayoutSource(null)
+      }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : String(error))
     }
@@ -102,7 +152,9 @@ export function SpaceList() {
 
     setBusy(true)
     try {
-      await createSpace({ name, type: effectiveType, folderPath })
+      const created = await createSpace({ name, type: effectiveType, folderPath })
+      // 导入空间：把源文件夹里的 mindscape-layout.json 收进软件目录（P1-2）
+      if (layoutSource) await importLayoutInto(created.id, layoutSource)
       setDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -110,7 +162,7 @@ export function SpaceList() {
     } finally {
       setBusy(false)
     }
-  }, [createSpace, effectiveType, folderPath, name, resetForm])
+  }, [createSpace, effectiveType, folderPath, layoutSource, name, resetForm])
 
   const handleDelete = useCallback(
     async (id: string, spaceName: string) => {
@@ -127,6 +179,80 @@ export function SpaceList() {
     },
     [removeSpace],
   )
+
+  /**
+   * 导出布局（P1-2）：把软件目录里这个空间的布局另存为「目标文件夹\mindscape-layout.json」。
+   * 导出的是**已落盘**的布局，因此从未进入过的空间没有可导出的内容。
+   */
+  const handleExportLayout = useCallback(async (space: Space) => {
+    try {
+      const raw = await localLayoutStore.read(space.id)
+      if (raw === null) {
+        await alertDialog(
+          '这个空间还没有布局记录（可能从未进入过）。先进去摆一下，再回来导出。',
+          '导出布局',
+        )
+        return
+      }
+      if (!parseLayout(raw).ok) {
+        await alertDialog('这个空间的布局数据无法识别，已取消导出。', '导出布局')
+        return
+      }
+
+      const target = await open({
+        directory: true,
+        multiple: false,
+        title: `把「${space.name}」的布局导出到哪个文件夹`,
+        defaultPath: space.folderPath,
+      })
+      if (typeof target !== 'string') return
+
+      const written = await localStorageProvider.writeFileBytes(
+        target,
+        EXPORTED_LAYOUT_FILE,
+        new TextEncoder().encode(raw),
+      )
+      await alertDialog(
+        `布局已导出：\n${written}\n\n` +
+          `把生成的文件（或整个文件夹）给到别人，对方用「导入空间」选中它即可还原摆放与连线。`,
+        '导出布局',
+      )
+    } catch (error) {
+      await alertDialog(error instanceof Error ? error.message : String(error), '导出布局失败')
+    }
+  }, [])
+
+  /**
+   * 导入空间（P1-2）：选一个带 mindscape-layout.json 的文件夹，
+   * 复用「新建空间」弹窗（名称默认取文件夹名、类型可自选），确认后才真正建空间并带上布局。
+   */
+  const handleImportSpace = useCallback(async () => {
+    try {
+      const chosen = await open({
+        directory: true,
+        multiple: false,
+        title: `选择含 ${EXPORTED_LAYOUT_FILE} 的文件夹`,
+      })
+      if (typeof chosen !== 'string') return
+
+      if (!(await exportedLayoutExists(localStorageProvider, chosen))) {
+        await alertDialog(
+          `这个文件夹里没有 ${EXPORTED_LAYOUT_FILE}。\n\n` +
+            '它由「导出布局」生成。如果只是想把这个文件夹当成新空间，请改用 ＋ 新建空间。',
+          '导入空间',
+        )
+        return
+      }
+
+      setFolderPath(chosen)
+      setName(basenameOf(chosen))
+      setFormError(null)
+      setLayoutSource(chosen)
+      setDialogOpen(true)
+    } catch (error) {
+      await alertDialog(error instanceof Error ? error.message : String(error), '导入空间')
+    }
+  }, [])
 
   const sortedSpaces = useMemo(() => spaces, [spaces])
 
@@ -150,9 +276,21 @@ export function SpaceList() {
             size="icon"
             title="新建空间"
             aria-label="新建空间"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => {
+              setLayoutSource(null)
+              setDialogOpen(true)
+            }}
           >
             <PlusIcon />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            title={`导入空间（选带 ${EXPORTED_LAYOUT_FILE} 的文件夹）`}
+            aria-label="导入空间"
+            onClick={() => void handleImportSpace()}
+          >
+            <ImportIcon />
           </Button>
           <Button
             variant={settingsOpen ? 'default' : 'outline'}
@@ -213,17 +351,32 @@ export function SpaceList() {
                 <h2 className="truncate font-medium" title={space.name}>
                   {space.name}
                 </h2>
-                <button
-                  type="button"
-                  aria-label={`移除空间 ${space.name}`}
-                  className="shrink-0 rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    void handleDelete(space.id, space.name)
-                  }}
-                >
-                  移除
-                </button>
+                {/* 悬停才出现的卡片操作 */}
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    aria-label={`导出空间布局 ${space.name}`}
+                    title="把布局导出到文件夹（生成 mindscape-layout.json）"
+                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void handleExportLayout(space)
+                    }}
+                  >
+                    导出布局
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`移除空间 ${space.name}`}
+                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void handleDelete(space.id, space.name)
+                    }}
+                  >
+                    移除
+                  </button>
+                </div>
               </div>
 
               <span className="mt-2 w-fit rounded bg-secondary/15 px-1.5 py-0.5 text-[11px] text-secondary">
@@ -243,7 +396,7 @@ export function SpaceList() {
 
       <Modal
         open={dialogOpen}
-        title="新建空间"
+        title={layoutSource ? '导入空间' : '新建空间'}
         onClose={() => {
           if (busy) return
           setDialogOpen(false)
@@ -334,7 +487,7 @@ export function SpaceList() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            可以直接选已有文件夹；布局会写进该文件夹的 .mindscape 目录，文件夹自包含
+            可以直接选已有文件夹；布局存在软件目录里，不会往这个文件夹里写任何文件
           </p>
         </div>
 
