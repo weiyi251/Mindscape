@@ -1,6 +1,6 @@
 [package]
 name = "mindscape-canvas"
-version = "0.1.0"
+version = "0.2.0"
 description = "Mindscape 脑海空间 — 把已有的文件夹变成可自由摆放与连线的思考画布"
 authors = ["weiyi251"]
 edition = "2021"

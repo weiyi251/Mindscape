@@ -67,9 +67,16 @@ function findUpdaterArtifact() {
     throw new Error(`未找到打包目录 ${nsisDir}，请先执行一次不带 --manifest-only 的构建。`)
   }
 
-  const setupFile = fs.readdirSync(nsisDir).find((name) => name.endsWith('-setup.exe'))
+  // ⚠️ 必须按版本号**精确匹配**：bundle 目录会累积历次构建的安装包，
+  //    只按后缀取第一个会拿到旧版本的包与旧签名，生成的清单就指向了错误的安装包。
+  const expected = `${productName}_${version}_x64-setup.exe`
+  const names = fs.readdirSync(nsisDir)
+  const setupFile = names.find((name) => name === expected)
   if (!setupFile) {
-    throw new Error(`${nsisDir} 下没有 *-setup.exe，打包可能未完成。`)
+    throw new Error(
+      `${nsisDir} 下没有本次版本（${version}）的安装包 ${expected}，打包可能未完成或版本号未同步。\n` +
+        `目录里现有的文件：${names.join('、')}`,
+    )
   }
 
   const sigPath = path.join(nsisDir, `${setupFile}.sig`)
