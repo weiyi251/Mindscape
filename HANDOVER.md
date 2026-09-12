@@ -60,7 +60,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
-- 全量基线（2026-09-12，v0.4.0 批次完成）：Vitest **721 passed / 58 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（386.66 kB / gzip 119.01 kB）
+- 全量基线（2026-09-13）：Vitest **721 passed / 58 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（387.69 kB / gzip 119.38 kB）
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
@@ -191,4 +191,5 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-09-12 | 357e1ea | `src/core/types.ts`、`src/core/storage/spacesFile.ts`(+test)、`src/core/store/{spacesStore.ts(+test), boardStore.test.ts}` | **改名/收藏/排序数据层（P1-5）**：Space schema 加 `favorite`（default false，旧数据经 zod 解析为 false，兼容用例锁定）；`sortSpacesForList`（收藏优先 → lastOpenedAt 倒序）替换 load/createSpace/openSpace 的排序；spacesStore 新增 `renameSpace`（空名/重名/不存在 id 报中文错误，改成原名为空操作）与 `toggleSpaceFavorite`（翻转即重排落盘）。11 条新单测 | 计划 P1-5：空间多起来后不再只能按时间找 |
 | 2026-09-12 | 8fa3a31 | `src/pages/SpaceList.tsx` | 空间卡片悬停操作新增「收藏 / 取消收藏」「重命名」；收藏卡片标题前常显 ★（语义色 text-primary）；列表用 `sortSpacesForList`；重命名走 PromptDialog（Enter/Esc，初始全选），校验错误经 alertDialog 弹出；只改显示名，绑定的文件夹不动 | 计划 P1-5 UI |
 | 2026-09-12 | （本次） | `HANDOVER.md`、`CHANGELOG.md`、`README.md` | 同步 P1-4/P1-5：§3 基线 694/57→**721/58**、§6 计数 694→721、§9 追加四行；CHANGELOG `[Unreleased]` 补两条；README 基线与功能表同步。**v0.4.0 批次（P1-1~P1-5）至此全部落地** | AGENTS.md 变更记录规范 |
+| 2026-09-13 | 2b734fa | `src/canvas/{Card.tsx, Canvas.tsx}`、`src/pages/Board.tsx`、`src/__guards__/architecture.test.ts` | **便签改为双击行内编辑（用户要求，替代编辑弹窗）**：双击便签 → 同尺寸 textarea 盖满卡片本体（字号/行距/内边距对齐正文，光标定位末尾），无弹窗/遮罩；blur（点外部）或 Esc 保存退出，textarea 内按键 stopPropagation（Esc 不取消选中、Delete 不移除卡片、Ctrl+A 只全选文本），pointerdown/dblclick 拦截防拖拽误触（先例：分区改名输入框）；草稿放卡片组件，打字不惊动画布其余部分；Board 的 `handleEditNoteCard` 弹窗版删除 → `handleCommitNote`（同一命令链，值没变不入栈）；右键菜单「备注」对便签走 `CanvasApi.beginNoteEdit`，图片/文件卡仍用弹窗。守卫棘轮 Canvas 1135→1160、Board 2024→2030 | 用户要求：双击便签在便签本体内直接编辑文字 |
 | 2026-09-12 | （本次） | `HANDOVER.md` | 同步 P1-2：§2 数据流向更新落盘路径与导出/导入链路；§3 基线 611/53→**657/56**；§5 新增第 9 条「布局存放位置」（用户裁决：key 用空间 id / 显式导出导入 / 不自动同步）；§6 `pnpm test` 计数 611→657；§9 追加两行 | AGENTS.md 变更记录规范 |
