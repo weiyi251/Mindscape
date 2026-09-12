@@ -74,11 +74,15 @@ const TEST_FILES = ALL_FILES.filter((file) => /\.test\.(ts|tsx)$/.test(file))
 const FILE_SIZE_BUDGET: Record<string, number> = {
   // P1-3（2026-09-12）：搜索接线（hook 调用 + 浮层 JSX + Canvas 三个 props）约 +40 行；
   // 可拆的状态逻辑已抽进 core/hooks/useCardSearch.ts
-  'src/pages/Board.tsx': 2024,
+  // 便签行内编辑（2026-09-13，用户要求）：弹窗版 handleEditNoteCard 换成 handleCommitNote +
+  // 菜单「备注」对便签改走 beginNoteEdit，净 +6 行
+  'src/pages/Board.tsx': 2030,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
-  'src/canvas/Canvas.tsx': 1135,
+  // 便签行内编辑（2026-09-13，用户要求）：editingNoteId 状态 + beginNoteEdit API +
+  // dblclick 分支 + 编辑结束回调转发，约 +25 行（替代了 Board 的弹窗逻辑）
+  'src/canvas/Canvas.tsx': 1160,
 }
 
 describe('规则 1：大文件行数只减不增', () => {

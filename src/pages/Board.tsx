@@ -1186,27 +1186,27 @@ export function Board() {
   }, [createNoteAt])
 
   /** 双击便签（T3.4）：浮层编辑内容，提交走 setCardNote 命令 */
-  const handleEditNoteCard = useCallback(
-    (card: Card) => {
-      setPrompt({
-        title: '编辑便签',
-        value: card.note,
-        multiline: true,
-        placeholder: '写下想法…（Enter 保存，Shift+Enter 换行）',
-        onConfirm: (value) => {
-          if (value === card.note) return
-          void history
-            .execute(
-              createSetCardNoteCommand(
-                card.id,
-                card.note,
-                value,
-                (id, note) => useBoardStore.getState().updateCardNote(id, note),
-              ),
-            )
-            .then(() => writer.schedule())
-        },
-      })
+  /**
+   * 便签行内编辑结束（用户要求：双击便签直接在便签本体内编辑，替代原弹窗）。
+   * Canvas 负责编辑态；这里只负责把最终草稿走既有命令链（撤销栈 + 防抖落盘）。
+   * 值没变就不入栈；找不到卡片（已移除视图 / 刚被删）直接忽略。
+   */
+  const handleCommitNote = useCallback(
+    (cardId: string, value: string) => {
+      const state = useBoardStore.getState()
+      const card = state.cards.find((item) => item.id === cardId)
+      if (!card) return
+      if (value === card.note) return
+      void history
+        .execute(
+          createSetCardNoteCommand(
+            card.id,
+            card.note,
+            value,
+            (id, note) => useBoardStore.getState().updateCardNote(id, note),
+          ),
+        )
+        .then(() => writer.schedule())
     },
     [history, writer],
   )
@@ -1453,7 +1453,13 @@ export function Board() {
       if (card) handleCardZIndex(card.id, 'back')
     })
     register(CARD_ACTION.addNote, ({ card }) => {
-      if (card) handleCardNote(card)
+      if (!card) return
+      // 便签：复用双击的行内编辑态（用户要求：便签编辑不再弹窗）
+      if (card.type === 'note') {
+        canvasApiRef.current?.beginNoteEdit(card.id)
+        return
+      }
+      handleCardNote(card)
     })
     register(CARD_ACTION.editLabel, ({ card }) => {
       if (card) handleCardTags(card)
@@ -1934,7 +1940,7 @@ export function Board() {
               onPartitionContextMenu={handlePartitionContextMenu}
               onCanvasContextMenu={handleCanvasContextMenu}
               onOpenCard={(card) => void openCardWithSystem(card)}
-              onEditNoteCard={handleEditNoteCard}
+              onCommitNote={handleCommitNote}
               onRequestSearch={search.openSearch}
               searchHitIds={search.hitIds}
               searchActiveId={search.activeId}

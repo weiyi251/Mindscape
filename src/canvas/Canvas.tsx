@@ -20,7 +20,7 @@
 // 实现任务：T1.3 / T1.4 / T1.5 / T2.2 / T2.3。
 // ============================================================================
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { CanvasState, Card, Connection, Partition } from '@/core/types'
 import { Viewport, CANVAS_ITEM_ATTR, CANVAS_ROOT_ATTR } from './Viewport'
@@ -126,8 +126,11 @@ export interface CanvasProps {
   onCanvasContextMenu?: (canvasPoint: Point, screen: { x: number; y: number }) => void
   /** 双击卡片打开（T3.5）：image → 打开原图；file → 系统默认程序 */
   onOpenCard?: (card: Card) => void
-  /** 双击便签卡（T3.4）：进入编辑 */
-  onEditNoteCard?: (card: Card) => void
+  /**
+   * 便签行内编辑结束（用户要求：双击便签直接在便签本体内编辑，替代弹窗）。
+   * Canvas 负责进出编辑态；这里只收到「最终草稿」，命令与落盘由 Board 完成。
+   */
+  onCommitNote?: (cardId: string, value: string) => void
   /** `Ctrl+F` 请求打开搜索浮层（P1-3）；浮层本身由 Board 渲染，画布只负责派发按键 */
   onRequestSearch?: () => void
   /** 搜索命中的卡片 id（P1-3）：虚线描边，表示「搜到了」 */
@@ -152,6 +155,8 @@ export interface CanvasApi {
   screenToCanvasPoint: (clientX: number, clientY: number) => Point
   /** 把给定画布坐标变为视口中心（小地图跳转用，2026-09-12）；保持当前缩放不变 */
   centerOn: (canvasPoint: Point) => void
+  /** 让指定便签进入行内编辑（右键菜单「备注」对便签复用同一编辑态） */
+  beginNoteEdit: (cardId: string) => void
 }
 
 export function Canvas({
@@ -181,7 +186,7 @@ export function Canvas({
   onPartitionContextMenu,
   onCanvasContextMenu,
   onOpenCard,
-  onEditNoteCard,
+  onCommitNote,
   onRequestSearch,
   searchHitIds = [],
   searchActiveId = null,
@@ -219,10 +224,10 @@ export function Canvas({
   onSelectPartitionRef.current = onSelectPartition
   const onCreateConnectionRef = useRef(onCreateConnection)
   onCreateConnectionRef.current = onCreateConnection
-  const onEditNoteCardRef = useRef(onEditNoteCard)
-  onEditNoteCardRef.current = onEditNoteCard
   const onOpenCardRef = useRef(onOpenCard)
   onOpenCardRef.current = onOpenCard
+  const onCommitNoteRef = useRef(onCommitNote)
+  onCommitNoteRef.current = onCommitNote
   const onRequestSearchRef = useRef(onRequestSearch)
   onRequestSearchRef.current = onRequestSearch
   const onCardContextMenuRef = useRef(onCardContextMenu)
@@ -241,6 +246,14 @@ export function Canvas({
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   /** 搜索命中集合（P1-3）：命中的卡片画虚线框 */
   const searchHitSet = useMemo(() => new Set(searchHitIds), [searchHitIds])
+
+  /** 便签行内编辑（用户要求）：正在编辑的便签 id；null = 没有编辑中的便签 */
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
+  /** 结束编辑：清状态 + 把草稿交给 Board 持久化（命令 + 防抖落盘在 Board） */
+  const handleNoteEditFinish = useCallback((cardId: string, value: string) => {
+    setEditingNoteId((current) => (current === cardId ? null : current))
+    onCommitNoteRef.current?.(cardId, value)
+  }, [])
 
   /** 分区框 DOM 注册表（拖框时直写样式，17.3） */
   const partitionElsRef = useRef(new Map<string, HTMLDivElement>())
@@ -877,6 +890,12 @@ export function Canvas({
             offsetY: root.clientHeight / 2 - canvasPoint.y * controller.zoom,
           })
         },
+        // 右键菜单「备注」对便签复用行内编辑（与双击同一编辑态）
+        beginNoteEdit: (cardId: string): void => {
+          const card = cardsRef.current.find((item) => item.id === cardId)
+          if (card?.type !== 'note') return
+          setEditingNoteId(cardId)
+        },
       })
     },
     [writeZoomLabel, upgradeOriginals],
@@ -953,8 +972,12 @@ export function Canvas({
         (item) => item.id === cardElement?.getAttribute(CARD_ID_ATTR),
       )
       if (!card) return
-      if (card.type === 'note') onEditNoteCardRef.current?.(card)
-      else onOpenCardRef.current?.(card)
+      if (card.type === 'note') {
+        // 双击便签：直接进入行内编辑（在便签本体内改文字，替代原编辑弹窗）
+        setEditingNoteId(card.id)
+      } else {
+        onOpenCardRef.current?.(card)
+      }
     }
 
     root.addEventListener('dblclick', handleDoubleClick)
@@ -1089,6 +1112,8 @@ export function Canvas({
                   ? 'hit'
                   : undefined
             }
+            noteEditing={card.id === editingNoteId}
+            onNoteEditFinish={handleNoteEditFinish}
           />
         ))}
       </Viewport>

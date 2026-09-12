@@ -10,6 +10,7 @@
 //   · 选中态只加边框高亮（11.6），缩放手柄在 T2.3 引入。
 // ============================================================================
 
+import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import type { Card } from '@/core/types'
@@ -32,6 +33,16 @@ export interface CardViewProps {
   grayscale?: boolean
   /** 搜索命中高亮（P1-3）：虚线 = 命中，粗实线 = 当前跳转目标 */
   searchState?: CardSearchState
+  /**
+   * 便签行内编辑（用户要求替换弹窗）：true 时便签本体被一个同尺寸的
+   * textarea 覆盖 —— 卡片盒子、样式、布局完全不动，只是文字变成可编辑。
+   */
+  noteEditing?: boolean
+  /**
+   * 结束行内编辑并交出草稿（textarea blur / Esc 触发）。
+   * Canvas 收到后清编辑状态并转发持久化（命令 + 防抖落盘在 Board）。
+   */
+  onNoteEditFinish?: (cardId: string, value: string) => void
 }
 
 /** 卡片外层容器的定位样式（GPU 图层，见文件顶部说明） */
@@ -53,7 +64,33 @@ export function CardView({
   registerEl,
   grayscale = false,
   searchState,
+  noteEditing = false,
+  onNoteEditFinish,
 }: CardViewProps) {
+  // ---- 便签行内编辑（见 props 注释）。草稿放本组件：打字只重渲染这一张卡，
+  //      不经过 Canvas / Board 的 state（画布其余部分零感知，17.3 反模式不沾边） ----
+  const [noteDraft, setNoteDraft] = useState(card.note)
+  const noteInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // 进入编辑时把草稿对齐为卡片当前内容（上次编辑后 card.note 可能已变）
+  useEffect(() => {
+    if (noteEditing) setNoteDraft(card.note)
+  }, [noteEditing, card.note])
+
+  // 进入编辑：聚焦并把光标放到末尾（继续往下写的直觉位置）
+  useEffect(() => {
+    if (!noteEditing) return
+    const element = noteInputRef.current
+    if (!element) return
+    element.focus()
+    element.setSelectionRange(element.value.length, element.value.length)
+  }, [noteEditing])
+
+  /** 结束编辑：交出草稿（是否真有改动、怎么入库由 Canvas → Board 判断） */
+  const finishNoteEdit = () => {
+    onNoteEditFinish?.(card.id, noteDraft)
+  }
+
   return (
     <div
       ref={(element) => {
@@ -77,6 +114,32 @@ export function CardView({
       >
         {renderCard({ card, selected })}
       </div>
+
+      {/* 便签行内编辑：textarea 盖满卡片（inset-0），卡片盒子/样式/布局不变。
+          字号行距内边距对齐便签正文（p-2 / text-[18px] / leading-relaxed），
+          进出编辑不跳动。pointerdown / dblclick 必须拦下——否则会被画布
+          当成拖拽手势（先例：Partition 改名输入框） */}
+      {noteEditing && card.type === 'note' ? (
+        <textarea
+          ref={noteInputRef}
+          value={noteDraft}
+          onChange={(event) => setNoteDraft(event.target.value)}
+          onBlur={finishNoteEdit}
+          onPointerDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            // 输入框内的按键不再传给画布：Esc 只退出编辑不取消选中、
+            // Delete/Backspace 只改文字不移除卡片、Ctrl+A 只全选文本
+            event.stopPropagation()
+            if (event.key === 'Escape') {
+              event.preventDefault()
+              finishNoteEdit()
+            }
+          }}
+          spellCheck={false}
+          className="absolute inset-0 h-full w-full resize-none rounded-sm border-0 bg-card p-2 text-[18px] leading-relaxed text-foreground outline-none"
+        />
+      ) : null}
 
       {/* 右下角缩放手柄（5.2：选中后拖右下角手柄）。11.6：仅在选中时出现。
           pointerdown 靠冒泡进入 Viewport 的原生监听，由 Canvas 分流到缩放控制器 */}
