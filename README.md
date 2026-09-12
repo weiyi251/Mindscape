@@ -20,7 +20,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 
 ## 当前状态
 
-**当前版本 `v0.2.0`（预览版），已在 GitHub 发布** —— 到 [Releases](https://github.com/weiyi251/Mindscape/releases/latest) 下载，支持 Windows 10/11 x64。应用内置自动更新，之后的版本可一键升级，无需再手动下载。
+**当前版本 `v0.3.0`（预览版），已在 GitHub 发布** —— 到 [Releases](https://github.com/weiyi251/Mindscape/releases/latest) 下载，支持 Windows 10/11 x64。应用内置自动更新，之后的版本可一键升级，无需再手动下载。
 
 计划书范围内的功能已全部实现，画布现在能做的事：
 
