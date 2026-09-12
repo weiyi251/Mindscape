@@ -15,7 +15,7 @@
 | 依赖 | 版本 |
 |---|---|
 | Node.js | ≥ 20 LTS |
-| pnpm | ≥ 9 |
+| pnpm | ≥ 10（`pnpm-workspace.yaml` 用的是 pnpm 10+ 配置格式；开发与 CI 均使用 11） |
 | Rust | ≥ 1.75 stable（Windows 目标 `x86_64-pc-windows-msvc`） |
 | MSVC 构建工具 | Visual Studio Build Tools 的「使用 C++ 的桌面开发」工作负载 |
 | WebView2 | Windows 10/11 已内置 |
@@ -109,3 +109,55 @@ pnpm icon
 
 脚本会绘制 1024×1024 源图、生成浏览器 favicon，并调用 Tauri CLI 派生各平台图标。
 设计参数集中在 `scripts/generate-icon.mjs` 顶部。
+
+## 发布新版本
+
+应用内置自动更新，而 updater 插件**强制校验签名**（无法关闭），所以发版比普通打包多一步。
+
+### 一次性准备：生成签名密钥
+
+```bash
+pnpm tauri signer generate -w "%USERPROFILE%\.tauri\mindscape.key"
+```
+
+- 私钥写到 `~/.tauri/mindscape.key`，**必须在仓库之外** —— 不要提交，也不要贴进 issue。
+- 命令会同时输出公钥文本，把它填进 `src-tauri/tauri.conf.json` 的 `plugins.updater.pubkey`。
+- 换密钥意味着**已安装的旧版本将无法再自动更新**（旧版本内置的是旧公钥），慎换。
+
+### 每次发版
+
+```bash
+# 1. 同步版本号：src-tauri/tauri.conf.json 与 package.json 的 version，并在 CHANGELOG.md 记录改动
+# 2. 签名构建 + 生成更新清单
+pnpm release
+
+# 3. 把安装包与 latest.json 一起上传到 GitHub Release，tag 用 v + 版本号
+```
+
+`pnpm release` 做两件事：
+
+1. 读取 `~/.tauri/mindscape.key` 并签名打包（可用 `TAURI_SIGNING_PRIVATE_KEY_PATH` 指定别的路径，
+   CI 里用 `TAURI_SIGNING_PRIVATE_KEY` 直接给密钥内容）。
+   注意 **tauri CLI 本身只认 `TAURI_SIGNING_PRIVATE_KEY`（内容）**，只给路径会报
+   「A public key has been found, but no private key」—— 路径变量是本脚本提供的便利写法，由它读成内容后注入；
+2. 读取 NSIS 安装包旁的 `.sig`，生成 `src-tauri/target/release/bundle/latest.json`。
+
+只想用已有产物重新生成清单时加 `--manifest-only`：`pnpm release --manifest-only`。
+
+上传到 Release 的物料应包含：`latest.json`、`*_x64-setup.exe`、`*_x64-setup.exe.sig`。
+
+> ⚠️ 这个 Release 必须是「最新正式版」——不能是草稿或预发布，否则
+> `releases/latest/download/latest.json` 会 404，客户端的检查更新会直接失败。
+>
+> ⚠️ `latest.json` 里的 `signature` 必须是 **`.sig` 文件的文本内容**，不是路径也不是 URL。
+> 手工拼清单时最容易在这里出错，所以请用脚本生成。
+
+### 本地验证自动更新
+
+不必真的发一个版本也能把链路验通：临时把 `tauri.conf.json` 的 `plugins.updater.endpoints`
+指向本地 HTTP 服务上的 `latest.json`，其中 `version` 填一个比当前更高的值，`pnpm tauri dev` 启动后
+就会走到「发现新版本」的分支。安装环节想要真的跑通，清单里的 `url` 与 `signature` 必须对应一个
+**用同一把私钥签出来的真实安装包**；否则会在验签阶段失败，这是预期行为。
+
+验证完记得把 `endpoints` 改回 GitHub 地址 —— 这个值会被打进发布包。
+

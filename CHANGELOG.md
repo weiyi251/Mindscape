@@ -7,6 +7,24 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **应用内检查更新** —— 集成 Tauri updater：启动时静默检查（只有真的发现新版本才提示），
+  空间列表页右上角提供「检查更新」手动入口；安装包经 minisign 签名校验后下载安装，可一键重启生效
+- 发版脚本 `pnpm release` —— 签名打包并生成自动更新所需的 `latest.json`
+  （`pnpm release --manifest-only` 可用已有产物只重生成清单）
+
+### 变更
+
+- 应用标识由 `com.mindscape.app` 改为 `com.mindscape.canvas`
+  —— 原值以 `.app` 结尾，与 macOS 应用包扩展名冲突，每次构建都会告警；改动不影响已存数据
+- 工具链要求：pnpm 提升到 **≥ 10**（`pnpm-workspace.yaml` 使用 pnpm 10+ 的配置格式，pnpm 9 会解析失败）
+
+### 文档
+
+- README 补充「下载安装」与「自动更新」说明
+- CONTRIBUTING 补充发版流程（签名密钥生成、发版步骤、Release 需上传的物料）
+
 ## [0.1.0] - 2026-09-12
 
 首个预览版。功能范围对应开发计划书的 T0 ~ T3 全部工单。

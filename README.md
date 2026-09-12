@@ -36,13 +36,34 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 类型检查 | `pnpm typecheck` | 无错误 |
-| 单元测试 | `pnpm test` | 551 passed / 48 个测试文件 |
+| 单元测试 | `pnpm test` | 582 passed / 50 个测试文件 |
 | Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 46 passed |
 | 代码检查 | `pnpm lint` | 无错误 |
 | 生产构建 | `pnpm build` | 通过 |
 | 安装包打包 | `pnpm tauri build` | 通过 · MSI 2.64 MB / NSIS 1.80 MB |
 
 > 界面截图待整体验收后补充。
+
+## 下载安装
+
+到 [Releases](https://github.com/weiyi251/Mindscape/releases/latest) 下载最新版，支持 Windows 10/11 x64：
+
+| 安装包 | 适用场景 |
+|---|---|
+| `Mindscape_x.y.z_x64-setup.exe` | **推荐**，体积更小，安装时可自选目录 |
+| `Mindscape_x.y.z_x64_en-US.msi` | 需要走组策略或批量部署时用 |
+
+安装包**未做代码签名**（个人开源项目），首次运行可能被 Windows SmartScreen 拦下，点「更多信息 → 仍要运行」即可。
+
+### 自动更新
+
+应用内置更新检查，发现新版本会弹窗，确认后自动下载安装，再点「立即重启」生效：
+
+- **启动时静默检查** —— 只有真的发现新版本才打扰你；
+- **手动检查** —— 空间列表页右上角「检查更新」；
+- 安装包经过 **minisign 签名校验**，签名不通过会被拒绝安装。
+
+覆盖安装**不会影响已有数据** —— 空间列表在 `%APPDATA%\Mindscape\`，布局与缩略图在各自空间文件夹的 `.mindscape\` 内，都在安装目录之外，卸载重装也不会动。
 
 ## 已知限制
 
@@ -52,6 +73,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 - **深色模式** —— 已提供配色变量与切换入口，尚未做全量视觉走查。
 - **缩略图体积偏大** —— 采用无损 WebP 编码（避免引入 C 依赖），照片类缩略图约为 JPEG q80 的 2~4 倍。
 - **历史数据迁移的副作用** —— 早期版本存在卡片 id 撞号，加载时会自动重编号修复；被重编号的卡片上原有连线端点可能失配（渲染层有兜底，不会崩溃）。
+- **自动更新依赖 GitHub 可达** —— 检查与下载都直接走 GitHub Release；内网等受限网络下会静默失败，此时需手动下载覆盖安装。
 
 ## 技术栈
 
@@ -63,6 +85,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 画布渲染 | DOM 方案（卡片是 div，不是 Canvas） |
 | 状态管理 | Zustand 4 |
 | 后端 | Rust（Tauri 自带） |
+| 自动更新 | Tauri updater（minisign 签名校验，更新清单托管在 GitHub Release） |
 
 ## 环境要求
 
@@ -83,6 +106,7 @@ pnpm lint             # ESLint
 pnpm format           # Prettier 格式化
 pnpm build            # 类型检查 + 前端构建
 pnpm tauri build      # 打包 Windows 安装包（MSI / NSIS）
+pnpm release          # 发版：签名打包 + 生成自动更新的 latest.json（见 CONTRIBUTING）
 pnpm icon             # 重新生成应用图标与 favicon（设计参数见 scripts/generate-icon.mjs）
 ```
 
@@ -106,7 +130,8 @@ src/
 │   ├── types.ts             # 数据 Schema
 │   ├── utils/               # 基础工具：路径 / ID / 时间 / 运行时检测 / 主题 / 媒体
 │   ├── board/               # 画布数据层：卡片构建 / 网格 / 分区 / 合并 / 落盘 / 缩略图
-│   ├── store/               # Zustand 状态（boardStore / spacesStore）
+│   ├── store/               # Zustand 状态（boardStore / spacesStore / updaterStore）
+│   ├── updater/             # 自动更新的插件封装（检查 / 下载安装 / 重启）
 │   ├── commands/            # 操作命令 + 撤销重做栈（impl/ 下逐个命令）
 │   ├── registry/            # 卡片类型 / 菜单 / 工具栏 / 插件注册中心
 │   └── storage/             # 存储层接口与本地实现
@@ -123,6 +148,7 @@ src-tauri/
 └── src/commands/            # Rust 端命令：fs_ops / layout / thumbnail / system
 
 scripts/generate-icon.mjs    # 图标生成脚本（矢量光栅化，无第三方依赖）
+scripts/release.mjs          # 发版脚本：签名打包 + 生成自动更新清单 latest.json
 public/favicon.svg           # 浏览器标签页图标
 .github/workflows/ci.yml     # CI：前端质量门 + Rust 单元测试
 ```
