@@ -60,7 +60,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
-- 全量基线（2026-09-12，v0.4.0 开发中）：Vitest **657 passed / 56 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（377.57 kB / gzip 116.06 kB）
+- 全量基线（2026-09-12，v0.4.0 开发中）：Vitest **694 passed / 57 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（383.61 kB / gzip 118.08 kB）
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
@@ -102,7 +102,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（657 tests）
+pnpm test           # vitest run（694 tests）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
@@ -182,4 +182,8 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-09-12 | 5533cb3 | `README.md` | 补齐被并发编辑覆盖的三处基线修正：`pnpm test` 629/55、`cargo test` 43、MSI 3.88 / NSIS 2.59 MB、技术栈表区间 2.6 ~ 3.9 MB | P0-3 漏改（并发编辑覆盖）+ P1-1 后基线变化 |
 | 2026-09-12 | 6ebd300 | `src/core/storage/appLayoutStore.ts`（新增）、`appLayoutStore.test.ts`（新增）、`src/core/store/boardStore.ts`(+test)、`src/pages/Board.tsx`、`src/__guards__/architecture.test.ts` | **布局改存软件目录（P1-2 数据层）**：新增 `appLayoutStore`（布局落 `%APPDATA%\Mindscape\layouts\<空间 id>.json`，含 `isSafeLayoutKey` 白名单、`layoutFileName`、`localLayoutStore` 默认实例）；`boardStore.readLayoutOrEmpty` 优先读软件目录，旧 `.mindscape\layout.json` 存在且新位置为空时读取并迁移写回（**旧文件不删**）；只读版本不写盘；`createBoardStore` 加 `layoutStore` 注入参数；Board 落盘目标改 `localLayoutStore.write(target.id, json)`；守卫行数棘轮 Board 1982→1984。单测 23 例 | 空间文件夹零新增文件；旧路径兼容迁移（守铁律①②③） |
 | 2026-09-12 | 123da5d | `src/pages/SpaceList.tsx`、`src/components/ui/icons.tsx`、`README.md` | **导出/导入布局（P1-2 UI）**：空间卡片悬停「导出布局」（读软件目录布局 → `parseLayout` 校验 → 写 `<目标文件夹>\mindscape-layout.json`；从未进入过的空间提示而非导出空文件）；顶栏「导入空间」图标（选带该文件的文件夹 → 复用新建弹窗、名称取文件夹名 → 创建后 `adoptExportedLayout` 收编：`copy_file` → 校验 → 改名，无效则删拷贝返回 `invalid`）；收编后询问是否删除源文件夹里的导出文件（文案明确「**永久删除**」，守铁律③）。新建弹窗文案改「不会往这个文件夹里写任何文件」；`icons.tsx` 加 `ImportIcon` | 把「布局跟着文件夹走」换成显式导出/导入 |
+| 2026-09-12 | de6d3e2 | `src/core/types.ts`、`src/core/storage/spacesFile.ts`、`src/core/board/layoutMerge.ts` | 修正 P1-2 后过时的数据位置注释（4.2 布局位置、「为什么用 fs 插件」的论据、T1.6 工单名），`.mindscape` 引用清点后只剩迁移兼容与历史成因说明 | P1-2 验收第 7 条（rg 命中只在迁移兼容代码里） |
+| 2026-09-12 | 8a40edf | `src/core/board/search.ts`（新增）、`search.test.ts`（新增） | **卡片搜索纯匹配层（P1-3）**：大小写不敏感子串匹配，覆盖文件名（filePath 最后一段）/ 便签正文（note）/ 分区名（group，无独立 tags 字段，分区名承担「标签」角色）；空查询返回空结果（不清屏全亮）；`excerptOf` 摘录（换行压平、超长省略号）、`stepIndex` 循环跳转、`describeHits` + `SEARCH_FIELD_LABELS` 展示整形。37 条单测 | 计划 P1-3：上百张卡的画布里能直接找到目标 |
+| 2026-09-12 | bed2cc1 | `src/components/ui/card-search.tsx`（新增）、`src/core/hooks/useCardSearch.ts`（新增）、`src/canvas/{Canvas.tsx, Card.tsx}`、`src/pages/Board.tsx`、`src/components/ui/icons.tsx`、`src/__guards__/architecture.test.ts` | **Ctrl+F 搜索浮层与画布命中高亮（P1-3 UI）**：浮层（输入框 + 命中数 + 上下跳转 + 结果列表，浮层内按键 stopPropagation —— Ctrl+A 全选输入框文本而非卡片、Esc 只关浮层）；`useCardSearch` hook（状态胶水，Board 注入 `jumpTo`：选中 + `CanvasApi.centerOn` 视口居中，复用小地图定位路径）；Canvas 加 Ctrl+F 分支（preventDefault 防 WebView 页内查找抢占）与 `searchHitIds`/`searchActiveId` props；`Card.searchState` 虚线（命中）/粗实线（当前跳转目标）描边，走 `outline-primary` 语义色；`icons.tsx` 加 Search/ChevronUp/ChevronDown/Close；守卫：2 个新文件登记豁免（逻辑在 search.ts 已测）、行数棘轮显式上调 Board 1984→2024、Canvas 1086→1114（原因已写进测试文件） | 计划 P1-3；与既有快捷键无冲突 |
+| 2026-09-12 | （本次） | `HANDOVER.md`、`CHANGELOG.md`、`README.md` | 同步 P1-3：§3 基线 657/56→**694/57**、§6 计数 657→694、§9 追加 P1-3 两行；CHANGELOG `[Unreleased]` 补「画布搜索」；README 功能表加搜索定位行、验证基线同步 | AGENTS.md 变更记录规范 |
 | 2026-09-12 | （本次） | `HANDOVER.md` | 同步 P1-2：§2 数据流向更新落盘路径与导出/导入链路；§3 基线 611/53→**657/56**；§5 新增第 9 条「布局存放位置」（用户裁决：key 用空间 id / 显式导出导入 / 不自动同步）；§6 `pnpm test` 计数 611→657；§9 追加两行 | AGENTS.md 变更记录规范 |
