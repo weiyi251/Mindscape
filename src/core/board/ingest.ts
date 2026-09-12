@@ -15,7 +15,6 @@
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'
-import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { joinPath } from '@/core/utils/paths'
 
 /** 空白落点目标子文件夹名（8.1） */
@@ -45,9 +44,13 @@ export interface DropDestination {
  * 判定拖入 / 粘贴的落点（T3.7）。
  * 命中规则：画布坐标点落在分区框矩形内（含标题条）即视为「框内」；
  * 多个框重叠时取面积最小的（最精确的命中），与视觉直觉一致。
+ *
+ * 坐标点用内联结构类型，而不是 `@/canvas/interaction/connectionAnchor` 的 `Point`：
+ * core 层不得依赖 canvas 层（架构守卫规则 4），而这里只需要两个数字，不值得把类型
+ * 提到公共层（canvas 层里已存在 connectionAnchor / coordinates 两处 Point 定义）。
  */
 export function resolveDropDestination(
-  point: Point,
+  point: { x: number; y: number },
   partitions: readonly Partition[],
   spacePath: string,
 ): DropDestination {
