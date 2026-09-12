@@ -2,8 +2,11 @@
 // 模块说明（中文）
 // 轻量输入浮层（T3.3 备注 / T3.9 编辑标签 / T3.2 连线标签共用）。
 //
-// 为什么不用 window.prompt：Tauri 的 WebView2 不支持原生 prompt/confirm/alert
-// （T2.6 已踩过：window.confirm 永远返回 false），一律走自研浮层。
+// 为什么不用 window.prompt：WebView2 **不提供**原生 prompt（没有输入框可弹），
+// 所以任何需要用户输入文本的场景都必须走自研浮层，这是本组件存在的唯一理由。
+// 注意：原生 confirm / alert 在 WebView2 里是**可用**的 —— T2.6 当时记下的相反结论
+// 经真机实测不成立。本项目不用它们只是风格分工：Board 走 @tauri-apps/plugin-dialog
+// 的 ask()（带标题与警告图标），SpaceList 用原生 confirm。
 //
 // 单行（input）与多行（textarea）两种形态；Enter 提交，Esc 取消。
 // ============================================================================
