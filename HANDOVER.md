@@ -113,6 +113,9 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 - **提交身份**：本机 git 未配置身份，每次提交必须带 `git -c user.name=weiyi251 -c user.email=3127459108@qq.com commit`；**不得改 git config**
 - **CI**：GitHub Actions 须 pnpm 11 + node 22（pnpm-workspace.yaml 是 10+ 格式，pnpm 9 报 `packages field missing` 且失败点误显示在装 Node 步骤）
 - **GitHub 资产上传必须 raw body**：`uploads.github.com` 不解析 multipart（会原样存盘损坏文件），工具脚本 `.workbuddy/gh-finish.mjs` 已固定 raw body
+- **`git push` 在本机不可用**：`github.com:443` 的 TCP 可连、DNS 正常、hosts 干净，但 smart-http 端点（`/info/refs?service=git-upload-pack`）在 TLS 后无响应（超时）。而 `api.github.com` 与 `uploads.github.com` 稳定可达。因此推送改走 Git Data API：`node .workbuddy/push-api-parity.mjs [--tag vX.Y.Z]`（显式传 author/committer 与逐字节相同的消息 → 远端 sha 与本地一致，不分叉）
+- **沙箱内跑 pnpm / cargo 必须经 `cmd.exe`**：Bash 环境缺 coreutils（`dirname`/`ls`/`head`/`tail` 均不可用，`pnpm` 直接跑会报 `Cannot find module ...\pnpm.mjs`）。用 `node .workbuddy/gate.mjs <pnpm 子命令|cargo>` 或 `node .workbuddy/gates-all.mjs`（全量门禁）
+- **脚本别用 `fs.createWriteStream` 记日志**：`spawnSync`（pnpm/cargo）会**阻塞事件循环**，写流的 flush 回调执行不到，日志全积在内存里，结尾再 `process.exit()` 就整份丢失（表现为「脚本明明跑完了，日志文件却不存在」）。改用 `fs.appendFileSync` / `writeFileSync` 同步写
 
 ## 7. 性能与素材
 
