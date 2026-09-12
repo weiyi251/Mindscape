@@ -79,6 +79,19 @@ export function sortSpacesByLastOpened(spaces: Space[]): Space[] {
   return [...spaces].sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt))
 }
 
+/**
+ * 列表展示排序（P1-5）：**收藏 → 最近打开**。
+ * 收藏的空间永远排在未收藏前面，各自内部再按 lastOpenedAt 倒序；
+ * 同组内时间相同的保持原有相对顺序（Array.prototype.sort 稳定）。
+ * 旧数据经 zod parse 后 favorite 恒为 boolean，无需特判。
+ */
+export function sortSpacesForList(spaces: Space[]): Space[] {
+  return [...spaces].sort((a, b) => {
+    if (a.favorite !== b.favorite) return a.favorite ? -1 : 1
+    return b.lastOpenedAt.localeCompare(a.lastOpenedAt)
+  })
+}
+
 /** 序列化：两空格缩进 + 末尾换行，便于用户直接打开查看/手改 */
 export function serializeSpacesFile(file: SpacesFile): string {
   return `${JSON.stringify(file, null, 2)}\n`

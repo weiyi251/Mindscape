@@ -31,6 +31,7 @@ const SPACE: Space = {
   folderPath: 'D:\\Mindscape\\01_项目A',
   createdAt: '2026-09-10T11:00:00',
   lastOpenedAt: '2026-09-10T11:00:00',
+  favorite: false,
   meta: {},
 }
 

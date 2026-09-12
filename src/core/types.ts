@@ -135,6 +135,8 @@ export const zSpaceSchema = z.object({
   folderPath: z.string(),
   createdAt: z.string(),
   lastOpenedAt: z.string(),
+  /** 收藏（P1-5）：列表里排在未收藏空间前面；旧数据无此字段 → false（向后兼容） */
+  favorite: z.boolean().default(false),
   meta: zMetaSchema,
 })
 export type Space = z.infer<typeof zSpaceSchema>

@@ -11,6 +11,7 @@ import {
   interpretSpacesText,
   serializeSpacesFile,
   sortSpacesByLastOpened,
+  sortSpacesForList,
 } from '@/core/storage/spacesFile'
 import { parseSpacesFile } from '@/core/types'
 import type { Space } from '@/core/types'
@@ -23,6 +24,7 @@ function makeSpace(over: Partial<Space> = {}): Space {
     folderPath: 'D:\\Mindscape\\01_项目A',
     createdAt: '2026-09-10T11:00:00',
     lastOpenedAt: '2026-09-10T11:30:00',
+    favorite: false,
     meta: {},
     ...over,
   }
@@ -122,6 +124,90 @@ describe('sortSpacesByLastOpened', () => {
     sortSpacesByLastOpened(spaces)
 
     expect(spaces.map((item) => item.id)).toEqual(snapshot)
+  })
+})
+
+describe('sortSpacesForList（P1-5：收藏 → 最近打开）', () => {
+  it('收藏的空间排在未收藏前面，组内按最近打开倒序', () => {
+    const spaces = [
+      makeSpace({ id: 'old_fav', favorite: true, lastOpenedAt: '2026-09-01T10:00:00' }),
+      makeSpace({ id: 'new_plain', favorite: false, lastOpenedAt: '2026-09-10T10:00:00' }),
+      makeSpace({ id: 'new_fav', favorite: true, lastOpenedAt: '2026-09-09T10:00:00' }),
+    ]
+
+    expect(sortSpacesForList(spaces).map((item) => item.id)).toEqual([
+      'new_fav',
+      'old_fav',
+      'new_plain',
+    ])
+  })
+
+  it('全部未收藏时等价于按最近打开倒序', () => {
+    const spaces = [
+      makeSpace({ id: 'a', lastOpenedAt: '2026-09-01T10:00:00' }),
+      makeSpace({ id: 'b', lastOpenedAt: '2026-09-10T10:00:00' }),
+    ]
+    expect(sortSpacesForList(spaces).map((item) => item.id)).toEqual(['b', 'a'])
+  })
+
+  it('不修改原数组（纯函数）', () => {
+    const spaces = [
+      makeSpace({ id: 'a', favorite: true, lastOpenedAt: '2026-09-01T10:00:00' }),
+      makeSpace({ id: 'b', lastOpenedAt: '2026-09-10T10:00:00' }),
+    ]
+    const snapshot = spaces.map((item) => item.id)
+
+    sortSpacesForList(spaces)
+
+    expect(spaces.map((item) => item.id)).toEqual(snapshot)
+  })
+})
+
+describe('favorite 字段向后兼容（P1-5）', () => {
+  it('旧数据没有 favorite 字段 → 解析后为 false', () => {
+    // v0.3.0 时代写出的 spaces.json 里没有 favorite
+    const legacyText = JSON.stringify({
+      version: 1,
+      spaces: [
+        {
+          id: 'sp_legacy',
+          name: '旧空间',
+          type: '项目',
+          folderPath: 'D:\\Mindscape\\旧空间',
+          createdAt: '2026-09-01T10:00:00',
+          lastOpenedAt: '2026-09-02T10:00:00',
+          meta: {},
+        },
+      ],
+    })
+
+    const interpreted = interpretSpacesText(legacyText)
+    expect(interpreted.corrupted).toBe(false)
+    expect(interpreted.file.spaces[0].favorite).toBe(false)
+  })
+
+  it('旧数据排序时按未收藏处理，不会因为缺字段而崩', () => {
+    const legacyText = JSON.stringify({
+      version: 1,
+      spaces: [
+        {
+          id: 'sp_legacy',
+          name: '旧空间',
+          type: '项目',
+          folderPath: 'D:\\Mindscape\\旧空间',
+          createdAt: '2026-09-01T10:00:00',
+          lastOpenedAt: '2026-09-02T10:00:00',
+          meta: {},
+        },
+        makeSpace({ id: 'sp_fav', favorite: true, lastOpenedAt: '2026-09-01T10:00:00' }),
+      ],
+    })
+
+    const interpreted = interpretSpacesText(legacyText)
+    expect(sortSpacesForList(interpreted.file.spaces).map((item) => item.id)).toEqual([
+      'sp_fav',
+      'sp_legacy',
+    ])
   })
 })
 

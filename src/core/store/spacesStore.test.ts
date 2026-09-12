@@ -56,6 +56,7 @@ function makeSpace(over: Partial<Space> = {}): Space {
     folderPath: 'D:\\Mindscape\\01_项目A',
     createdAt: '2026-09-10T11:00:00',
     lastOpenedAt: '2026-09-10T11:00:00',
+    favorite: false,
     meta: {},
     ...over,
   }
@@ -328,7 +329,7 @@ describe('T1.2 重启恢复', () => {
     expect(memory.stored.version).toBe(1)
     expect(Array.isArray(memory.stored.spaces)).toBe(true)
     expect(Object.keys(memory.stored.spaces[0]).sort()).toEqual(
-      ['createdAt', 'folderPath', 'id', 'lastOpenedAt', 'meta', 'name', 'type'].sort(),
+      ['createdAt', 'favorite', 'folderPath', 'id', 'lastOpenedAt', 'meta', 'name', 'type'].sort(),
     )
   })
 
@@ -347,5 +348,94 @@ describe('T1.2 重启恢复', () => {
     await store.getState().load()
 
     expect(store.getState().spaces.map((space) => space.name)).toEqual(['晚', '早'])
+  })
+})
+
+describe('renameSpace（P1-5）', () => {
+  const setup = async () => {
+    const memory = createMemoryGateway({
+      file: {
+        version: 1,
+        spaces: [
+          makeSpace({ id: 'sp_001', name: '项目A', lastOpenedAt: '2026-09-01T00:00:00' }),
+          makeSpace({ id: 'sp_002', name: '项目B', lastOpenedAt: '2026-09-09T00:00:00' }),
+        ],
+      },
+    })
+    const store = createSpacesStore(memory.gateway)
+    await store.getState().load()
+    return { memory, store }
+  }
+
+  it('改名成功并落盘；重启后仍是新名', async () => {
+    const { memory, store } = await setup()
+    await store.getState().renameSpace('sp_001', '新名字')
+    expect(store.getState().spaces.find((space) => space.id === 'sp_001')?.name).toBe('新名字')
+    expect(memory.stored.spaces.find((space) => space.id === 'sp_001')?.name).toBe('新名字')
+
+    // 模拟重启：新 store 实例从同一份数据加载
+    const secondRun = createSpacesStore(memory.gateway)
+    await secondRun.getState().load()
+    expect(secondRun.getState().spaces.find((space) => space.id === 'sp_001')?.name).toBe('新名字')
+  })
+
+  it('空名 / 纯空白拒绝', async () => {
+    const { store } = await setup()
+    await expect(store.getState().renameSpace('sp_001', '   ')).rejects.toThrow('空间名称不能为空')
+  })
+
+  it('与其他空间重名拒绝', async () => {
+    const { store } = await setup()
+    await expect(store.getState().renameSpace('sp_001', '项目B')).rejects.toThrow(
+      '已存在名为「项目B」的空间',
+    )
+  })
+
+  it('改成原名是空操作（不落盘、不报错）', async () => {
+    const { memory, store } = await setup()
+    const savesBefore = memory.saves.length
+    await store.getState().renameSpace('sp_001', '项目A')
+    expect(memory.saves.length).toBe(savesBefore)
+  })
+
+  it('不存在的 id 报中文错误', async () => {
+    const { store } = await setup()
+    await expect(store.getState().renameSpace('sp_404', '任意')).rejects.toThrow('空间不存在')
+  })
+})
+
+describe('toggleSpaceFavorite（P1-5）', () => {
+  const setup = async () => {
+    const memory = createMemoryGateway({
+      file: {
+        version: 1,
+        spaces: [
+          makeSpace({ id: 'sp_001', name: '较早未收藏', lastOpenedAt: '2026-09-01T00:00:00' }),
+          makeSpace({ id: 'sp_002', name: '较新未收藏', lastOpenedAt: '2026-09-09T00:00:00' }),
+        ],
+      },
+    })
+    const store = createSpacesStore(memory.gateway)
+    await store.getState().load()
+    return { memory, store }
+  }
+
+  it('收藏后排在未收藏前面并落盘；再切一次恢复原排序', async () => {
+    const { memory, store } = await setup()
+
+    await store.getState().toggleSpaceFavorite('sp_001')
+    expect(store.getState().spaces.map((space) => space.id)).toEqual(['sp_001', 'sp_002'])
+    expect(memory.stored.spaces.find((space) => space.id === 'sp_001')?.favorite).toBe(true)
+
+    await store.getState().toggleSpaceFavorite('sp_001')
+    expect(store.getState().spaces.map((space) => space.id)).toEqual(['sp_002', 'sp_001'])
+    expect(memory.stored.spaces.find((space) => space.id === 'sp_001')?.favorite).toBe(false)
+  })
+
+  it('不存在的 id 是空操作（不崩、不落盘）', async () => {
+    const { memory, store } = await setup()
+    const savesBefore = memory.saves.length
+    await store.getState().toggleSpaceFavorite('sp_404')
+    expect(memory.saves.length).toBe(savesBefore)
   })
 })
