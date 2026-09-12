@@ -60,7 +60,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
-- 全量基线（2026-09-12，v0.4.0 开发中）：Vitest **694 passed / 57 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（383.61 kB / gzip 118.08 kB）
+- 全量基线（2026-09-12，v0.4.0 批次完成）：Vitest **721 passed / 58 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（386.66 kB / gzip 119.01 kB）
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
@@ -102,7 +102,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（694 tests）
+pnpm test           # vitest run（721 tests）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
@@ -186,4 +186,9 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-09-12 | 8a40edf | `src/core/board/search.ts`（新增）、`search.test.ts`（新增） | **卡片搜索纯匹配层（P1-3）**：大小写不敏感子串匹配，覆盖文件名（filePath 最后一段）/ 便签正文（note）/ 分区名（group，无独立 tags 字段，分区名承担「标签」角色）；空查询返回空结果（不清屏全亮）；`excerptOf` 摘录（换行压平、超长省略号）、`stepIndex` 循环跳转、`describeHits` + `SEARCH_FIELD_LABELS` 展示整形。37 条单测 | 计划 P1-3：上百张卡的画布里能直接找到目标 |
 | 2026-09-12 | bed2cc1 | `src/components/ui/card-search.tsx`（新增）、`src/core/hooks/useCardSearch.ts`（新增）、`src/canvas/{Canvas.tsx, Card.tsx}`、`src/pages/Board.tsx`、`src/components/ui/icons.tsx`、`src/__guards__/architecture.test.ts` | **Ctrl+F 搜索浮层与画布命中高亮（P1-3 UI）**：浮层（输入框 + 命中数 + 上下跳转 + 结果列表，浮层内按键 stopPropagation —— Ctrl+A 全选输入框文本而非卡片、Esc 只关浮层）；`useCardSearch` hook（状态胶水，Board 注入 `jumpTo`：选中 + `CanvasApi.centerOn` 视口居中，复用小地图定位路径）；Canvas 加 Ctrl+F 分支（preventDefault 防 WebView 页内查找抢占）与 `searchHitIds`/`searchActiveId` props；`Card.searchState` 虚线（命中）/粗实线（当前跳转目标）描边，走 `outline-primary` 语义色；`icons.tsx` 加 Search/ChevronUp/ChevronDown/Close；守卫：2 个新文件登记豁免（逻辑在 search.ts 已测）、行数棘轮显式上调 Board 1984→2024、Canvas 1086→1114（原因已写进测试文件） | 计划 P1-3；与既有快捷键无冲突 |
 | 2026-09-12 | （本次） | `HANDOVER.md`、`CHANGELOG.md`、`README.md` | 同步 P1-3：§3 基线 657/56→**694/57**、§6 计数 657→694、§9 追加 P1-3 两行；CHANGELOG `[Unreleased]` 补「画布搜索」；README 功能表加搜索定位行、验证基线同步 | AGENTS.md 变更记录规范 |
+| 2026-09-12 | 29eceff | `src/canvas/interaction/fitToContent.ts`（新增）、`fitToContent.test.ts`（新增）、`viewportController.ts` | **缩放到全部内容纯计算层（P1-4）**：`contentRects`（卡片+分区，折叠分区按标题条高度算，与 MiniMap 同口径）、`unionRects`、`fitViewportState`（min(可用宽/内容宽, 可用高/内容高) 钳到 [10%,400%]，包围盒中心对准视口中心；空内容/视口非法返回 null）；`ViewportController.fitToContent(rects)` 直写 `style.transform`（守 17.3）。15 条单测（3 矩形适配、单卡片、空画布、钳到 400%/10%、极小视口、零尺寸矩形） | 计划 P1-4：误拖到远处后一键找回全部内容 |
+| 2026-09-12 | dd241ea | `src/canvas/Canvas.tsx`、`src/__guards__/architecture.test.ts` | Ctrl+Shift+0 快捷键分支（⚠️ 放在 Ctrl+0 之前，否则被「ctrlKey && key==='0'」先命中）+ 状态条「适应内容」按钮；守卫棘轮 Canvas 1114→1135（原因写进测试文件） | 计划 P1-4 接线 |
+| 2026-09-12 | 357e1ea | `src/core/types.ts`、`src/core/storage/spacesFile.ts`(+test)、`src/core/store/{spacesStore.ts(+test), boardStore.test.ts}` | **改名/收藏/排序数据层（P1-5）**：Space schema 加 `favorite`（default false，旧数据经 zod 解析为 false，兼容用例锁定）；`sortSpacesForList`（收藏优先 → lastOpenedAt 倒序）替换 load/createSpace/openSpace 的排序；spacesStore 新增 `renameSpace`（空名/重名/不存在 id 报中文错误，改成原名为空操作）与 `toggleSpaceFavorite`（翻转即重排落盘）。11 条新单测 | 计划 P1-5：空间多起来后不再只能按时间找 |
+| 2026-09-12 | 8fa3a31 | `src/pages/SpaceList.tsx` | 空间卡片悬停操作新增「收藏 / 取消收藏」「重命名」；收藏卡片标题前常显 ★（语义色 text-primary）；列表用 `sortSpacesForList`；重命名走 PromptDialog（Enter/Esc，初始全选），校验错误经 alertDialog 弹出；只改显示名，绑定的文件夹不动 | 计划 P1-5 UI |
+| 2026-09-12 | （本次） | `HANDOVER.md`、`CHANGELOG.md`、`README.md` | 同步 P1-4/P1-5：§3 基线 694/57→**721/58**、§6 计数 694→721、§9 追加四行；CHANGELOG `[Unreleased]` 补两条；README 基线与功能表同步。**v0.4.0 批次（P1-1~P1-5）至此全部落地** | AGENTS.md 变更记录规范 |
 | 2026-09-12 | （本次） | `HANDOVER.md` | 同步 P1-2：§2 数据流向更新落盘路径与导出/导入链路；§3 基线 611/53→**657/56**；§5 新增第 9 条「布局存放位置」（用户裁决：key 用空间 id / 显式导出导入 / 不自动同步）；§6 `pnpm test` 计数 611→657；§9 追加两行 | AGENTS.md 变更记录规范 |
