@@ -76,6 +76,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 ### 已解决（保留备查）
 
 - ~~本地与远端 sha 分叉~~ —— v0.3.0 推送改用 `.workbuddy/push-api-parity.mjs`：走 Git Data API 重建提交时**显式传入 author / committer（含原始时区）与逐字节相同的消息**，创建后立即与本地 sha 比对，因此远端与本地 sha 完全一致，不再产生分叉。该脚本取代了 v0.2.0 时期的 `.workbuddy/push-via-api.mjs`
+- ~~本地 v0.1.0 / v0.2.0 标签引用丢失~~ —— 事故删掉了 `.git/refs/tags`（标签对象仍在，即 `git fsck` 里的 `dangling tag`）。已恢复：v0.1.0 的本地对象与远端**完全相同**（`0cbd6ae8`）直接用；v0.2.0 的本地对象指向事故前本地提交 `e89bb99` 而远端指向 `36cdb32`，故按远端元数据**逐字节重建**（`2e595df2`）。**三个标签的对象 sha 现均与远端一致**，未来 `git fetch --tags` 不会冲突。⚠️ 踩坑：`GET /git/tags/{sha}` 的 `tagger.date` 是 UTC 的 `…Z`，但对象里存的是「**UTC 的 epoch + 用户时区偏移**」（`1789179112 +0800`），照 `Z` 写成 `+0000` 永远对不上 → 用 API 元数据重建对象时**时区必须穷举**
 - ~~沙箱事故导致本地 git 历史丢失~~ —— 2026-09-12 一次 `git rebase` 被沙箱 SIGTERM 中断，`.git/refs` 与大量松散对象被删。已按「备份 → 用 API 重建远端 tip 对象 → 对齐 main → 重建索引（删损坏 index + `git read-tree HEAD`）→ 按模块重建提交」恢复；**内容零丢失**已用树哈希硬校验（`4d309fcd44901b59ffa53bbbaef6e55664d883c5` 与事故前一致）。备份留在 `.workbuddy/backup/2026-09-12-recovery/`。遗留一处**不可达的损坏 pack 条目**（`0c0a2eab`），`git fsck` 会报 `failed to load pack entry`，但 `git rev-list --objects HEAD` 退出 0，可达对象全部完整，不影响使用
 
 ### 已知限制（有意取舍，见 README「已知限制」）
