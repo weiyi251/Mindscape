@@ -22,12 +22,14 @@ import { open } from '@tauri-apps/plugin-dialog'
 
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { ImportIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons'
 import { SPACE_TYPE_PRESETS, parseLayout } from '@/core/types'
 import type { Space } from '@/core/types'
 import { useTheme } from '@/core/hooks/useTheme'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
+import { sortSpacesForList } from '@/core/storage/spacesFile'
 import {
   EXPORTED_LAYOUT_FILE,
   adoptExportedLayout,
@@ -90,6 +92,8 @@ export function SpaceList() {
   const createSpace = useSpacesStore((state) => state.createSpace)
   const removeSpace = useSpacesStore((state) => state.removeSpace)
   const openSpace = useSpacesStore((state) => state.openSpace)
+  const renameSpace = useSpacesStore((state) => state.renameSpace)
+  const toggleSpaceFavorite = useSpacesStore((state) => state.toggleSpaceFavorite)
 
   /** 主题（2026-09-12）：与空间内共用 useTheme，「外观」一项在主界面同样可用 */
   const { theme, toggle: handleToggleTheme } = useTheme()
@@ -106,6 +110,8 @@ export function SpaceList() {
   const [busy, setBusy] = useState(false)
   /** 导入空间时选中的源文件夹（里面有 mindscape-layout.json）；null 表示普通新建 */
   const [layoutSource, setLayoutSource] = useState<string | null>(null)
+  /** 正在重命名的空间（P1-5）；null 表示改名弹窗关闭 */
+  const [renameTarget, setRenameTarget] = useState<Space | null>(null)
 
   const effectiveType = typeChoice === CUSTOM_TYPE ? customType.trim() : typeChoice
 
@@ -254,7 +260,30 @@ export function SpaceList() {
     }
   }, [])
 
-  const sortedSpaces = useMemo(() => spaces, [spaces])
+  /** 列表排序（P1-5）：收藏的排前面，组内按最近打开时间倒序 */
+  const sortedSpaces = useMemo(() => sortSpacesForList(spaces), [spaces])
+
+  /** 改名确认（P1-5）：校验在 store 内（与新建同一套规则），这里只负责把错误弹出来 */
+  const handleRenameConfirm = useCallback(
+    (value: string) => {
+      const target = renameTarget
+      setRenameTarget(null)
+      if (!target) return
+      void renameSpace(target.id, value).catch((error: unknown) => {
+        void alertDialog(error instanceof Error ? error.message : String(error), '重命名空间')
+      })
+    },
+    [renameTarget, renameSpace],
+  )
+
+  const handleToggleFavorite = useCallback(
+    (space: Space) => {
+      void toggleSpaceFavorite(space.id).catch((error: unknown) => {
+        void alertDialog(error instanceof Error ? error.message : String(error), '收藏空间')
+      })
+    },
+    [toggleSpaceFavorite],
+  )
 
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
@@ -348,11 +377,37 @@ export function SpaceList() {
               }}
             >
               <div className="flex items-start justify-between gap-2">
-                <h2 className="truncate font-medium" title={space.name}>
+                <h2 className="min-w-0 truncate font-medium" title={space.name}>
+                  {/* 收藏标记常显（P1-5）：列表靠收藏排序，标记要能看出「为什么它在前面」 */}
+                  {space.favorite ? <span className="mr-1 text-primary">★</span> : null}
                   {space.name}
                 </h2>
                 {/* 悬停才出现的卡片操作 */}
                 <div className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    type="button"
+                    aria-label={`${space.favorite ? '取消收藏' : '收藏'} ${space.name}`}
+                    title={space.favorite ? '取消收藏' : '收藏（排在列表前面）'}
+                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      handleToggleFavorite(space)
+                    }}
+                  >
+                    {space.favorite ? '取消收藏' : '收藏'}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`重命名 ${space.name}`}
+                    title="重命名（只改显示名，文件夹不动）"
+                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setRenameTarget(space)
+                    }}
+                  >
+                    重命名
+                  </button>
                   <button
                     type="button"
                     aria-label={`导出空间布局 ${space.name}`}
@@ -493,6 +548,21 @@ export function SpaceList() {
 
         {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
       </Modal>
+
+      {/* 重命名弹窗（P1-5）：Enter 提交、Esc 取消；只改显示名，绑定的文件夹不动 */}
+      <PromptDialog
+        state={
+          renameTarget
+            ? {
+                title: `重命名「${renameTarget.name}」`,
+                value: renameTarget.name,
+                placeholder: '输入新的空间名称',
+                onConfirm: handleRenameConfirm,
+              }
+            : null
+        }
+        onClose={() => setRenameTarget(null)}
+      />
     </div>
   )
 }
