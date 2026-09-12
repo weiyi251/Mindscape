@@ -142,13 +142,17 @@ describe('三种核心类型的渲染可区分', () => {
     expect(html).toContain('data-card-type="image"')
     expect(html).toContain('data-card-image')
     expect(html).toContain('alt="ref-01.jpg"')
-    // 卡片尺寸已按原始宽高比算好，图片用 contain 铺满且不变形
-    expect(html).toContain('object-contain')
+    // 图片用 contain 等比缩放不变形；且必须有确定高度（flex-1 + min-h-0），
+    // 否则 img 元素盒会按"宽度 × 原图比例"自行撑高，被 overflow-hidden 裁掉
+    const imgTag = html.match(/<img[^>]*>/)?.[0] ?? ''
+    expect(imgTag).toContain('object-contain')
+    expect(imgTag).toContain('flex-1')
+    expect(imgTag).toContain('min-h-0')
     expect(html).not.toContain('（空便签）')
   })
 
   it('image：把坐标与原图地址写进 dataset（供原图懒加载直接判交）', () => {
-    setCardAsset('card-1', { thumbnailPath: 'D:\\t\\a.webp', originalPath: 'D:\\s\\a.jpg' })
+    setCardAsset('card-1', { originalPath: 'D:\\s\\a.jpg' })
 
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: false }),
@@ -159,6 +163,16 @@ describe('三种核心类型的渲染可区分', () => {
     expect(html).toContain('data-y="0"')
     expect(html).toContain('data-w="220"')
     expect(html).toContain('data-h="220"')
+  })
+
+  it('image：src 初始为空（方案 A：可见时才由懒加载写入原图）', () => {
+    setCardAsset('card-1', { originalPath: 'D:\\s\\a.jpg' })
+
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+
+    expect(html).not.toContain('src=')
   })
 
   it('image：缩略图缺失时加兜底底色类名，不留白', () => {

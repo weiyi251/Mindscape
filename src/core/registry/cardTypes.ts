@@ -12,7 +12,8 @@
 //
 // ⚠️ 当前 render 的完成度：
 //    file / note 是极简可视占位（文件=扩展名徽标+文件名 / 便签=文字内容）；
-//    image 已在阶段一 T1.4 接入真实缩略图渲染（经 17.10 的 assetProtocol 通道）。
+//    image 自 T1.4 起走真实图片渲染（经 17.10 的 assetProtocol 通道），
+//    2026-09-12 方案 A 起直接加载原图（可见时由懒加载写入 src，无缩略图）。
 //
 // 实现任务：T0.10（准备层）/ T1.4（图片类型接入 asset 通道）。
 // ============================================================================
@@ -23,7 +24,7 @@ import type { ReactNode } from 'react'
 import type { Card, CoreCardType } from '@/core/types'
 import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
-import { getCardOriginalPath, getCardThumbnailPath } from '@/core/board/cardAssets'
+import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { tagsOfMeta } from '@/core/commands/impl/setCardMeta'
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'
 import { getRegisteredCardType, listRegisteredCardTypes } from './pluginCenter'
@@ -216,16 +217,24 @@ function shell(
   )
 }
 
-/** image：图片本体（缩略图 → 视口内升级原图，见 canvas/lazyOriginal.ts） */
+/** image：图片本体（可见时由 lazyOriginal 写入原图 src，见 canvas/lazyOriginal.ts） */
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
-  const thumbnailUrl = toAssetUrl(getCardThumbnailPath(card.id))
   const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
   const note = noteBar(card)
   const tags = tagBar(card)
 
-  // 卡片尺寸已按图片原始宽高比算好（T1.4），因此 object-contain 就是铺满且不变形。
-  // 坐标写进 dataset，供原图懒加载在**不触发 React 更新**的前提下直接判交（17.3）。
+  // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：
+  //   · 只给 w-full 时，img 元素盒的高度会按"宽度 × 原图比例"自己撑开；
+  //     卡片比原图更宽更扁（例如 480×135 装 16:9 图）时元素盒会比卡片高，
+  //     多出的部分被外壳的 overflow-hidden 裁掉 —— 表现就是"图片显示不完整"。
+  //   · 给成 flex-1（有备注条 / 标签条时自动让出它们的高度）后元素盒被容器约束，
+  //     object-contain 才真正做"等比缩放 + 居中留白"，任何卡片尺寸下都完整不变形。
+  // ⚠️ 卡片缩放本身也已锁定原图比例（cardResizeController），这里是渲染层兜底：
+  //    旧布局里已经失真的卡片、以及带备注条的卡片都能正确显示。
+  // 坐标写进 dataset，供原图懒加载在**不触发 React 更新**的前提下直接判交（17.3）；
+  // src 初始为空（方案 A：不生成缩略图）——可见时由 lazyOriginal 把原图写进 img.src，
+  // 视口外的卡片完全不加载（17.11 反模式 9）。
   const body = createElement('img', {
     key: 'image',
     'data-card-image': '',
@@ -234,17 +243,14 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     'data-y': card.y,
     'data-w': card.w,
     'data-h': card.h,
-    src: thumbnailUrl || undefined,
     alt: name,
     title: name,
     draggable: false,
     decoding: 'async',
     className: [
-      // 有备注条 / 标签条时图片让出高度，保持 contain 不变形
-      note || tags ? 'min-h-0 flex-1' : '',
-      'pointer-events-none w-full select-none object-contain',
-      // 缩略图还没到位（首次生成中 / 生成失败）时给一块可辨识的底色，不留白
-      thumbnailUrl ? '' : 'bg-muted/60 text-[11px] text-muted-foreground',
+      'pointer-events-none min-h-0 w-full flex-1 select-none object-contain',
+      // 原图 URL 缺失（非 Tauri 环境 / 未登记）时给一块可辨识的底色，不留白
+      originalUrl ? '' : 'bg-muted/60 text-[11px] text-muted-foreground',
     ].join(' '),
   })
 

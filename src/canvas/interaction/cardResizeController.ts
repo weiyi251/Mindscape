@@ -10,18 +10,31 @@
 //
 // 只改右下角：卡片左上角（x / y）保持不变，宽高随手柄增长/收缩。
 // 最小尺寸 MIN_CARD_SIZE 是手感可调参数（17 章「⚠️ 可调」精神），文档未规定。
-// 实现任务：T2.3。
+//
+// 【图片卡片锁比例】（2026-09-12 用户实测反馈修复）
+//   无约束的自由缩放会让卡片盒的比例脱离原图比例，渲染层只能用 object-contain
+//   做留白（letterbox）；卡片比原图"更宽更扁"时，图片元素盒还会被撑得比卡片高，
+//   被外壳的 overflow-hidden 裁掉 —— 用户看到的就是"图片显示不完整"。
+//   因此：source.getAspectRatio 给出比例（w/h）时，缩放按该比例等比进行
+//   （判据见 ratioLockedSize）；返回 null（非图片 / 未登记）时保持自由缩放。
+//
+// 实现任务：T2.3（比例锁定为 2026-09-12 增补）。
 // ============================================================================
 
-/** 卡片允许的最小宽 / 高（px，画布坐标） */
+/** 卡片允许的最小宽 / 高（px，画布坐标）。锁比例时两轴都不得低于它 */
 export const MIN_CARD_SIZE = 40
 
-/** 缩放通道：读按下时的尺寸、直写 DOM、读缩放比 */
+/** 缩放通道：读按下时的尺寸、直写 DOM、读缩放比、取宽高比 */
 export interface CardResizeSource {
   getCardSize(cardId: string): { w: number; h: number }
   /** 直写 DOM 的 width / height（不进 React state） */
   setCardSize(cardId: string, w: number, h: number): void
   getZoom(): number
+  /**
+   * 该卡片的锁定宽高比（w / h）。返回 null 表示不锁比例（自由缩放）。
+   * element 是卡片根元素，实现方可从中读取已加载原图的真实比例。
+   */
+  getAspectRatio(cardId: string, element: HTMLElement | null): number | null
 }
 
 export interface CardResizeDelegate {
@@ -30,16 +43,53 @@ export interface CardResizeDelegate {
   onResizeEnd(cardId: string, from: { w: number; h: number }, to: { w: number; h: number }): void
 }
 
-/** 一次缩放的快照（测试用） */
-export interface ResizeSnapshot {
-  cardId: string
-  from: { w: number; h: number }
-  to: { w: number; h: number }
-}
-
 function clampSize(value: number): number {
   if (!Number.isFinite(value)) return MIN_CARD_SIZE
   return Math.max(MIN_CARD_SIZE, Math.round(value))
+}
+
+/**
+ * 锁比例缩放：由「相对变化更大的那一轴」决定尺寸，另一轴按原图比例推出。
+ *
+ * 为什么用"相对变化更大的轴"而不是固定某一轴：
+ *   用户拖右下角时可能水平拖得多、也可能垂直拖得多。取主导轴才符合
+ *   "往哪个方向拖就往哪个方向变"的直觉；固定按宽度算会出现"竖直拖半天不动"。
+ *
+ * 纯函数，不碰 DOM，便于单测覆盖各种极端比例。
+ *
+ * @param start   按下时的卡片尺寸（画布坐标）
+ * @param ratio   锁定的宽高比 w / h（须 > 0）
+ * @param deltaW  水平位移换算到画布坐标的增量
+ * @param deltaH  垂直位移换算到画布坐标的增量
+ */
+export function ratioLockedSize(
+  start: { w: number; h: number },
+  ratio: number,
+  deltaW: number,
+  deltaH: number,
+): { w: number; h: number } {
+  const baseW = start.w > 0 ? start.w : MIN_CARD_SIZE
+  const baseH = start.h > 0 ? start.h : MIN_CARD_SIZE
+  if (!(ratio > 0) || !Number.isFinite(ratio)) return { w: Math.round(baseW), h: Math.round(baseH) }
+
+  const useWidth = Math.abs(deltaW) / baseW >= Math.abs(deltaH) / baseH
+  let w = useWidth ? baseW + deltaW : (baseH + deltaH) * ratio
+  // 只拦非有限值；负值（拖过头）交给下面的短边保底抬回来 —— 那才是用户预期的"缩到最小"
+  if (!Number.isFinite(w)) w = baseW
+
+  let h = w / ratio
+  // 短边保底（顺序有讲究）：先把高抬到下限再反推宽；比例 < 1 时还要再抬一次宽。
+  // 不这样做的话，长条形的图会被缩成一条看不见也点不中的细线。
+  if (h < MIN_CARD_SIZE) {
+    h = MIN_CARD_SIZE
+    w = h * ratio
+  }
+  if (w < MIN_CARD_SIZE) {
+    w = MIN_CARD_SIZE
+    h = w / ratio
+  }
+
+  return { w: Math.round(w), h: Math.round(h) }
 }
 
 export class CardResizeController {
@@ -91,10 +141,20 @@ export class CardResizeController {
 
     const zoom = this.source.getZoom()
     const safeZoom = zoom > 0 ? zoom : 1
-    this.currentSize = {
-      w: clampSize(this.startSize.w + (event.clientX - this.startScreen.x) / safeZoom),
-      h: clampSize(this.startSize.h + (event.clientY - this.startScreen.y) / safeZoom),
-    }
+    const deltaW = (event.clientX - this.startScreen.x) / safeZoom
+    const deltaH = (event.clientY - this.startScreen.y) / safeZoom
+
+    // 图片卡片锁原图比例（见文件顶部【图片卡片锁比例】）；
+    // 非图片卡片（比例为 null）保持自由缩放，行为与 T2.3 初版一致。
+    const ratio = this.source.getAspectRatio(this.cardId, this.element)
+
+    this.currentSize = ratio
+      ? ratioLockedSize(this.startSize, ratio, deltaW, deltaH)
+      : {
+          w: clampSize(this.startSize.w + deltaW),
+          h: clampSize(this.startSize.h + deltaH),
+        }
+
     this.source.setCardSize(this.cardId, this.currentSize.w, this.currentSize.h)
   }
 
