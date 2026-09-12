@@ -40,7 +40,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 类型检查 | `pnpm typecheck` | 无错误 |
-| 单元测试 | `pnpm test` | 629 passed / 55 个测试文件 |
+| 单元测试 | `pnpm test` | 657 passed / 56 个测试文件 |
 | Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 43 passed |
 | 代码检查 | `pnpm lint` | 无错误 |
 | 生产构建 | `pnpm build` | 通过 |

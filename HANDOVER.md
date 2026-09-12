@@ -48,7 +48,8 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 ### 数据流向（关键）
 
 - **高频坐标（卡片 x/y、viewport zoom/offset）不进 Zustand、不 setState**，只直写 `element.style.transform`（`transform-origin: 0 0`），松手才走命令层落盘
-- 落盘：500ms 防抖 + `.tmp` 原子重命名 → `<空间文件夹>\.mindscape\layout.json`
+- 落盘：500ms 防抖 + `.tmp` 原子重命名 → `%APPDATA%\Mindscape\layouts\<空间 id>.json`（`appLayoutStore.ts`）。**空间文件夹内零新增文件**；旧 `<空间文件夹>\.mindscape\layout.json` 仍会读取并迁移写回，但**旧文件不删**（守铁律③）
+- 布局导出/导入：空间卡片「导出布局」写出 `<目标文件夹>\mindscape-layout.json`；「导入空间」选中该文件夹后 `copy_file` → 校验 → 改名收编进软件目录，源文件删不删由用户确认
 - 空间列表：`%APPDATA%\Mindscape\spaces.json`（`dataDir()` + 硬编码 `'Mindscape'`，**与 identifier 无关**）
 - ~~缩略图~~：**已于 2026-09-12（方案 A）下线** —— 空间文件夹内不再生成缩略图，卡片直接加载原图（宽高比由 `read_image_size` 读图头获得，渲染走 `lazyOriginal` 可见时加载）；Rust `make_thumbnail` 命令保留未删（回退保命符）
 - 卡片原图绝对路径**不进 schema 不落盘**，放 `core/board/cardAssets.ts` 模块级 Map；写入必须早于 `boardStore.set({cards})`
@@ -59,7 +60,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
-- 全量基线（2026-09-12，v0.3.0）：Vitest **611 passed / 53 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过
+- 全量基线（2026-09-12，v0.4.0 开发中）：Vitest **657 passed / 56 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（377.57 kB / gzip 116.06 kB）
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
@@ -93,6 +94,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 6. **代码约定**：模块顶部写中文说明并注文档章节；代码内注释用英文；中文文案进常量表（如 `CORE_CARD_TYPE_LABELS`）
 7. **架构红线**（17.3/17.11）：见第 2 节数据流向；另：拖拽平移**禁用** dnd-kit/react-rnd；资源管理器拖入用 Tauri `onDragDropEvent` **禁用** HTML5 drop；滚轮 `{ passive:false }` + preventDefault；缩放 10%~400% 以鼠标为锚点
 8. **坐标换算**：`画布坐标 = (屏幕 − 容器左上角 − offset) / zoom`；`getBoundingClientRect()` 参照系陷阱见第 8 节
+9. **布局存放位置**（2026-09-12 裁决，P1-2）：布局改存 `%APPDATA%\Mindscape\layouts\<空间 id>.json` —— key 用**空间 id**（可读、文件夹改名/移动不丢、避免哈希不可读），空间文件夹零新增文件；旧 `.mindscape\layout.json` 读到就迁移但不删（守铁律③）；跨机器/跨人共享走**显式**「导出布局 / 导入空间」（文件名固定 `mindscape-layout.json`），**不做自动同步**。`$DATA/Mindscape/**` 已在 fs 插件 scope 内，故此项无需改 Rust
 
 ## 6. 运行、测试与发版
 
@@ -100,7 +102,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（611 tests）
+pnpm test           # vitest run（657 tests）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
@@ -178,3 +180,6 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-09-12 | 02de9da | `src/core/board/ingest.ts` | `resolveDropDestination` 的坐标点参数改为内联结构类型 `{ x: number; y: number }`，删掉对 `@/canvas/interaction/connectionAnchor` 的 import（全项目唯一一处 core 反向依赖上层） | 架构守卫规则 4 清零 |
 | 2026-09-12 | 8c00bae | `src/__guards__/architecture.test.ts`（新增，376 行） | **新增架构守卫测试**：6 条规则共 13 个用例 —— ①大文件行数棘轮（Board 1982 / Canvas 1086）②`window.confirm/alert/prompt` 只许出现在 `nativeDialogs.ts` ③不得硬编码配色（Tailwind 调色板类名；hex 3 条豁免各记原因）④`core/` 不得 import 上层目录 ⑤模块无循环依赖 ⑥新增源文件必须带同名测试（38 条存量豁免，只减不增）。含**环检测器自身的构造图单测**与**依赖图健全性定点校验**（防解析器静默失效而永远报「0 个环」）。**反向验证已做**：临时在 `SnapGuide.tsx` 写一行 `window.alert` → 测试变红并精确定位 `SnapGuide.tsx:89`，删除后恢复全绿 | P1-1：把只写在文档里的约定变成会自动失败的测试 |
 | 2026-09-12 | 5533cb3 | `README.md` | 补齐被并发编辑覆盖的三处基线修正：`pnpm test` 629/55、`cargo test` 43、MSI 3.88 / NSIS 2.59 MB、技术栈表区间 2.6 ~ 3.9 MB | P0-3 漏改（并发编辑覆盖）+ P1-1 后基线变化 |
+| 2026-09-12 | 6ebd300 | `src/core/storage/appLayoutStore.ts`（新增）、`appLayoutStore.test.ts`（新增）、`src/core/store/boardStore.ts`(+test)、`src/pages/Board.tsx`、`src/__guards__/architecture.test.ts` | **布局改存软件目录（P1-2 数据层）**：新增 `appLayoutStore`（布局落 `%APPDATA%\Mindscape\layouts\<空间 id>.json`，含 `isSafeLayoutKey` 白名单、`layoutFileName`、`localLayoutStore` 默认实例）；`boardStore.readLayoutOrEmpty` 优先读软件目录，旧 `.mindscape\layout.json` 存在且新位置为空时读取并迁移写回（**旧文件不删**）；只读版本不写盘；`createBoardStore` 加 `layoutStore` 注入参数；Board 落盘目标改 `localLayoutStore.write(target.id, json)`；守卫行数棘轮 Board 1982→1984。单测 23 例 | 空间文件夹零新增文件；旧路径兼容迁移（守铁律①②③） |
+| 2026-09-12 | 123da5d | `src/pages/SpaceList.tsx`、`src/components/ui/icons.tsx`、`README.md` | **导出/导入布局（P1-2 UI）**：空间卡片悬停「导出布局」（读软件目录布局 → `parseLayout` 校验 → 写 `<目标文件夹>\mindscape-layout.json`；从未进入过的空间提示而非导出空文件）；顶栏「导入空间」图标（选带该文件的文件夹 → 复用新建弹窗、名称取文件夹名 → 创建后 `adoptExportedLayout` 收编：`copy_file` → 校验 → 改名，无效则删拷贝返回 `invalid`）；收编后询问是否删除源文件夹里的导出文件（文案明确「**永久删除**」，守铁律③）。新建弹窗文案改「不会往这个文件夹里写任何文件」；`icons.tsx` 加 `ImportIcon` | 把「布局跟着文件夹走」换成显式导出/导入 |
+| 2026-09-12 | （本次） | `HANDOVER.md` | 同步 P1-2：§2 数据流向更新落盘路径与导出/导入链路；§3 基线 611/53→**657/56**；§5 新增第 9 条「布局存放位置」（用户裁决：key 用空间 id / 显式导出导入 / 不自动同步）；§6 `pnpm test` 计数 611→657；§9 追加两行 | AGENTS.md 变更记录规范 |
