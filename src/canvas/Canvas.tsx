@@ -44,6 +44,7 @@ import type { PartitionResizeEdge } from './interaction/partitionResizeControlle
 import { cardIdsInRect, normalizeRect } from './interaction/marquee'
 import { computeSnap, snapThresholdInCanvas } from './interaction/snap'
 import { screenToCanvas } from './interaction/coordinates'
+import { contentRects } from './interaction/fitToContent'
 import { connectionPathD, rightAnchor } from './interaction/connectionAnchor'
 import type { Point } from './interaction/connectionAnchor'
 import { visibleCanvasRect } from './lazyOriginal'
@@ -960,9 +961,18 @@ export function Canvas({
     return () => root.removeEventListener('dblclick', handleDoubleClick)
   }, [])
 
-  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
+  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+Shift+0 缩放到全部内容（P1-4）/
+  // Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // ⚠️ Ctrl+Shift+0 必须在 Ctrl+0 之前判断：带 Shift 的组合会被 `ctrlKey && key === '0'` 先命中
+      if (event.ctrlKey && event.shiftKey && event.key === '0') {
+        event.preventDefault()
+        // 误拖到远处后一键找回全部内容；空画布时 fitToContent 返回 false，视图保持不动
+        controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
+        return
+      }
+
       if (event.ctrlKey && event.key === '0') {
         event.preventDefault()
         controllerRef.current?.reset()
@@ -1100,6 +1110,17 @@ export function Canvas({
       </div>
 
       <div className="absolute bottom-3 right-3 flex items-center gap-2">
+        <button
+          type="button"
+          className="rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
+          onClick={() =>
+            controllerRef.current?.fitToContent(
+              contentRects(cardsRef.current, partitionsRef.current),
+            )
+          }
+        >
+          适应内容（Ctrl+Shift+0）
+        </button>
         <button
           type="button"
           className="rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"

@@ -77,7 +77,8 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   'src/pages/Board.tsx': 2024,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
-  'src/canvas/Canvas.tsx': 1114,
+  // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
+  'src/canvas/Canvas.tsx': 1135,
 }
 
 describe('规则 1：大文件行数只减不增', () => {
