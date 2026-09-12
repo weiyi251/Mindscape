@@ -58,20 +58,25 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - **T0 ~ T3 全部工单已完成**（准备层 / 文件夹铺画布与平移缩放 / 拖拽缩放分区撤销重做 / 连线备注便签拖入粘贴）
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
-- 全量基线（2026-09-12）：Vitest **582 passed / 50 文件**、tsc 0 错、eslint 0 error（2 条既有 warning）、cargo test **46 passed**、vite build 通过
+- v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
+- 全量基线（2026-09-12，v0.3.0）：Vitest **611 passed / 53 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
 
-### ⚠️ 高优先级（阻塞推送）
+### 高优先级
 
-1. **本地与远端 sha 分叉**：远端 main = `36cdb32`，本地 = `e89bb99` + 3 个新提交（fe0d750 / fa2cb11 / fc86a05）。分叉原因是 git 被墙时走了 Git Data API 在远端重建提交链（内容树一致、历史不同）。**处理**：网络恢复后 `git fetch` → `git checkout -B main origin/main` → 用 `git cherry-pick` 或重建提交把本地 3 个提交带上去 → 重打本地 `v0.2.0` tag 指向远端 `36cdb32`
-2. **hosts 恢复**：`C:\Windows\System32\drivers\etc\hosts.bak-20260912` 中 Steam/YouTube/Google/Docker/greasyfork 等**非 GitHub 条目**被误清（清理 GitHub 屏蔽时），需管理员恢复；Watt Toolkit（Steam++）运行会再写回屏蔽
+1. **hosts 恢复**：`C:\Windows\System32\drivers\etc\hosts.bak-20260912` 中 Steam/YouTube/Google/Docker/greasyfork 等**非 GitHub 条目**被误清（清理 GitHub 屏蔽时），需管理员恢复；Watt Toolkit（Steam++）运行会再写回屏蔽。当前 hosts 文件除系统注释外为空
 
 ### 中优先级
 
-3. **README 界面截图仍缺**（需真机运行截取）
-4. **GitHub PAT 轮换**：2026-10-11 到期，且曾在日志泄露 base64 形式
+2. **README 界面截图仍缺**（需真机运行截取）
+3. **GitHub PAT 轮换**：2026-10-11 到期，且曾在日志泄露 base64 形式
+
+### 已解决（保留备查）
+
+- ~~本地与远端 sha 分叉~~ —— v0.3.0 推送改用 `.workbuddy/push-api-parity.mjs`：走 Git Data API 重建提交时**显式传入 author / committer（含原始时区）与逐字节相同的消息**，创建后立即与本地 sha 比对，因此远端与本地 sha 完全一致，不再产生分叉。该脚本取代了 v0.2.0 时期的 `.workbuddy/push-via-api.mjs`
+- ~~沙箱事故导致本地 git 历史丢失~~ —— 2026-09-12 一次 `git rebase` 被沙箱 SIGTERM 中断，`.git/refs` 与大量松散对象被删。已按「备份 → 用 API 重建远端 tip 对象 → 对齐 main → 重建索引（删损坏 index + `git read-tree HEAD`）→ 按模块重建提交」恢复；**内容零丢失**已用树哈希硬校验（`4d309fcd44901b59ffa53bbbaef6e55664d883c5` 与事故前一致）。备份留在 `.workbuddy/backup/2026-09-12-recovery/`。遗留一处**不可达的损坏 pack 条目**（`0c0a2eab`），`git fsck` 会报 `failed to load pack entry`，但 `git rev-list --objects HEAD` 退出 0，可达对象全部完整，不影响使用
 
 ### 已知限制（有意取舍，见 README「已知限制」）
 
@@ -94,13 +99,13 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（582 tests）
+pnpm test           # vitest run（611 tests）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
 pnpm release        # 发版：签名打包 + latest.json（--manifest-only 可只重生成清单）
 pnpm icon           # 重新生成图标（scripts/generate-icon.mjs，零第三方依赖）
-cd src-tauri && cargo test   # Rust 测试（46 passed）
+cd src-tauri && cargo test   # Rust 测试（43 passed）
 ```
 
 - **cargo 全路径**：`C:\Users\lenovo\.cargo\bin\cargo.exe`（PATH 坑已修但沙箱内仍建议全路径）；crates 走 rsproxy 镜像
@@ -157,3 +162,6 @@ cd src-tauri && cargo test   # Rust 测试（46 passed）
 | 2026-09-12 | 15764e4 | `src/components/ui/{icon-toolbar.tsx, icons.tsx}` | 修正折叠手柄箭头方向：**收起 → 双箭头向右（»）、展开 → 双箭头向左（«）**。判据是「箭头指向按下后整块内容移动的方向」——工具栏在顶栏里**靠右对齐**，收起时内容向右缩回去、展开时向左铺开；原先按左侧面板的约定写反了。图标注释改为只描述字形（不再把语义绑在图标上，避免下次改动不一致）。实测：展开态手柄 d=`m6 17 5-5-5-5`（右）、收起态 d=`m11 17-5-5 5-5`（左） | 用户实测反馈展开/收起图标显示相反 |
 | 2026-09-12 | 96fb3e1 | `src/canvas/interaction/cardResizeController.ts(+test)`、`src/canvas/Canvas.tsx` | **根因①（数据层）**：卡片缩放手柄自由改 w/h，卡片盒比例会脱离原图比例。`CardResizeSource` 新增 `getAspectRatio(cardId, element)`；新增纯函数 `ratioLockedSize` —— 有比例时按「相对变化更大的那一轴」等比缩放、另一轴由原图比例推出，短边仍受 MIN_CARD_SIZE 保底（先保高再反推宽，竖图/全景图都不会变细线），无比例保持自由缩放。Canvas 注入：优先读已加载原图的 naturalWidth/Height，未加载退回卡片当前比例，非图片返回 null。补 10 条单测 | 用户实测反馈「图片放大缩小后宽高比与原图不一致，图片显示不完整」 |
 | 2026-09-12 | a80e604 | `src/core/registry/cardTypes.ts(+test)` | **根因②（渲染层）**：img 只给 `w-full` 时元素盒高度由「宽度 × 原图比例」自行推出，卡片比原图更宽更扁时元素盒比卡片高，被外壳 `overflow-hidden` 裁掉（`object-fit` 管不了元素盒超出容器）。实测 16:9 图放进 480×135 卡片：img 盒 478×268.9、图片仅 **50% 可见**。改为无条件 `flex-1 + min-h-0`（元素盒被容器约束，有备注/标签条时自动让出高度）→ 同用例 **100%**；六种尺寸 × 有/无备注条全部 100%。渲染层兜底：旧布局里已失真的卡片也能完整显示 | 同上（配合上一条：数据层锁比例 + 渲染层兜底） |
+| 2026-09-12 | e3c89a2 | `HANDOVER.md`（新增）、`AGENTS.md`（新增）、`docs/缩略图重构计划.md`（新增）、`README.md` | 新增项目交接文档（分层说明 + §9 变更记录机制）、代理工作规范、缩略图重构（方案 A）评估与实施记录；README 同步方案 A 的功能表 / 数据位置 / 已知限制 | 用户要求建立交接与协作机制 |
+| 2026-09-12 | （无提交） | `.git`、`.workbuddy/recover-step*.mjs`、`.workbuddy/push-api-parity.mjs`（新增） | **沙箱事故恢复**：一次 `git rebase --onto` 被沙箱 SIGTERM 中断，`.git/refs` 目录与大量松散对象被删（pack 内的已发布历史完好，丢失的是 34 个从未推送的本地提交；工作区文件完好）。处理：备份 → 用 GitHub API 取远端 tip 元信息 → 本地逐字节重建提交对象（穷举 630 组候选命中 `36cdb32`）→ 写 `refs/heads/main` → 删损坏 `.git/index` 并 `git read-tree HEAD` 重建索引 → 按模块重建 5 条提交 → 用 API 补齐远端孪生链缺失对象。**内容零丢失硬证据：重建后 HEAD 树 `4d309fc` 与事故前逐字节一致** | 沙箱删除拦截导致 git 操作中途被杀 |
+| 2026-09-12 | （本次收口） | `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`CHANGELOG.md`、`eslint.config.js`、`HANDOVER.md` | v0.3.0 发版收口：四处版本号 0.2.0 → 0.3.0；CHANGELOG `[Unreleased]` 按新增/变更/修复/文档四类收口为 `## [0.3.0] - 2026-09-12`（含小地图、设置面板统一、可折叠工具栏、图标更换、方案 A、图片比例修复）；eslint ignores 补 `.workbuddy`（消除来自恢复备份副本的 2 条噪声 warning，现仅剩 `button.tsx` 1 条固有 warning）；HANDOVER §3 基线更新为 611/53 + cargo 43，§4 把分叉与事故移入「已解决」，§6 补充 API 推送与 cmd.exe 门禁说明 | 用户要求发布新版本 |
