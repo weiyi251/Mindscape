@@ -40,11 +40,11 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 类型检查 | `pnpm typecheck` | 无错误 |
-| 单元测试 | `pnpm test` | 582 passed / 50 个测试文件 |
-| Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 46 passed |
+| 单元测试 | `pnpm test` | 629 passed / 55 个测试文件 |
+| Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 43 passed |
 | 代码检查 | `pnpm lint` | 无错误 |
 | 生产构建 | `pnpm build` | 通过 |
-| 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.79 MB / NSIS 2.54 MB（含自动更新组件） |
+| 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.88 MB / NSIS 2.59 MB（含自动更新组件） |
 
 > 界面截图待补充。
 
@@ -83,7 +83,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 
 | 层 | 选型 |
 |---|---|
-| 桌面框架 | Tauri v2（复用系统 WebView2，实测安装包 2.5 ~ 3.8 MB） |
+| 桌面框架 | Tauri v2（复用系统 WebView2，实测安装包 2.6 ~ 3.9 MB） |
 | 前端 | React 18 + TypeScript 5 + Vite 5 |
 | UI | Tailwind CSS 3 + shadcn/ui |
 | 画布渲染 | DOM 方案（卡片是 div，不是 Canvas） |
