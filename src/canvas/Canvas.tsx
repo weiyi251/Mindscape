@@ -1055,13 +1055,18 @@ export function Canvas({
         ))}
       </Viewport>
 
-      {/* 状态条：卡片数 / 缩放百分比 / 帧率 / 操作提示 / 复原视图（对应 Ctrl+0） */}
+      {/* 状态条：卡片数 / 缩放百分比 / 帧率 / 操作提示（对应 Ctrl+0） */}
       <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
         <span>{cards.length} 张</span>
         <span className="text-border">|</span>
         <span ref={zoomLabelRef}>100%</span>
-        <span className="text-border">|</span>
-        <FpsMeter />
+        {/* 帧率表只服务于开发期手感验收（11.2 ~ 11.4），正式构建不渲染 */}
+        {import.meta.env.DEV ? (
+          <>
+            <span className="text-border">|</span>
+            <FpsMeter />
+          </>
+        ) : null}
         <span className="text-border">|</span>
         <span>滚轮缩放 · 拖空白平移 · 拖卡片移动 · Ctrl+拖框选</span>
       </div>
