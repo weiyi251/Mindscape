@@ -7,11 +7,14 @@
 //
 // 阶段一职责：
 //   T1.3 进入空间 → listDir → 生成卡片 → 交给 Canvas 渲染
-//   T1.4 同时批量生成缩略图（17.7），并用缩略图尺寸把卡片按**原始宽高比**摆好
+//   T1.4 批量读取图片原始尺寸（read_image_size 只读图头），按宽高比摆好卡片
 //   T1.6 读 layout.json 恢复卡片位置与视图状态；缺失/损坏时退回扫描文件夹
 //
-// 【缩略图不进 Zustand】
-//   卡片资源路径（缩略图 / 原图绝对路径）存在 core/board/cardAssets.ts 的模块级表里，
+// 【缩略图已下线】（2026-09-12 用户裁决：方案 A）
+//   不再生成缩略图，卡片直接加载原图（渲染走 lazyOriginal 的可见时加载）。
+//
+// 【资源路径不进 Zustand】
+//   卡片的原图绝对路径存在 core/board/cardAssets.ts 的模块级表里，
 //   原因见该文件顶部说明：它不是布局数据、不落盘、也不需要触发重渲染。
 //
 // 【竞态保护】
@@ -51,8 +54,8 @@ import { createCardsFromEntries } from '@/core/board/buildCards'
 import type { CardSize } from '@/core/board/buildCards'
 import { cardTypeFor } from '@/core/board/imageTypes'
 import { cardSizeForImage } from '@/core/board/cardSize'
-import { collectThumbnails } from '@/core/board/thumbnails'
-import type { ThumbnailBatchResult } from '@/core/board/thumbnails'
+import { collectImageSizes } from '@/core/board/imageSizes'
+import type { ImageSizeBatchResult } from '@/core/board/imageSizes'
 import { clearCardAssets, registerCardAssets } from '@/core/board/cardAssets'
 import { mergeScannedWithLayout } from '@/core/board/layoutMerge'
 import { DEFAULT_GRID_OPTIONS } from '@/core/board/grid'
@@ -107,9 +110,13 @@ export interface BoardState {
   selectedIds: string[]
   /** 选中的连线（T3.2：单击连线选中，Delete 删除）。连线数量少，低频数据进 Zustand */
   selectedConnectionIds: string[]
+  /** 选中的分区框（2026-09-12 用户裁决：Ctrl+V 粘贴目标 = 选中的分区；低频数据进 Zustand） */
+  selectedPartitionId: string | null
 
   /** 设置选中集合（全量替换）。传空数组即取消选中（5.1 单击空白） */
   selectCards: (ids: string[]) => void
+  /** 选中分区框（与卡片选中互斥，5.1 同一哲学）；传 null 取消 */
+  selectPartition: (id: string | null) => void
   /**
    * 一次性写入多张卡片坐标（拖拽松手 / 撤销重做都走它）。
    * 只动 x / y，不触碰其他字段 —— 保持 store 更新面最小。
@@ -153,6 +160,12 @@ export interface BoardState {
   updateCardNote: (id: string, note: string) => void
   /** 整体替换某张卡片的 meta（T3.9 编辑标签：meta.tags）。只动 meta 字段 */
   setCardMeta: (id: string, meta: Meta) => void
+  /**
+   * 一次性写入多张卡片的文件归属（2026-09-12「移动到…」功能）：
+   * filePath / originalPath / group 一起更新，其余字段不动。
+   * group 传 undefined 表示移出所有分区（未分类 / 空间根目录）。
+   */
+  setCardFileRefs: (updates: { id: string; filePath: string; originalPath: string; group: string | undefined }[]) => void
   /** 一次性写入多张卡片的 zIndex（置顶 / 置底 T3.9） */
   setCardsZIndex: (updates: { id: string; zIndex: number }[]) => void
   /** 指定分区框颜色（T3.9）。'auto' 表示回到 8 色轮换 */
@@ -185,25 +198,25 @@ export interface BoardState {
 
 /**
  * 单张卡片的初始尺寸。
- * 图片：按缩略图尺寸还原原始宽高比（缩略图长边 ≤800，比例与原图一致）；
- * 缩略图缺失（生成失败）时退回该类型的默认尺寸。
+ * 图片：按**原图尺寸**还原原始宽高比（read_image_size 只读图头，不解码全图）；
+ * 尺寸读取失败时退回该类型的默认尺寸。
  */
-function sizeForEntry(entry: DirEntry, thumbs: ThumbnailBatchResult): CardSize {
+function sizeForEntry(entry: DirEntry, sizes: ImageSizeBatchResult): CardSize {
   const type = cardTypeFor(entry.name)
-  const info = thumbs.byName.get(entry.name)
+  const info = sizes.byName.get(entry.name)
   if (type === 'image' && info) {
     return cardSizeForImage(info.width, info.height)
   }
   return CORE_CARD_TYPE_DEFAULT_SIZE[type]
 }
 
-/** 把缩略图失败清单收敛成一条人话提示（最多列 3 个文件名） */
-function thumbnailNotice(thumbs: ThumbnailBatchResult): string[] {
-  if (thumbs.failed.size === 0) return []
+/** 把尺寸读取失败清单收敛成一条人话提示（最多列 3 个文件名） */
+function imageSizeNotice(sizes: ImageSizeBatchResult): string[] {
+  if (sizes.failed.size === 0) return []
 
-  const shown = [...thumbs.failed.entries()].slice(0, 3).map(([name, reason]) => `${name}（${reason}）`)
-  const more = thumbs.failed.size > shown.length ? ` 等 ${thumbs.failed.size} 个文件` : ''
-  return [`${shown.join('；')}${more} 的缩略图生成失败，已先按占位显示`]
+  const shown = [...sizes.failed.entries()].slice(0, 3).map(([name, reason]) => `${name}（${reason}）`)
+  const more = sizes.failed.size > shown.length ? ` 等 ${sizes.failed.size} 个文件` : ''
+  return [`${shown.join('；')}${more} 的图片尺寸读取失败，已按默认尺寸显示`]
 }
 
 /**
@@ -268,11 +281,17 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
     notices: [],
     selectedIds: [],
     selectedConnectionIds: [],
+    selectedPartitionId: null,
     removedView: false,
     removedCards: [],
 
     selectCards(ids) {
-      set({ selectedIds: [...ids] })
+      // 选中集合互斥（5.1）：选中卡片时取消分区选中
+      set({ selectedIds: [...ids], selectedPartitionId: null })
+    },
+
+    selectPartition(id) {
+      set({ selectedPartitionId: id, selectedIds: [] })
     },
 
     setCardPositions(positions) {
@@ -379,6 +398,19 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
       }))
     },
 
+    setCardFileRefs(updates) {
+      if (updates.length === 0) return
+      const byId = new Map(updates.map((update) => [update.id, update]))
+      set((state) => ({
+        cards: state.cards.map((card) => {
+          const next = byId.get(card.id)
+          return next
+            ? { ...card, filePath: next.filePath, originalPath: next.originalPath, group: next.group }
+            : card
+        }),
+      }))
+    },
+
     setCardsZIndex(updates) {
       if (updates.length === 0) return
       const byId = new Map(updates.map((update) => [update.id, update.zIndex]))
@@ -473,7 +505,7 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
         const byMovedTo = new Map(get().removed.map((entry) => [entry.movedTo.replace(/\\/g, '/'), entry]))
         const targets = media.filter((item) => byMovedTo.has(item.name))
 
-        // 缩略图批量生成（key = movedTo 相对路径）
+        // 批量读取原图尺寸（key = movedTo 相对路径；只读图头，不解码全图）
         const fakeEntries: DirEntry[] = targets.map((item) => ({
           name: item.name,
           path: item.path,
@@ -481,11 +513,11 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
           size: 0,
           modifiedAt: null,
         }))
-        const thumbs = await collectThumbnails(fakeEntries, spacePath, provider)
+        const sizes = await collectImageSizes(fakeEntries, provider)
 
         if (get().removedView === false) return // 用户已退出视图，丢弃结果
 
-        const sizeFor = (entry: DirEntry): CardSize => sizeForEntry(entry, thumbs)
+        const sizeFor = (entry: DirEntry): CardSize => sizeForEntry(entry, sizes)
         // 兜底生成的灰卡 id 不能与画布卡片撞号（画布卡片此时仍在 store 中）
         const cards = createCardsFromEntries(fakeEntries, {
           sizeFor,
@@ -495,10 +527,10 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
           return { ...card, id: entry?.id ?? card.id }
         })
 
-        // 缩略图 / 原图资源登记（原图在 _已移除 下）。
+        // 原图资源登记（原图在 _已移除 下）。
         // ⚠️ 不 clearCardAssets：已移除卡的 id 与画布卡 id 不重叠（被移除的卡不在画布），
         // 直接叠加注册 —— 退出视图后正常卡片的资源仍然有效。
-        registerCardAssets(cards, spacePath, thumbs)
+        registerCardAssets(cards, spacePath)
 
         set({ removedCards: cards })
       } catch {
@@ -561,13 +593,13 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
           }
         }
 
-        // 4) 缩略图一批生成（key = 相对路径，与 card.filePath 对齐）
+        // 4) 批量读取原图尺寸（key = 相对路径，与 card.filePath 对齐；只读图头，不解码全图）
         const allMedia = [...mediaEntries, ...partitionMedia.flatMap((item) => item.entries)]
-        const thumbs = await collectThumbnails(allMedia, space.folderPath, provider)
+        const sizes = await collectImageSizes(allMedia, provider)
 
         if (token !== loadToken) return // 已被更晚的加载取代，丢弃本次结果
 
-        const sizeFor = (entry: DirEntry): CardSize => sizeForEntry(entry, thumbs)
+        const sizeFor = (entry: DirEntry): CardSize => sizeForEntry(entry, sizes)
 
         // 5) 根目录卡片先铺；分区卡片各自占一条独立行带，依次往下
         //    （独立行带保证分区框的包围盒互不重叠）
@@ -632,8 +664,8 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
         // 7) 分区框：已有记录沿用；新子文件夹按合并后的卡片包围盒建框（第六章）
         const partitions = createPartitions(partitionNames, mergedCards, layout.partitions)
 
-        // ⚠️ 顺序要求：资源必须先于 cards 写入，卡片渲染时才能读到缩略图路径
-        registerCardAssets(mergedCards, space.folderPath, thumbs)
+        // ⚠️ 顺序要求：资源必须先于 cards 写入，卡片渲染时才能读到原图路径
+        registerCardAssets(mergedCards, space.folderPath)
 
         set({
           cards: mergedCards,
@@ -645,7 +677,7 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
           // 修过历史数据就要求上层补一次落盘，否则修复只停留在内存
           needsMigration: idsPatched || patchedOriginalPath,
           status: 'ready',
-          notices: [...notices, ...partitionNotices, ...thumbnailNotice(thumbs)],
+          notices: [...notices, ...partitionNotices, ...imageSizeNotice(sizes)],
         })
       } catch (error) {
         if (token !== loadToken) return
@@ -673,6 +705,7 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
         notices: [],
         selectedIds: [],
         selectedConnectionIds: [],
+        selectedPartitionId: null,
         removedView: false,
         removedCards: [],
       })

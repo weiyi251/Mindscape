@@ -70,7 +70,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('核心菜单配置', () => {
-  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制）', () => {
+  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制 + 移动到）', () => {
     expect(idsOf(CORE_CARD_MENU_ITEMS)).toEqual([
       CARD_ACTION.openOriginal,
       CARD_ACTION.remove,
@@ -80,6 +80,7 @@ describe('核心菜单配置', () => {
       CARD_ACTION.editLabel,
       CARD_ACTION.connect,
       CARD_ACTION.copy,
+      CARD_ACTION.move,
     ])
   })
 
@@ -110,20 +111,35 @@ describe('buildCardMenuFor', () => {
   })
 
   it('便签 / 文件卡片：仅按 appliesTo 隐藏「打开原图」，「复制」对所有类型可见', () => {
-    for (const type of ['note', 'file']) {
-      const ids = idsOf(buildCardMenuFor(makeCard({ type })))
-      expect(ids).not.toContain(CARD_ACTION.openOriginal)
-      expect(ids).toContain(CARD_ACTION.copy)
-      expect(ids).toEqual([
-        CARD_ACTION.remove,
-        CARD_ACTION.bringToFront,
-        CARD_ACTION.sendToBack,
-        CARD_ACTION.addNote,
-        CARD_ACTION.editLabel,
-        CARD_ACTION.connect,
-        CARD_ACTION.copy,
-      ])
-    }
+    // 便签没有硬盘文件（filePath 为空）→ 不显示「移动到…」
+    const noteIds = idsOf(buildCardMenuFor(makeCard({ type: 'note', filePath: '', originalPath: '' })))
+    expect(noteIds).not.toContain(CARD_ACTION.openOriginal)
+    expect(noteIds).not.toContain(CARD_ACTION.move)
+    expect(noteIds).toContain(CARD_ACTION.copy)
+    expect(noteIds).toEqual([
+      CARD_ACTION.remove,
+      CARD_ACTION.bringToFront,
+      CARD_ACTION.sendToBack,
+      CARD_ACTION.addNote,
+      CARD_ACTION.editLabel,
+      CARD_ACTION.connect,
+      CARD_ACTION.copy,
+    ])
+
+    // 文件卡片有硬盘文件 → 显示「移动到…」（2026-09-12 用户裁决）
+    const fileIds = idsOf(buildCardMenuFor(makeCard({ type: 'file' })))
+    expect(fileIds).not.toContain(CARD_ACTION.openOriginal)
+    expect(fileIds).toContain(CARD_ACTION.move)
+    expect(fileIds).toEqual([
+      CARD_ACTION.remove,
+      CARD_ACTION.bringToFront,
+      CARD_ACTION.sendToBack,
+      CARD_ACTION.addNote,
+      CARD_ACTION.editLabel,
+      CARD_ACTION.connect,
+      CARD_ACTION.copy,
+      CARD_ACTION.move,
+    ])
   })
 
   it('图片卡片：同时包含「打开原图」与「复制」', () => {

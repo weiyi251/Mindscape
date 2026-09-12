@@ -28,8 +28,19 @@ import { ContextMenu } from '@/components/ui/context-menu'
 import type { ContextMenuItemData, ContextMenuState } from '@/components/ui/context-menu'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
+import { SettingsPanel } from '@/components/ui/settings-panel'
+import { IconToolbar, TOOLBAR_PREF_KEY } from '@/components/ui/icon-toolbar'
+import type { IconToolbarItem } from '@/components/ui/icon-toolbar'
+import {
+  NoteAddIcon,
+  RedoIcon,
+  RestoreIcon,
+  SettingsIcon,
+  UndoIcon,
+} from '@/components/ui/icons'
 import { Canvas } from '@/canvas/Canvas'
 import type { CanvasApi } from '@/canvas/Canvas'
+import { MiniMap, MINIMAP_PREF_KEY } from '@/canvas/MiniMap'
 import { isDesktopRuntime } from '@/core/utils/runtime'
 import { getViewportSnapshot, resetViewportSnapshot, setViewportSnapshot } from '@/canvas/viewportSnapshot'
 import type { ViewportState } from '@/canvas/interaction/coordinates'
@@ -61,25 +72,27 @@ import {
   createSetConnectionLabelCommand,
 } from '@/core/commands/impl/connections'
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
+import { createMoveCardToFolderCommand, currentTopFolderOf } from '@/core/commands/impl/moveCardToFolder'
 import { registerAction } from '@/core/registry/actionRegistry'
 import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
-import { applyTheme, loadTheme, saveTheme, toggleTheme } from '@/core/utils/theme'
-import type { Theme } from '@/core/utils/theme'
+import { useTheme } from '@/core/hooks/useTheme'
 import { zCardSchema } from '@/core/types'
-import type { Card, Connection } from '@/core/types'
+import type { Card, Connection, Partition } from '@/core/types'
 import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
 import { cardSizeForImage } from '@/core/board/cardSize'
-import { cardTypeFor, isImageFile } from '@/core/board/imageTypes'
+import { cardTypeFor } from '@/core/board/imageTypes'
 import { setCardAsset } from '@/core/board/cardAssets'
 import {
   expandedBounds,
   isCopyableCard,
   pasteFileName,
   resolveDropDestination,
+  UNCLASSIFIED_DIR,
 } from '@/core/board/ingest'
+import type { DropDestination } from '@/core/board/ingest'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { isValidFolderName } from '@/core/board/partitions'
@@ -117,6 +130,8 @@ export function Board() {
   const removed = useBoardStore((state) => state.removed)
   const selectedIds = useBoardStore((state) => state.selectedIds)
   const selectCards = useBoardStore((state) => state.selectCards)
+  const selectedPartitionId = useBoardStore((state) => state.selectedPartitionId)
+  const selectPartition = useBoardStore((state) => state.selectPartition)
   const setCardPositions = useBoardStore((state) => state.setCardPositions)
   const setCardSizes = useBoardStore((state) => state.setCardSizes)
   const setPartitionPositions = useBoardStore((state) => state.setPartitionPositions)
@@ -158,8 +173,14 @@ export function Board() {
    *  仅应用内有效（系统剪贴板写文件需要额外插件，8.2 的截图粘贴不受影响）。 */
   const [copiedCards, setCopiedCards] = useState<Card[]>([])
 
-  /** 主题状态（2026-09-11 用户裁决「深色模式」）：初始值来自上次保存的偏好 */
-  const [theme, setTheme] = useState<Theme>(() => loadTheme())
+  /** 设置面板显隐（2026-09-12：外观 / 已移除视图 / 检查更新统一收纳） */
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  /**
+   * 主题状态（2026-09-11 用户裁决「深色模式」）：读取 / 切换 / 应用 / 记忆统一走 useTheme，
+   * 与主界面（SpaceList）共用同一份实现 —— 两处设置面板的主题按钮行为完全一致。
+   */
+  const { theme, toggle: handleToggleTheme } = useTheme()
 
   const space = spaces.find((item) => item.id === currentSpaceId) ?? null
 
@@ -201,10 +222,61 @@ export function Board() {
     (state: ViewportState) => {
       // 影子快照：落盘时读它取 zoom/offset（不进 React state，见 viewportSnapshot.ts）
       setViewportSnapshot(state)
+      // 小地图每帧重绘（2D canvas 直画，零 React 更新）
+      minimapRedrawRef.current?.()
       writer.schedule()
     },
     [writer],
   )
+
+  // ---- 小地图（2026-09-12）：右下角概览 + 显示 / 隐藏（偏好记忆）----
+
+  /** 小地图显示偏好：localStorage 记忆，默认显示 */
+  const [minimapVisible, setMinimapVisible] = useState(() => {
+    try {
+      return localStorage.getItem(MINIMAP_PREF_KEY) !== 'hidden'
+    } catch {
+      return true
+    }
+  })
+
+  const handleMinimapVisibleChange = useCallback((visible: boolean) => {
+    setMinimapVisible(visible)
+    try {
+      localStorage.setItem(MINIMAP_PREF_KEY, visible ? 'visible' : 'hidden')
+    } catch {
+      // localStorage 不可用（如无痕限制）：只影响记忆，不影响本次功能
+    }
+  }, [])
+
+  /** 小地图每帧重绘函数（MiniMap 挂载时登记，视口变化时直呼） */
+  const minimapRedrawRef = useRef<(() => void) | null>(null)
+
+  /** 小地图点击 / 拖拽跳转：把画布坐标变为视口中心 */
+  const handleMinimapJump = useCallback((point: { x: number; y: number }) => {
+    canvasApiRef.current?.centerOn(point)
+  }, [])
+
+  // ---- 画布工具栏（2026-09-12 用户裁决）：顶栏操作类控件收进一条可折叠的纯图标工具栏 ----
+
+  /** 展开 / 收起偏好：localStorage 记忆，默认展开（不藏功能） */
+  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
+    try {
+      return localStorage.getItem(TOOLBAR_PREF_KEY) !== 'collapsed'
+    } catch {
+      return true
+    }
+  })
+
+  const handleToolbarToggle = useCallback(() => {
+    const next = !toolbarExpanded
+    setToolbarExpanded(next)
+    try {
+      localStorage.setItem(TOOLBAR_PREF_KEY, next ? 'expanded' : 'collapsed')
+    } catch {
+      // localStorage 不可用（如无痕限制）：只影响记忆，不影响本次功能
+    }
+  }, [toolbarExpanded])
 
   /** 单击卡片 / 空白（5.1）：全量替换选中集合 */
   const handleSelectCards = useCallback(
@@ -484,6 +556,7 @@ export function Board() {
   /**
    * 拖入 / 粘贴共用的「新卡片」生成：
    * 尺寸（图片按原始宽高比）、filePath 归一、资源表登记（必须先于 addCards 渲染）。
+   * 方案 A（2026-09-12）：资源表只登记原图绝对路径，不生成缩略图。
    */
   const buildIngestedCard = useCallback(
     async (params: {
@@ -492,9 +565,8 @@ export function Board() {
       spacePath: string
       point: Point
       offset: number
-      thumbPath: string
     }): Promise<Card> => {
-      const { id, actualAbs, spacePath, point, offset, thumbPath } = params
+      const { id, actualAbs, spacePath, point, offset } = params
       const name = basenameOf(actualAbs)
       const type = cardTypeFor(name)
 
@@ -506,7 +578,7 @@ export function Board() {
         } catch {
           // 尺寸读不到就按默认
         }
-        setCardAsset(id, { thumbnailPath: thumbPath, originalPath: actualAbs })
+        setCardAsset(id, { originalPath: actualAbs })
       }
 
       const filePath = relativePathOf(actualAbs, spacePath)
@@ -590,15 +662,8 @@ export function Board() {
       for (const src of paths) {
         const name = basenameOf(src)
         try {
-          let actualAbs: string
-          let thumbPath = ''
-          if (isImageFile(name)) {
-            const copied = await localStorageProvider.copyImageWithThumbnail(src, dest.destDir)
-            actualAbs = copied.path
-            thumbPath = copied.thumbnailPath ?? ''
-          } else {
-            actualAbs = await localStorageProvider.copyFile(src, dest.destDir)
-          }
+          // 图片与非图片统一走 copy_file（方案 A：复制时不再生成缩略图）
+          const actualAbs = await localStorageProvider.copyFile(src, dest.destDir)
 
           const id = nextCardId([...usedIds, ...cards.map((card) => card.id)])
           const card = await buildIngestedCard({
@@ -607,7 +672,6 @@ export function Board() {
             spacePath: space.folderPath,
             point,
             offset,
-            thumbPath,
           })
           // 拖入的卡归入命中分区（T3.7）
           if (dest.groupName) card.group = dest.groupName
@@ -633,6 +697,46 @@ export function Board() {
     [buildIngestedCard, commitIngestedCards],
   )
 
+  /** 视口中心的画布坐标（Ctrl+V 落点；与新建便签同规则） */
+  const viewportCenterCanvasPoint = useCallback((): Point | null => {
+    const api = canvasApiRef.current
+    if (!api) return null
+    const root = document.querySelector('[data-canvas-root]')
+    const rect = root?.getBoundingClientRect()
+    const center = rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+    return api.screenToCanvasPoint(center.x, center.y)
+  }, [])
+
+  /**
+   * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」）：
+   *   · 当前选中了分区框（按下分区即选中，见 Canvas）→ 该分区对应的子文件夹；
+   *   · 否则 → `未分类\`。
+   * ⚠️ 不再看视口中心落在哪个分区 —— 落点猜测正是「有时未分类、有时别的文件夹」
+   * 的根源；指定目标的显式路径（分区右键粘贴 / 空白右键粘贴）不走这里。
+   */
+  const resolvePasteDestination = useCallback((): DropDestination | null => {
+    const space = useSpacesStore.getState().getCurrentSpace()
+    if (!space) return null
+    const snapshot = useBoardStore.getState()
+    const partition = snapshot.selectedPartitionId
+      ? snapshot.partitions.find((item) => item.id === snapshot.selectedPartitionId)
+      : null
+    if (partition) {
+      return {
+        destDir: joinPath(space.folderPath, partition.folderPath),
+        partitionId: partition.id,
+        groupName: partition.name,
+      }
+    }
+    return {
+      destDir: joinPath(space.folderPath, UNCLASSIFIED_DIR),
+      partitionId: null,
+      groupName: null,
+    }
+  }, [])
+
   /** T3.8 粘贴截图：剪贴板二进制 → 落盘为 粘贴-YYYYMMDD-HHmm.png → 卡片 */
   const handlePasteImage = useCallback(
     async (bytes: Uint8Array) => {
@@ -646,21 +750,19 @@ export function Board() {
       setActionError(null)
 
       try {
-        // 落点：当前视口中心（粘贴没有指针位置），命中分区的规则与拖入一致（T3.7）
-        const root = document.querySelector('[data-canvas-root]')
-        const rect = root?.getBoundingClientRect()
-        const center = rect
-          ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-          : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-        const point = api.screenToCanvasPoint(center.x, center.y)
-        const dest = resolveDropDestination(point, useBoardStore.getState().partitions, space.folderPath)
+        // 落盘目标（2026-09-12 用户裁决）：选中分区 → 该分区；否则 → 未分类。
+        // 卡片仍出现在视口中心（粘贴没有指针位置），但归哪个文件夹不再靠落点猜。
+        const dest = resolvePasteDestination()
+        if (!dest) return
+
+        const point = viewportCenterCanvasPoint()
+        if (!point) return
 
         const actualAbs = await localStorageProvider.writeFileBytes(
           dest.destDir,
           pasteFileName(new Date()),
           bytes,
         )
-        const thumb = await localStorageProvider.makeThumbnail(actualAbs, space.folderPath)
 
         const id = nextCardId(usedCardIds())
         const card = await buildIngestedCard({
@@ -669,7 +771,6 @@ export function Board() {
           spacePath: space.folderPath,
           point,
           offset: 0,
-          thumbPath: thumb.path,
         })
         if (dest.groupName) card.group = dest.groupName
 
@@ -678,7 +779,7 @@ export function Board() {
         setActionError(`粘贴失败：${error instanceof Error ? error.message : String(error)}`)
       }
     },
-    [buildIngestedCard, commitIngestedCards],
+    [buildIngestedCard, commitIngestedCards, resolvePasteDestination, viewportCenterCanvasPoint],
   )
 
   // ---- 复制 / 粘贴卡片（2026-09-11 用户裁决：三种类型全支持，同空间跨分区复制）----
@@ -689,18 +790,6 @@ export function Board() {
     if (copyable.length === 0) return
     setCopiedCards(copyable.map((card) => ({ ...card })))
     setActionError(null)
-  }, [])
-
-  /** 视口中心的画布坐标（Ctrl+V 落点；与新建便签同规则） */
-  const viewportCenterCanvasPoint = useCallback((): Point | null => {
-    const api = canvasApiRef.current
-    if (!api) return null
-    const root = document.querySelector('[data-canvas-root]')
-    const rect = root?.getBoundingClientRect()
-    const center = rect
-      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-    return api.screenToCanvasPoint(center.x, center.y)
   }, [])
 
   /**
@@ -725,7 +814,9 @@ export function Board() {
 
       const dest =
         destOverride ??
-        resolveDropDestination(point, useBoardStore.getState().partitions, space.folderPath)
+        // Ctrl+V（2026-09-12 用户裁决）：选中分区 → 该分区；否则 → 未分类（确定性规则）
+        resolvePasteDestination()
+      if (!dest) return
 
       const cards: Card[] = []
       const createdFiles: string[] = []
@@ -764,39 +855,21 @@ export function Board() {
           const src = joinPath(space.folderPath, copied.originalPath || copied.filePath)
           const id = takeId()
 
-          if (copied.type === 'image') {
-            const result = await localStorageProvider.copyImageWithThumbnail(src, dest.destDir)
-            const card = await buildIngestedCard({
-              id,
-              actualAbs: result.path,
-              spacePath: space.folderPath,
-              point,
-              offset,
-              thumbPath: result.thumbnailPath ?? '',
-            })
-            if (dest.groupName) card.group = dest.groupName
+          // 图片与非图片统一走 copy_file（方案 A：复制时不再生成缩略图）
+          const actualAbs = await localStorageProvider.copyFile(src, dest.destDir)
+          const card = await buildIngestedCard({
+            id,
+            actualAbs,
+            spacePath: space.folderPath,
+            point,
+            offset,
+          })
+          if (dest.groupName) card.group = dest.groupName
 
-            usedIds.push(id)
-            cards.push(card)
-            createdFiles.push(result.path)
-            sources.push({ src, destDir: dest.destDir })
-          } else {
-            const actualAbs = await localStorageProvider.copyFile(src, dest.destDir)
-            const card = await buildIngestedCard({
-              id,
-              actualAbs,
-              spacePath: space.folderPath,
-              point,
-              offset,
-              thumbPath: '',
-            })
-            if (dest.groupName) card.group = dest.groupName
-
-            usedIds.push(id)
-            cards.push(card)
-            createdFiles.push(actualAbs)
-            sources.push({ src, destDir: dest.destDir })
-          }
+          usedIds.push(id)
+          cards.push(card)
+          createdFiles.push(actualAbs)
+          sources.push({ src, destDir: dest.destDir })
           offset += 24
         } catch (error) {
           const label = copied.type === 'note' ? '便签' : basenameOf(copied.filePath)
@@ -815,7 +888,7 @@ export function Board() {
         partitionId: dest.partitionId,
       })
     },
-    [copiedCards, buildIngestedCard, commitIngestedCards],
+    [copiedCards, buildIngestedCard, commitIngestedCards, resolvePasteDestination],
   )
 
   /** Ctrl+C 复制选中的图片卡片 / Ctrl+V 粘贴（应用内剪贴板优先于截图粘贴） */
@@ -967,6 +1040,11 @@ export function Board() {
     })
   }, [])
 
+  /** 选中分区框（2026-09-12）：Ctrl+V 粘贴目标跟随选中的分区；传 null 取消 */
+  const handleSelectPartition = useCallback((id: string | null) => {
+    selectPartition(id)
+  }, [selectPartition])
+
   /** 创建连线（T3.1）：一条命令入撤销栈，undo 删除连线 */  const handleCreateConnection = useCallback(
     (fromCardId: string, toCardId: string) => {
       const snapshot = useBoardStore.getState()
@@ -1069,6 +1147,19 @@ export function Board() {
     },
     [history, writer],
   )
+
+  /** 新建便签（工具栏入口，T3.4）：落在当前视口中心的画布坐标 */
+  const handleCreateNoteAtViewportCenter = useCallback(() => {
+    const api = canvasApiRef.current
+    if (!api) return
+    const root = document.querySelector('[data-canvas-root]')
+    const rect = root?.getBoundingClientRect()
+    const center = rect
+      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+    const point = api.screenToCanvasPoint(center.x, center.y)
+    createNoteAt(point.x - 100, point.y - 80)
+  }, [createNoteAt])
 
   /** 双击便签（T3.4）：浮层编辑内容，提交走 setCardNote 命令 */
   const handleEditNoteCard = useCallback(
@@ -1216,6 +1307,88 @@ export function Board() {
     setContextMenu({ x: screen.x, y: screen.y, items })
   }, [history, writer])
 
+  /**
+   * 移动卡片到文件夹（2026-09-12 用户裁决「画布内切换图片所属文件夹」）：
+   * 弹出二级菜单列出全部分区 + `未分类`；选定后走 moveCardToFolder 命令 ——
+   * 物理文件 moveFile + 卡片 filePath / originalPath / group 更新 +
+   * 目标分区扩框，undo 全部还原。文件列表与画布显示经 store 同步刷新。
+   */
+  const handleCardMove = useCallback(
+    (card: Card, screen: { x: number; y: number }) => {
+      const snapshot = useBoardStore.getState()
+      const space = useSpacesStore.getState().getCurrentSpace()
+      if (!space) return
+      if (snapshot.readOnly) {
+        setActionError('布局由更新版本创建，处于只读模式，无法移动')
+        return
+      }
+      if (card.filePath === '') return
+
+      const currentFolder = currentTopFolderOf(card.filePath)
+
+      const move = (
+        targetFolderRel: string,
+        groupName: string | undefined,
+        partition: Partition | null,
+      ) => {
+        void history
+          .execute(
+            createMoveCardToFolderCommand(card, targetFolderRel, groupName, partition, {
+              spacePath: space.folderPath,
+              provider: localStorageProvider,
+              // 资源表写入必须早于 store 更新（渲染时读快照，方案 A 裁决 6）；
+              // undo 复用同一路径把原图绝对路径写回旧值
+              applyUpdate: (updates) => {
+                if (card.type === 'image') {
+                  for (const update of updates) {
+                    setCardAsset(update.id, {
+                      originalPath: joinPath(space.folderPath, update.filePath),
+                    })
+                  }
+                }
+                useBoardStore.getState().setCardFileRefs(updates)
+              },
+              applyPartitionRects: (rects) => useBoardStore.getState().setPartitionRects(rects),
+            }),
+          )
+          .then(() => writer.schedule())
+          .catch((error: unknown) => {
+            setActionError(
+              error instanceof Error ? `移动失败：${error.message}` : String(error),
+            )
+          })
+      }
+
+      const items: ContextMenuItemData[] = [
+        // 未分类（当前已在未分类时跳过 —— 移到原地没有意义；空间根目录的文件可以移入）
+        ...(currentFolder !== UNCLASSIFIED_DIR
+          ? [
+              {
+                id: `${CARD_ACTION.move}:unclassified`,
+                label: UNCLASSIFIED_DIR,
+                run: () => move(UNCLASSIFIED_DIR, undefined, null),
+              },
+            ]
+          : []),
+        ...snapshot.partitions
+          // 卡片当前所在分区不列（no-op）；其余分区按画布顺序列出
+          .filter((partition) => partition.folderPath !== currentFolder)
+          .map((partition) => ({
+            id: `${CARD_ACTION.move}:${partition.id}`,
+            label: partition.name,
+            run: () => move(partition.folderPath, partition.name, partition),
+          })),
+      ]
+
+      if (items.length === 0) {
+        setActionError('没有可移动到的其他文件夹')
+        return
+      }
+      setContextMenu({ x: screen.x, y: screen.y, items })
+    },
+    [history, writer],
+  )
+
   /** 删除连线（T3.2 / 断开连接）：一条命令入撤销栈，undo 原样恢复（含标签） */
   const handleRemoveConnections = useCallback(
     (ids: string[]) => {
@@ -1317,19 +1490,24 @@ export function Board() {
 
   // ---- T3.9 右键菜单的弹出入口：菜单数组一律来自配置中心 ----
 
-  const handleCardContextMenu = useCallback((card: Card, screen: { x: number; y: number }) => {
-    const ctx = { spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '', card }
-    setContextMenu({
-      x: screen.x,
-      y: screen.y,
-      items: buildCardMenuFor(card).map((item) => ({
-        id: item.id,
-        label: item.label,
-        danger: item.id === CARD_ACTION.remove,
-        run: () => item.action(ctx),
-      })),
-    })
-  }, [])
+  const handleCardContextMenu = useCallback(
+    (card: Card, screen: { x: number; y: number }) => {
+      const ctx = { spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '', card }
+      setContextMenu({
+        x: screen.x,
+        y: screen.y,
+        items: buildCardMenuFor(card).map((item) => ({
+          id: item.id,
+          label: item.label,
+          danger: item.id === CARD_ACTION.remove,
+          run: () => item.action(ctx),
+          // 「移动到…」展开二级文件夹选择菜单（2026-09-12 用户裁决）
+          ...(item.id === CARD_ACTION.move ? { run: () => handleCardMove(card, screen) } : {}),
+        })),
+      })
+    },
+    [handleCardMove],
+  )
 
   const handlePartitionContextMenu = useCallback(
     (partition: import('@/core/types').Partition, screen: { x: number; y: number }) => {
@@ -1392,13 +1570,26 @@ export function Board() {
             label: '新建便签',
             run: () => createNoteAt(canvasPoint.x - 100, canvasPoint.y - 20),
           },
-          // 应用内剪贴板非空时：空白处也可直接粘贴（落点 = 右键位置）
+          // 应用内剪贴板非空时：空白处也可直接粘贴。
+          // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
+          // 分区的文件夹，点在空白归 `未分类`（与 Ctrl+V 的「选中分区/未分类」规则区分开）
           ...(copiedCards.length > 0
             ? [
                 {
                   id: 'canvas.paste',
                   label: '粘贴',
-                  run: () => void pasteCards(canvasPoint),
+                  run: () => {
+                    const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
+                    if (!spacePath) return
+                    void pasteCards(
+                      canvasPoint,
+                      resolveDropDestination(
+                        canvasPoint,
+                        useBoardStore.getState().partitions,
+                        spacePath,
+                      ),
+                    )
+                  },
                 },
               ]
             : []),
@@ -1530,6 +1721,48 @@ export function Board() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [writer])
 
+  // -------------------------------------------------------------------------
+  // 工具栏条目（2026-09-12 用户裁决）
+  // 一律纯图标：文字只出现在原生 title / aria-label 上，按钮面不出现任何标签；
+  // 「恢复选中」的张数改用计数徽标承载，避免因为去文字而丢掉信息。
+  // -------------------------------------------------------------------------
+
+  const toolbarItems = useMemo<IconToolbarItem[]>(() => {
+    const items: IconToolbarItem[] = [
+      { id: 'undo', label: '撤销（Ctrl+Z）', icon: <UndoIcon />, onClick: handleUndo },
+      { id: 'redo', label: '重做（Ctrl+Shift+Z）', icon: <RedoIcon />, onClick: handleRedo },
+    ]
+
+    if (removedView) {
+      // 已移除视图才有「恢复选中」，且只有选中了灰卡才出现
+      if (selectedIds.length > 0) {
+        items.push({
+          id: 'restore',
+          label: `恢复选中的 ${selectedIds.length} 张卡片`,
+          icon: <RestoreIcon />,
+          badge: selectedIds.length,
+          onClick: () => handleRestoreCards(selectedIds),
+        })
+      }
+    } else {
+      items.push({
+        id: 'note',
+        label: '新建便签',
+        icon: <NoteAddIcon />,
+        onClick: handleCreateNoteAtViewportCenter,
+      })
+    }
+
+    return items
+  }, [
+    handleUndo,
+    handleRedo,
+    removedView,
+    selectedIds,
+    handleRestoreCards,
+    handleCreateNoteAtViewportCenter,
+  ])
+
   const handleBack = async () => {
     // 切空间前强制落盘，再清状态（顺序不能反：build 依赖 store 里的空间 id）
     await writer.flush()
@@ -1544,8 +1777,9 @@ export function Board() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="flex h-full w-full flex-col bg-background">
-      <header className="flex items-center gap-3 border-b border-border px-5 py-3">
+    <div className="relative flex h-full w-full flex-col bg-background">
+      {/* flex-wrap：窄窗口时按钮换行而不是溢出（2026-09-12 响应式） */}
+      <header className="flex flex-wrap items-center gap-3 gap-y-2 border-b border-border px-5 py-3">
         <Button variant="outline" onClick={() => void handleBack()}>
           返回列表
         </Button>
@@ -1569,60 +1803,43 @@ export function Board() {
           {space?.type}
         </span>
 
-        {/* 已移除视图切换（T2.8 / 7.2）+ 恢复选中（灰卡视图下） */}
-        {removedView && selectedIds.length > 0 ? (
-          <Button
-            variant="outline"
-            onClick={() => handleRestoreCards(selectedIds)}
-            className="shrink-0"
-          >
-            恢复选中（{selectedIds.length}）
-          </Button>
-        ) : null}
-        <Button variant="outline" onClick={handleUndo} className="shrink-0" title="Ctrl+Z">
-          撤销
-        </Button>
-        <Button variant="outline" onClick={handleRedo} className="shrink-0" title="Ctrl+Shift+Z">
-          重做
-        </Button>
-        {!removedView ? (
-          <Button
-            variant="outline"
-            className="shrink-0"
-            onClick={() => {
-              // T3.4：落在当前视口中心（画布坐标）
-              const api = canvasApiRef.current
-              if (!api) return
-              const root = document.querySelector('[data-canvas-root]')
-              const rect = root?.getBoundingClientRect()
-              const center = rect
-                ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-                : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-              const point = api.screenToCanvasPoint(center.x, center.y)
-              createNoteAt(point.x - 100, point.y - 80)
-            }}
-          >
-            新建便签
-          </Button>
-        ) : null}
-        <Button variant={removedView ? 'default' : 'outline'} onClick={handleToggleRemovedView} className="shrink-0">
-          {removedView ? '返回画布' : `显示已移除${removed.length > 0 ? `（${removed.length}）` : ''}`}
-        </Button>
-        {/* 深 / 浅主题切换（2026-09-11 用户裁决）：偏好由 core/utils/theme.ts 记忆 */}
+        {/* 画布工具栏（2026-09-12 用户裁决）：撤销 / 重做 / 新建便签（已移除视图下是恢复选中）
+            统一收进这条**可折叠**的**纯图标**工具栏；文字只保留在原生 title 上 */}
+        <IconToolbar
+          items={toolbarItems}
+          expanded={toolbarExpanded}
+          onToggle={handleToolbarToggle}
+        />
+
+        {/* 设置（2026-09-12）：主题切换 / 显示已移除 / 检查更新 收进面板，顶栏只留一个**纯图标**入口 */}
         <Button
-          variant="outline"
+          variant={settingsOpen ? 'default' : 'outline'}
+          size="icon"
           className="shrink-0"
-          title="切换深色 / 浅色主题（会记住选择）"
-          onClick={() => {
-            const next = toggleTheme(theme)
-            setTheme(next)
-            applyTheme(next)
-            saveTheme(next)
-          }}
+          title="设置（主题 / 已移除视图 / 检查更新）"
+          aria-label="设置"
+          onClick={() => setSettingsOpen((value) => !value)}
         >
-          {theme === 'dark' ? '浅色模式' : '深色模式'}
+          <SettingsIcon />
         </Button>
       </header>
+
+      {/* 设置面板：绝对定位贴页面右上角（点外部关闭）。
+          ⚠️ 挂根容器而非头部按钮：绝对定位的 `right-3` 以最近定位祖先为基准，
+          挂进头部（flex-wrap 换行）后窄窗口会被按钮位置带到视口外。
+          2026-09-12：与主界面（SpaceList）复用同一个组件，功能与样式一致 */}
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        theme={theme}
+        onToggleTheme={handleToggleTheme}
+        removedView={removedView}
+        removedCount={removed.length}
+        onToggleRemovedView={() => {
+          setSettingsOpen(false)
+          handleToggleRemovedView()
+        }}
+      />
 
       {status === 'error' ? (
         <div className="border-b border-destructive/40 bg-destructive/5 px-5 py-2 text-xs text-destructive">
@@ -1665,37 +1882,65 @@ export function Board() {
 
       <div className="relative min-h-0 flex-1">
         {status === 'ready' ? (
-          <Canvas
-            cards={removedView ? removedCards : cards}
-            partitions={removedView ? [] : partitions}
-            selectedIds={selectedIds}
-            initialView={canvas}
-            onViewportChange={handleViewportChange}
-            onSelectCards={handleSelectCards}
-            onCommitMove={handleCommitMove}
-            onCommitResize={handleCommitResize}
-            onCommitPartitionMove={handleCommitPartitionMove}
-            onCommitPartitionResize={handleCommitPartitionResize}
-            onTogglePartitionCollapsed={handleTogglePartitionCollapsed}
-            onRenamePartition={handleRenamePartition}
-            onRemoveCards={handleRemoveCards}
-            removedMode={removedView}
-            connections={removedView ? [] : connections}
-            selectedConnectionIds={selectedConnectionIds}
-            onSelectConnections={handleSelectConnections}
-            onEditConnectionLabel={handleEditConnectionLabel}
-            onCreateConnection={handleCreateConnection}
-            onCardContextMenu={handleCardContextMenu}
-            onConnectionContextMenu={handleConnectionContextMenu}
-            onPartitionContextMenu={handlePartitionContextMenu}
-            onCanvasContextMenu={handleCanvasContextMenu}
-            onOpenCard={(card) => void openCardWithSystem(card)}
-            onEditNoteCard={handleEditNoteCard}
-            pendingConnectFrom={pendingConnectFrom}
-            registerCanvasApi={(api) => {
-              canvasApiRef.current = api
-            }}
-          />
+          <>
+            <Canvas
+              cards={removedView ? removedCards : cards}
+              partitions={removedView ? [] : partitions}
+              selectedIds={selectedIds}
+              initialView={canvas}
+              onViewportChange={handleViewportChange}
+              onSelectCards={handleSelectCards}
+              onCommitMove={handleCommitMove}
+              onCommitResize={handleCommitResize}
+              onCommitPartitionMove={handleCommitPartitionMove}
+              onCommitPartitionResize={handleCommitPartitionResize}
+              onTogglePartitionCollapsed={handleTogglePartitionCollapsed}
+              onRenamePartition={handleRenamePartition}
+              onRemoveCards={handleRemoveCards}
+              selectedPartitionId={removedView ? null : selectedPartitionId}
+              onSelectPartition={handleSelectPartition}
+              removedMode={removedView}
+              connections={removedView ? [] : connections}
+              selectedConnectionIds={selectedConnectionIds}
+              onSelectConnections={handleSelectConnections}
+              onEditConnectionLabel={handleEditConnectionLabel}
+              onCreateConnection={handleCreateConnection}
+              onCardContextMenu={handleCardContextMenu}
+              onConnectionContextMenu={handleConnectionContextMenu}
+              onPartitionContextMenu={handlePartitionContextMenu}
+              onCanvasContextMenu={handleCanvasContextMenu}
+              onOpenCard={(card) => void openCardWithSystem(card)}
+              onEditNoteCard={handleEditNoteCard}
+              pendingConnectFrom={pendingConnectFrom}
+              registerCanvasApi={(api) => {
+                canvasApiRef.current = api
+              }}
+            />
+
+            {/* 小地图（2026-09-12）：右下角概览当前位置；可收起。
+                ⚠️ bottom-12：让开 Canvas 状态条复原视图按钮所在的 bottom-3 一行，
+                两态（面板 / 入口按钮）都在其上方，互不遮挡 */}
+            {minimapVisible ? (
+              <MiniMap
+                cards={cards}
+                partitions={partitions}
+                onJump={handleMinimapJump}
+                registerRedraw={(fn) => {
+                  minimapRedrawRef.current = fn
+                }}
+                onCollapse={() => handleMinimapVisibleChange(false)}
+              />
+            ) : null}
+            {!minimapVisible ? (
+              <button
+                type="button"
+                className="absolute bottom-12 right-3 z-20 flex h-7 items-center rounded-md border border-border bg-background/80 px-2 text-[11px] text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-background"
+                onClick={() => handleMinimapVisibleChange(true)}
+              >
+                小地图
+              </button>
+            ) : null}
+          </>
         ) : null}
 
         {status === 'loading' ? (

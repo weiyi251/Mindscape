@@ -28,7 +28,7 @@ import type { Card, Connection, RemovedEntry } from '@/core/types'
 import type { Command } from '../types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { joinPath, relativePathOf } from '@/core/utils/paths'
-import { runWithConcurrency } from '@/core/board/thumbnails'
+import { runWithConcurrency } from '@/core/board/imageSizes'
 
 /** 被移除文件在 `_已移除` 下的相对路径：保留原文件夹结构（7.1） */
 export function removedPathFor(filePath: string): string {
@@ -53,7 +53,7 @@ export function connectionsTouchingCardIds(
 /**
  * 三级性能保护（7.4）的批量阈值：
  *   ≤ 50 张 → 逐项同步执行（数量小，耗时可忽略）；
- *   > 50 张 → 并发执行（DEFAULT_THUMBNAIL_CONCURRENCY 路）+ onProgress 进度回调。
+ *   > 50 张 → 并发执行（DEFAULT_IMAGE_CONCURRENCY 路）+ onProgress 进度回调。
  * 单文件失败：无论哪一档都跳过并记录（不中断批次）。
  */
 export const REMOVE_BATCH_ASYNC_LIMIT = 50

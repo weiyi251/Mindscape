@@ -96,6 +96,10 @@ export interface CanvasProps {
   }) => void
   /** Delete 键移除选中卡片（T2.7）：文件移动与命令由上层完成 */
   onRemoveCards?: (ids: string[]) => void
+  /** 选中的分区框（2026-09-12：Ctrl+V 粘贴目标 = 选中的分区） */
+  selectedPartitionId?: string | null
+  /** 选中分区框变化：按下分区框选中；单击空白取消（传 null） */
+  onSelectPartition?: (id: string | null) => void
   /** 已移除视图模式（T2.8）：卡片灰底、禁用拖动 / 缩放 / 框选平移以外的编辑 */
   removedMode?: boolean
 
@@ -139,6 +143,8 @@ export interface CanvasProps {
 export interface CanvasApi {
   /** 视口内屏幕坐标（clientX/clientY）→ 画布坐标 */
   screenToCanvasPoint: (clientX: number, clientY: number) => Point
+  /** 把给定画布坐标变为视口中心（小地图跳转用，2026-09-12）；保持当前缩放不变 */
+  centerOn: (canvasPoint: Point) => void
 }
 
 export function Canvas({
@@ -155,6 +161,8 @@ export function Canvas({
   onTogglePartitionCollapsed,
   onRenamePartition,
   onRemoveCards,
+  selectedPartitionId = null,
+  onSelectPartition,
   removedMode = false,
   connections = [],
   selectedConnectionIds = [],
@@ -197,6 +205,8 @@ export function Canvas({
   onRenamePartitionRef.current = onRenamePartition
   const onRemoveCardsRef = useRef(onRemoveCards)
   onRemoveCardsRef.current = onRemoveCards
+  const onSelectPartitionRef = useRef(onSelectPartition)
+  onSelectPartitionRef.current = onSelectPartition
   const onCreateConnectionRef = useRef(onCreateConnection)
   onCreateConnectionRef.current = onCreateConnection
   const onEditNoteCardRef = useRef(onEditNoteCard)
@@ -473,6 +483,21 @@ export function Canvas({
         element.style.height = `${h}px`
       },
       getZoom: () => controllerRef.current?.zoom ?? 1,
+      getAspectRatio: (cardId, element) => {
+        // 1) 首选"已加载原图的真实比例"：懒加载把原图写进 src 之后
+        //    naturalWidth / naturalHeight 才有效（方案 A：直接加载原图，没有缩略图）。
+        const img = element?.querySelector<HTMLImageElement>('[data-card-image]')
+        const naturalW = img?.naturalWidth ?? 0
+        const naturalH = img?.naturalHeight ?? 0
+        if (naturalW > 0 && naturalH > 0) return naturalW / naturalH
+
+        // 2) 原图还没加载（视口外 / 加载失败）时退回卡片当前比例：
+        //    图片卡片的初始尺寸本就按原图比例算好（T1.4 的 cardSizeForImage），
+        //    因此这个退路同样是对的；非图片卡片一律返回 null → 自由缩放。
+        const card = cardsRef.current.find((item) => item.id === cardId)
+        if (card && card.type === 'image' && card.w > 0 && card.h > 0) return card.w / card.h
+        return null
+      },
     }),
     [],
   )
@@ -616,6 +641,8 @@ export function Canvas({
         const partitionId = partitionElement?.getAttribute(PARTITION_ID_ATTR)
         const partition = partitionsRef.current.find((item) => item.id === partitionId)
         if (partitionElement && partitionId && partition) {
+          // 2026-09-12：按下分区（含调整大小手柄）即选中它（Ctrl+V 粘贴目标跟随）
+          onSelectPartitionRef.current?.(partitionId)
           const members = cardsRef.current.filter((card) => card.group === partition.name)
           const limits = computePartitionResizeLimits(
             partition,
@@ -639,6 +666,8 @@ export function Canvas({
         const partitionId = partitionElement.getAttribute(PARTITION_ID_ATTR)
         const partition = partitionsRef.current.find((item) => item.id === partitionId)
         if (partitionId && partition) {
+          // 2026-09-12：按下分区框即选中它（与卡片选中互斥，见 boardStore.selectPartition）
+          onSelectPartitionRef.current?.(partitionId)
           // 框内卡片快照从数据层取：折叠时卡片未渲染也要随动（数据层位移）
           const companions = cardsRef.current
             .filter((card) => card.group === partition.name)
@@ -739,9 +768,10 @@ export function Canvas({
     endConnectionDrag,
   ])
 
-  /** 单击空白 → 取消选中（5.1） */
+  /** 单击空白 → 取消选中（5.1）；分区选中一并取消（2026-09-12） */
   const handleBackgroundClick = useCallback(() => {
     onSelectCardsRef.current?.([])
+    onSelectPartitionRef.current?.(null)
   }, [])
 
   /** 折叠 / 展开分区框（T2.5）：低频 UI 操作，走 React 状态 */
@@ -821,6 +851,17 @@ export function Canvas({
             controller.getState(),
             { left: rect.left, top: rect.top },
           )
+        },
+        // 小地图跳转（2026-09-12）：画布坐标 → 视口中心；offset 按容器尺寸反推，
+        // setState 内部 applyToDom + notify，走正常视口变更链路（快照 / 小地图同步刷新）
+        centerOn: (canvasPoint: Point): void => {
+          const root = canvasRootRef.current
+          if (!root) return
+          controller.setState({
+            zoom: controller.zoom,
+            offsetX: root.clientWidth / 2 - canvasPoint.x * controller.zoom,
+            offsetY: root.clientHeight / 2 - canvasPoint.y * controller.zoom,
+          })
         },
       })
     },
@@ -959,6 +1000,7 @@ export function Canvas({
             key={partition.id}
             partition={partition}
             color={resolvePartitionColor(partition.color, index)}
+            selected={selectedPartitionId === partition.id}
             registerEl={registerPartitionEl}
             onToggleCollapsed={handleTogglePartitionCollapsed}
             onRename={handleRenamePartition}

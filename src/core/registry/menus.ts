@@ -38,6 +38,8 @@ export const CARD_ACTION = {
   editLabel: 'card.editLabel',
   connect: 'card.connect',
   copy: 'card.copy',
+  /** 移动到…（2026-09-12 用户裁决：画布内切换卡片文件所属的文件夹） */
+  move: 'card.move',
 } as const
 
 /**
@@ -90,6 +92,15 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
     id: CARD_ACTION.copy,
     label: '复制',
     action: (ctx) => runAction(CARD_ACTION.copy, '复制', ctx),
+  },
+  {
+    // 2026-09-12 用户裁决「在画布中切换图片所在文件夹」：
+    // 有硬盘文件的卡片（图片 / 文件）才谈得上「换文件夹」；便签没有文件，不显示。
+    // 点击后弹出二级菜单列出全部分区与 `未分类`，物理移动文件 + 同步画布。
+    id: CARD_ACTION.move,
+    label: '移动到…',
+    appliesTo: (card) => card.filePath !== '',
+    action: (ctx) => runAction(CARD_ACTION.move, '移动到…', ctx),
   },
 ]
 

@@ -26,6 +26,8 @@ export interface PartitionViewProps {
   partition: Partition
   /** 已解析的颜色（Canvas 层统一算好，组件保持纯展示） */
   color: string
+  /** 是否选中（2026-09-12：Ctrl+V 粘贴目标 = 选中的分区，选中时描边高亮） */
+  selected?: boolean
   /** 注册 DOM 元素（拖框时直写样式用，17.3） */
   registerEl?: (id: string, element: HTMLDivElement | null) => void
   /** 点击折叠按钮 */
@@ -37,6 +39,7 @@ export interface PartitionViewProps {
 export function PartitionView({
   partition,
   color,
+  selected = false,
   registerEl,
   onToggleCollapsed,
   onRename,
@@ -68,12 +71,16 @@ export function PartitionView({
     <div
       {...{ [PARTITION_ID_ATTR]: partition.id, 'data-canvas-item': '' }}
       ref={(element) => registerEl?.(partition.id, element)}
-      className="group absolute left-0 top-0 rounded-lg border will-change-transform"
+      className={cn(
+        'group absolute left-0 top-0 rounded-lg border will-change-transform',
+        // 选中高亮：主色描边（Ctrl+V 粘贴目标的视觉反馈）
+        selected && 'ring-2 ring-primary ring-offset-0',
+      )}
       style={{
         width: `${partition.w}px`,
         height: `${height}px`,
         transform: `translate3d(${partition.x}px, ${partition.y}px, 0)`,
-        borderColor: `${color}66`,
+        borderColor: selected ? undefined : `${color}66`,
         backgroundColor: `${color}24`,
       }}
     >
@@ -109,7 +116,8 @@ export function PartitionView({
           onDoubleClick={(event) => event.stopPropagation()}
           onClick={() => onToggleCollapsed?.(partition.id)}
           className={cn(
-            'flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] leading-none',
+            // 2026-09-12 用户裁决：随分区名字号一起放大（h-5/11px → h-6/12px），保持比例协调
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded text-[12px] leading-none',
             'text-foreground/70 hover:bg-foreground/10',
           )}
           title={collapsed ? '展开分区' : '折叠分区'}
@@ -129,13 +137,16 @@ export function PartitionView({
               if (event.key === 'Escape') setEditing(false)
             }}
             onBlur={submit}
-            className="min-w-0 flex-1 rounded border border-border bg-background px-1 py-0.5 text-[13px] outline-none"
+            // 字号与显示态一致（text-[17px]），改名时不会跳动
+            className="min-w-0 flex-1 rounded border border-border bg-background px-1 py-0.5 text-[17px] outline-none"
             autoFocus
           />
         ) : (
           <span
-            // select-none：双击是改名手势，别让浏览器顺手选中文字
-            className="min-w-0 flex-1 cursor-text select-none truncate text-[13px] font-medium text-foreground/80"
+            // select-none：双击是改名手势，别让浏览器顺手选中文字。
+            // 2026-09-12 用户裁决：调大文件夹名字号（13px → 15px → 17px）更醒目；
+            // 标题条仍是 PARTITION_TITLE_HEIGHT(32px)，17px 行盒（≈24px）放得下，不遮挡
+            className="min-w-0 flex-1 cursor-text select-none truncate text-[17px] font-medium text-foreground/90"
             title={`${partition.name}（双击改名）`}
           >
             {partition.name}

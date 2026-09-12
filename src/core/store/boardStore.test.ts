@@ -9,14 +9,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 
 import { createBoardStore } from '@/core/store/boardStore'
-import { clearCardAssets, getCardThumbnailPath } from '@/core/board/cardAssets'
+import { clearCardAssets, getCardOriginalPath } from '@/core/board/cardAssets'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
 import { createEmptyLayout, zCardSchema } from '@/core/types'
 import { History } from '@/core/commands/history'
 import { createRemoveCardsCommand } from '@/core/commands/impl/removeCards'
 import { StorageError } from '@/core/storage/StorageProvider'
 import type { Layout, RemovedEntry, Space } from '@/core/types'
-import type { DirEntry, StorageProvider, ThumbInfo } from '@/core/storage/StorageProvider'
+import type { DirEntry, ImageSize, StorageProvider } from '@/core/storage/StorageProvider'
 
 /** 假 provider 默认返回的 layout.json 内容（空布局） */
 function emptyLayoutJson(): string {
@@ -266,6 +266,64 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
   })
 })
 
+describe('boardStore · 分区选中与文件归属（2026-09-12）', () => {
+  async function loadedStore() {
+    const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
+    const store = createBoardStore(
+      createFakeProvider([entry('参考资料', true)], { [dirPath]: [entry('a.jpg')] }),
+    )
+    await store.getState().loadSpace(SPACE)
+    return store
+  }
+
+  it('selectPartition 选中分区并清空卡片选中；selectCards 反向清除分区选中', async () => {
+    const store = await loadedStore()
+    const partitionId = store.getState().partitions[0].id
+
+    store.getState().selectCards(['a'])
+    expect(store.getState().selectedIds).toEqual(['a'])
+
+    store.getState().selectPartition(partitionId)
+    expect(store.getState().selectedPartitionId).toBe(partitionId)
+    expect(store.getState().selectedIds).toEqual([])
+
+    store.getState().selectCards(['a'])
+    expect(store.getState().selectedPartitionId).toBeNull()
+
+    store.getState().selectPartition(partitionId)
+    store.getState().selectPartition(null)
+    expect(store.getState().selectedPartitionId).toBeNull()
+  })
+
+  it('setCardFileRefs 更新 filePath / originalPath / group，其余字段不动', async () => {
+    const store = await loadedStore()
+    const before = store.getState().cards[0]
+    const id = before.id
+
+    store.getState().setCardFileRefs([
+      { id, filePath: '旅行/a.jpg', originalPath: '旅行/a.jpg', group: '旅行' },
+    ])
+
+    const after = store.getState().cards.find((card) => card.id === id)
+    expect(after).toMatchObject({ filePath: '旅行/a.jpg', originalPath: '旅行/a.jpg', group: '旅行' })
+    expect(after?.x).toBe(before.x)
+    expect(after?.w).toBe(before.w)
+
+    // group 传 undefined → 移出分区（回到未分类 / 根目录）
+    store.getState().setCardFileRefs([
+      { id, filePath: '未分类/a.jpg', originalPath: '未分类/a.jpg', group: undefined },
+    ])
+    expect(store.getState().cards.find((card) => card.id === id)?.group).toBeUndefined()
+  })
+
+  it('reset 清空分区选中', async () => {
+    const store = await loadedStore()
+    store.getState().selectPartition(store.getState().partitions[0].id)
+    store.getState().reset()
+    expect(store.getState().selectedPartitionId).toBeNull()
+  })
+})
+
 describe('boardStore.reset', () => {
   it('清空画布状态', async () => {
     const store = createBoardStore(createFakeProvider([entry('a.jpg')]))
@@ -282,13 +340,13 @@ describe('boardStore.reset', () => {
 })
 
 // ---------------------------------------------------------------------------
-// T1.4：缩略图接入
+// T1.4：尺寸读取与宽高比（方案 A：不再生成缩略图，宽高比来自 read_image_size）
 // ---------------------------------------------------------------------------
 
-/** 同时实现 listDir 与 makeThumbnail 的假 provider */
-function createThumbProvider(
+/** 同时实现 listDir 与 readImageSize 的假 provider */
+function createSizeProvider(
   entries: DirEntry[],
-  thumbs: Record<string, ThumbInfo>,
+  sizes: Record<string, ImageSize>,
   failFor: string[] = [],
   layoutJson?: string,
 ): StorageProvider {
@@ -299,30 +357,30 @@ function createThumbProvider(
     async readLayout() {
       return layoutJson ?? emptyLayoutJson()
     },
-    async makeThumbnail(src: string) {
+    async readImageSize(src: string) {
       const name = src.split('\\').pop() ?? src
-      if (failFor.includes(name)) throw new Error('解码图片失败：损坏的文件')
-      const info = thumbs[name]
+      if (failFor.includes(name)) throw new Error('读取图片尺寸失败：损坏的文件')
+      const info = sizes[name]
       if (!info) throw new Error(`未预期的图片：${name}`)
       return info
     },
   } as unknown as StorageProvider
 }
 
-function thumb(path: string, width: number, height: number): ThumbInfo {
-  return { path, width, height }
+function sizeOf(width: number, height: number): ImageSize {
+  return { width, height }
 }
 
-describe('boardStore.loadSpace · 缩略图与宽高比（T1.4）', () => {
+describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）', () => {
   beforeEach(() => {
     clearCardAssets()
   })
 
-  it('图片卡片按缩略图尺寸还原原始宽高比（16:9 仍是 16:9）', async () => {
+  it('图片卡片按原图尺寸还原原始宽高比（16:9 仍是 16:9）', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('wide.jpg'), entry('square.png')], {
-        'wide.jpg': thumb('D:\\t\\w.webp', 800, 450),
-        'square.png': thumb('D:\\t\\s.webp', 800, 800),
+      createSizeProvider([entry('wide.jpg'), entry('square.png')], {
+        'wide.jpg': sizeOf(8000, 4500),
+        'square.png': sizeOf(800, 800),
       }),
     )
 
@@ -333,26 +391,22 @@ describe('boardStore.loadSpace · 缩略图与宽高比（T1.4）', () => {
     expect(square.w).toBe(square.h)
   })
 
-  it('缩略图路径登记进资源表（渲染层据此取绝对路径）', async () => {
+  it('原图路径登记进资源表（= 空间文件夹 + filePath）', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('a.jpg')], {
-        'a.jpg': thumb('D:\\Mindscape\\01_项目A\\.mindscape\\thumbnails\\ab.webp', 800, 600),
-      }),
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
     await store.getState().loadSpace(SPACE)
 
     const [card] = store.getState().cards
-    expect(getCardThumbnailPath(card.id)).toBe(
-      'D:\\Mindscape\\01_项目A\\.mindscape\\thumbnails\\ab.webp',
-    )
+    expect(getCardOriginalPath(card.id)).toBe('D:\\Mindscape\\01_项目A\\a.jpg')
   })
 
-  it('非图片文件不调 makeThumbnail，使用类型默认尺寸', async () => {
-    // thumbs 里没有 pdf，若被调用会抛「未预期的图片」
+  it('非图片文件不调 readImageSize，使用类型默认尺寸', async () => {
+    // sizes 里没有 pdf，若被调用会抛「未预期的图片」
     const store = createBoardStore(
-      createThumbProvider([entry('总平面.pdf'), entry('a.jpg')], {
-        'a.jpg': thumb('D:\\t\\a.webp', 800, 600),
+      createSizeProvider([entry('总平面.pdf'), entry('a.jpg')], {
+        'a.jpg': sizeOf(4000, 3000),
       }),
     )
 
@@ -365,11 +419,11 @@ describe('boardStore.loadSpace · 缩略图与宽高比（T1.4）', () => {
     expect(store.getState().notices).toEqual([])
   })
 
-  it('单张缩略图失败 → 该卡片退回默认尺寸，其余照常，并给出可展示的提示', async () => {
+  it('单张尺寸读取失败 → 该卡片退回默认尺寸，其余照常，并给出可展示的提示；原图路径仍登记', async () => {
     const store = createBoardStore(
-      createThumbProvider(
+      createSizeProvider(
         [entry('bad.jpg'), entry('ok.jpg')],
-        { 'ok.jpg': thumb('D:\\t\\ok.webp', 800, 600) },
+        { 'ok.jpg': sizeOf(4000, 3000) },
         ['bad.jpg'],
       ),
     )
@@ -382,43 +436,43 @@ describe('boardStore.loadSpace · 缩略图与宽高比（T1.4）', () => {
 
     const bad = state.cards.find((card) => card.filePath === 'bad.jpg')
     expect(bad?.w).toBe(CORE_CARD_TYPE_DEFAULT_SIZE.image.w)
-    expect(getCardThumbnailPath(bad!.id)).toBe('')
+    expect(getCardOriginalPath(bad!.id)).toBe('D:\\Mindscape\\01_项目A\\bad.jpg')
 
     expect(state.notices).toHaveLength(1)
     expect(state.notices[0]).toContain('bad.jpg')
-    expect(state.notices[0]).toContain('解码图片失败：损坏的文件')
+    expect(state.notices[0]).toContain('读取图片尺寸失败：损坏的文件')
   })
 
   it('切换空间时清空上一批资源路径', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('a.jpg')], { 'a.jpg': thumb('D:\\t\\1.webp', 800, 600) }),
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
     await store.getState().loadSpace(SPACE)
     const firstId = store.getState().cards[0].id
-    expect(getCardThumbnailPath(firstId)).not.toBe('')
+    expect(getCardOriginalPath(firstId)).not.toBe('')
 
     store.getState().reset()
-    expect(getCardThumbnailPath(firstId)).toBe('')
+    expect(getCardOriginalPath(firstId)).toBe('')
   })
 
   it('资源路径先于卡片写入（渲染时一定能读到）', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('a.jpg')], { 'a.jpg': thumb('D:\\t\\1.webp', 800, 600) }),
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
     // 订阅：卡片一到就立刻查资源
     let seenAtSetTime = ''
     const unsubscribe = store.subscribe((state) => {
       if (state.status === 'ready' && state.cards[0]) {
-        seenAtSetTime = getCardThumbnailPath(state.cards[0].id)
+        seenAtSetTime = getCardOriginalPath(state.cards[0].id)
       }
     })
 
     await store.getState().loadSpace(SPACE)
     unsubscribe()
 
-    expect(seenAtSetTime).toBe('D:\\t\\1.webp')
+    expect(seenAtSetTime).toBe('D:\\Mindscape\\01_项目A\\a.jpg')
   })
 })
 
@@ -476,7 +530,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('恢复卡片位置与 id（不是重新排网格）', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('a.jpg')], { 'a.jpg': thumb('D:\\t\\a.webp', 800, 600) }, [], layoutJson((layout) => {
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(800, 600) }, [], layoutJson((layout) => {
         layout.cards.push({
           id: 'c_005',
           type: 'image',
@@ -505,7 +559,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('恢复视图状态（zoom / offset），对应「关掉再开视图还原」', async () => {
     const store = createBoardStore(
-      createThumbProvider([], {}, [], layoutJson((layout) => {
+      createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.canvas = { zoom: 2.5, offsetX: -300, offsetY: -120 }
       })),
     )
@@ -517,11 +571,11 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('folder 里有新文件 → 接在既有卡片下方，已有位置不变', async () => {
     const store = createBoardStore(
-      createThumbProvider(
+      createSizeProvider(
         [entry('a.jpg'), entry('新图.jpg')],
         {
-          'a.jpg': thumb('D:\\t\\a.webp', 800, 600),
-          '新图.jpg': thumb('D:\\t\\b.webp', 800, 600),
+          'a.jpg': sizeOf(800, 600),
+          '新图.jpg': sizeOf(800, 600),
         },
         [],
         layoutJson((layout) => {
@@ -552,7 +606,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('layout 里有、文件夹里没有的卡片不显示', async () => {
     const store = createBoardStore(
-      createThumbProvider([entry('a.jpg')], { 'a.jpg': thumb('D:\\t\\a.webp', 800, 600) }, [], layoutJson((layout) => {
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(800, 600) }, [], layoutJson((layout) => {
         layout.cards.push({
           id: 'c_001',
           type: 'image',
@@ -598,7 +652,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('数据无法识别（能读但不是合法布局）→ 退回全新布局并提示', async () => {
     const store = createBoardStore(
-      createThumbProvider([], {}, [], JSON.stringify({ version: 1, cards: 'not-an-array' })),
+      createSizeProvider([], {}, [], JSON.stringify({ version: 1, cards: 'not-an-array' })),
     )
 
     await store.getState().loadSpace(SPACE)
@@ -609,7 +663,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('version 高于当前版本 → 只读模式 + 提示（17.6）', async () => {
     const store = createBoardStore(
-      createThumbProvider([], {}, [], layoutJson((layout) => {
+      createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.version = 9
       })),
     )
@@ -622,7 +676,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
 
   it('reset 清掉只读标志与提示', async () => {
     const store = createBoardStore(
-      createThumbProvider([], {}, [], layoutJson((layout) => {
+      createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.version = 9
       })),
     )
@@ -784,9 +838,9 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
 
   it('新建卡片的 id 池包含 removed 记录 id（不再与已移除记录撞号）', async () => {
     const store = createBoardStore(
-      createThumbProvider(
+      createSizeProvider(
         [entry('a.jpg')],
-        { 'a.jpg': thumb('D:\\t\\a.webp', 800, 600) },
+        { 'a.jpg': sizeOf(800, 600) },
         [],
         layoutJson((layout) => {
           layout.removed.push(removedEntry('c_001', 'gone.jpg'))
@@ -803,9 +857,9 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
 
   it('脏 originalPath（恢复后残留 `_已移除/…`）回填为 filePath，并要求补一次落盘', async () => {
     const store = createBoardStore(
-      createThumbProvider(
+      createSizeProvider(
         [entry('a.jpg')],
-        { 'a.jpg': thumb('D:\\t\\a.webp', 800, 600) },
+        { 'a.jpg': sizeOf(800, 600) },
         [],
         layoutJson((layout) => {
           layout.cards.push({
@@ -835,7 +889,7 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
 
   it('removed 记录 id 重复 → 去重并标记待落盘（否则恢复会按 id 匹配错文件）', async () => {
     const store = createBoardStore(
-      createThumbProvider(
+      createSizeProvider(
         [],
         {},
         [],
@@ -855,7 +909,7 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
   })
 
   it('干净数据：needsMigration 为 false（不做无谓落盘）', async () => {
-    const store = createBoardStore(createThumbProvider([], {}, []))
+    const store = createBoardStore(createSizeProvider([], {}, []))
     await store.getState().loadSpace(SPACE)
     expect(store.getState().needsMigration).toBe(false)
   })
