@@ -332,7 +332,7 @@ export function SpaceList() {
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            可以直接选已有文件夹；布局与缩略图会写进该文件夹的 .mindscape 目录，文件夹自包含
+            可以直接选已有文件夹；布局会写进该文件夹的 .mindscape 目录，文件夹自包含
           </p>
         </div>
 
