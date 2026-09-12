@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
-import { ask } from '@tauri-apps/plugin-dialog'
+import { confirmDialog } from '@/core/utils/nativeDialogs'
 
 import { Button } from '@/components/ui/button'
 import { ContextMenu } from '@/components/ui/context-menu'
@@ -461,14 +461,12 @@ export function Board() {
       }
 
       // ④ 确认框（第六章原文提示）。
-      // ⚠️ 不能用 window.confirm：Tauri 的 WebView2 不支持原生 confirm/alert，
-      // 它会直接返回 false 把改名永远拦死 —— 桌面端必须走 dialog 插件的 ask()。
+      // 走 nativeDialogs 统一出口：桌面端是 dialog 插件的系统弹窗（带标题与警告图标），
+      // 浏览器开发态回落原生 confirm —— 环境判定收在那一处，这里不再重复。
       const message =
         `将同时重命名硬盘文件夹「${partition.name}」→「${newName}」，` +
         '可能导致外部引用（如 SketchUp 贴图路径）失效，确认？'
-      const confirmed = isDesktopRuntime()
-        ? await ask(message, { title: '重命名分区', kind: 'warning' })
-        : window.confirm(message)
+      const confirmed = await confirmDialog(message, '重命名分区')
       if (!confirmed) return
 
       // ⑤ 执行 + 记录旧名（命令的 undo 会把硬盘名一并改回去）

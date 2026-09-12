@@ -26,6 +26,7 @@ import { SettingsPanel } from '@/components/ui/settings-panel'
 import { PlusIcon, SettingsIcon } from '@/components/ui/icons'
 import { SPACE_TYPE_PRESETS } from '@/core/types'
 import { useTheme } from '@/core/hooks/useTheme'
+import { alertDialog, confirmDialog } from '@/core/utils/nativeDialogs'
 import { useSpacesStore } from '@/core/store/spacesStore'
 
 /** 自定义类型的哨兵值（选中它时展开输入框） */
@@ -113,14 +114,15 @@ export function SpaceList() {
 
   const handleDelete = useCallback(
     async (id: string, spaceName: string) => {
-      const confirmed = window.confirm(
+      const confirmed = await confirmDialog(
         `确定从列表移除「${spaceName}」？\n\n只删除记录，硬盘上的文件夹与文件不会被动。`,
+        '移除空间',
       )
       if (!confirmed) return
       try {
         await removeSpace(id)
       } catch (error) {
-        window.alert(error instanceof Error ? error.message : String(error))
+        await alertDialog(error instanceof Error ? error.message : String(error), '移除空间')
       }
     },
     [removeSpace],
