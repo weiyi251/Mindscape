@@ -29,6 +29,7 @@ import type { ContextMenuItemData, ContextMenuState } from '@/components/ui/cont
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
 import { SettingsPanel } from '@/components/ui/settings-panel'
+import { CardSearchPanel } from '@/components/ui/card-search'
 import { IconToolbar, TOOLBAR_PREF_KEY } from '@/components/ui/icon-toolbar'
 import type { IconToolbarItem } from '@/components/ui/icon-toolbar'
 import {
@@ -77,6 +78,7 @@ import { createMoveCardToFolderCommand, currentTopFolderOf } from '@/core/comman
 import { registerAction } from '@/core/registry/actionRegistry'
 import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
+import { useCardSearch } from '@/core/hooks/useCardSearch'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
@@ -287,6 +289,28 @@ export function Board() {
     },
     [selectCards],
   )
+
+  // ---- 卡片搜索（P1-3）：Ctrl+F 唤出浮层，在命中项之间循环跳转 ----
+  // 状态与动作收在 useCardSearch（core/hooks），这里只注入「跳到某张卡」的动作：
+  // 选中该卡并把卡片中心挪到视口中心（复用小地图的定位路径）。
+
+  /** 搜索范围跟随当前视图：已移除视图里搜的是 removedCards（与画布展示一致） */
+  const searchDocs = removedView ? removedCards : cards
+  // 经 ref 转手：jumpTo 保持稳定引用，hook 内部的回调不必随卡片列表重建
+  const searchDocsRef = useRef(searchDocs)
+  searchDocsRef.current = searchDocs
+
+  const handleSearchJumpTo = useCallback(
+    (id: string) => {
+      const target = searchDocsRef.current.find((card) => card.id === id)
+      if (!target) return
+      selectCards([target.id])
+      canvasApiRef.current?.centerOn({ x: target.x + target.w / 2, y: target.y + target.h / 2 })
+    },
+    [selectCards],
+  )
+
+  const search = useCardSearch({ docs: searchDocs, jumpTo: handleSearchJumpTo })
 
   /**
    * 拖拽松手（T2.2）：坐标固化进 store + 一条命令入撤销栈 + 触发防抖落盘。
@@ -1911,10 +1935,26 @@ export function Board() {
               onCanvasContextMenu={handleCanvasContextMenu}
               onOpenCard={(card) => void openCardWithSystem(card)}
               onEditNoteCard={handleEditNoteCard}
+              onRequestSearch={search.openSearch}
+              searchHitIds={search.hitIds}
+              searchActiveId={search.activeId}
               pendingConnectFrom={pendingConnectFrom}
               registerCanvasApi={(api) => {
                 canvasApiRef.current = api
               }}
+            />
+
+            {/* 搜索浮层（P1-3）：Ctrl+F 唤出。z-30 压过小地图（z-20）；定位在画布顶部居中 */}
+            <CardSearchPanel
+              open={search.open}
+              query={search.query}
+              items={search.items}
+              activeIndex={search.activeIndex}
+              panelClassName="left-1/2 top-3 -translate-x-1/2"
+              onQueryChange={search.changeQuery}
+              onStep={search.step}
+              onPick={search.pick}
+              onClose={search.closeSearch}
             />
 
             {/* 小地图（2026-09-12）：右下角概览当前位置；可收起。

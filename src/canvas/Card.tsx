@@ -20,6 +20,9 @@ import { CANVAS_ITEM_ATTR } from './Viewport'
 /** 标记「卡片 DOM」的属性：拖拽控制器靠它从事件目标反查卡片 id */
 export const CARD_ID_ATTR = 'data-card-id'
 
+/** 搜索命中态（P1-3）：`hit` = 命中但不是当前跳转目标，`active` = 当前跳转目标 */
+export type CardSearchState = 'hit' | 'active'
+
 export interface CardViewProps {
   card: Card
   selected: boolean
@@ -27,6 +30,8 @@ export interface CardViewProps {
   registerEl?: (cardId: string, element: HTMLDivElement | null) => void
   /** 已移除视图（T2.8）：灰底淡入（7.2） */
   grayscale?: boolean
+  /** 搜索命中高亮（P1-3）：虚线 = 命中，粗实线 = 当前跳转目标 */
+  searchState?: CardSearchState
 }
 
 /** 卡片外层容器的定位样式（GPU 图层，见文件顶部说明） */
@@ -42,7 +47,13 @@ function cardStyle(card: Card): CSSProperties {
   }
 }
 
-export function CardView({ card, selected, registerEl, grayscale = false }: CardViewProps) {
+export function CardView({
+  card,
+  selected,
+  registerEl,
+  grayscale = false,
+  searchState,
+}: CardViewProps) {
   return (
     <div
       ref={(element) => {
@@ -54,7 +65,10 @@ export function CardView({ card, selected, registerEl, grayscale = false }: Card
       className={cn(
         'absolute left-0 top-0 cursor-grab touch-none select-none rounded-sm bg-card shadow-sm',
         'transition-shadow hover:shadow-md',
-        selected && 'outline outline-2 outline-primary',
+        // 跳转目标用更粗的实线，盖过选中态的 2px 描边（两者同色，宽度不叠加以免粗细随类名顺序漂移）
+        selected && searchState !== 'active' && 'outline outline-2 outline-primary',
+        searchState === 'hit' && 'outline-dashed outline-2 outline-primary/70',
+        searchState === 'active' && 'outline outline-4 outline-primary',
       )}
     >
       <div

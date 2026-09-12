@@ -127,3 +127,41 @@ export function ChevronsRightIcon({ className }: IconProps) {
     </StrokeIcon>
   )
 }
+
+/** 放大镜（P1-3：画布搜索浮层的标题区） */
+export function SearchIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </StrokeIcon>
+  )
+}
+
+/** 单箭头向上（P1-3：搜索浮层「上一个命中」） */
+export function ChevronUpIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="m18 15-6-6-6 6" />
+    </StrokeIcon>
+  )
+}
+
+/** 单箭头向下（P1-3：搜索浮层「下一个命中」） */
+export function ChevronDownIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="m6 9 6 6 6-6" />
+    </StrokeIcon>
+  )
+}
+
+/** 关闭叉（P1-3：搜索浮层关闭按钮；语义由 aria-label 承担） */
+export function CloseIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </StrokeIcon>
+  )
+}

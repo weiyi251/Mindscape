@@ -127,6 +127,12 @@ export interface CanvasProps {
   onOpenCard?: (card: Card) => void
   /** 双击便签卡（T3.4）：进入编辑 */
   onEditNoteCard?: (card: Card) => void
+  /** `Ctrl+F` 请求打开搜索浮层（P1-3）；浮层本身由 Board 渲染，画布只负责派发按键 */
+  onRequestSearch?: () => void
+  /** 搜索命中的卡片 id（P1-3）：虚线描边，表示「搜到了」 */
+  searchHitIds?: string[]
+  /** 当前跳转目标卡片 id（P1-3）：粗实线描边，比命中态更醒目 */
+  searchActiveId?: string | null
   /**
    * 挂起连线模式（T3.9 菜单「连线」触发）：传源卡 id 后，下一张被点中的卡片
    * 成为连线目标；传 null 取消挂起。
@@ -175,6 +181,9 @@ export function Canvas({
   onCanvasContextMenu,
   onOpenCard,
   onEditNoteCard,
+  onRequestSearch,
+  searchHitIds = [],
+  searchActiveId = null,
   pendingConnectFrom = null,
   registerCanvasApi,
 }: CanvasProps) {
@@ -213,6 +222,8 @@ export function Canvas({
   onEditNoteCardRef.current = onEditNoteCard
   const onOpenCardRef = useRef(onOpenCard)
   onOpenCardRef.current = onOpenCard
+  const onRequestSearchRef = useRef(onRequestSearch)
+  onRequestSearchRef.current = onRequestSearch
   const onCardContextMenuRef = useRef(onCardContextMenu)
   onCardContextMenuRef.current = onCardContextMenu
   const onConnectionContextMenuRef = useRef(onConnectionContextMenu)
@@ -227,6 +238,8 @@ export function Canvas({
   selectedIdsRef.current = selectedIds
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  /** 搜索命中集合（P1-3）：命中的卡片画虚线框 */
+  const searchHitSet = useMemo(() => new Set(searchHitIds), [searchHitIds])
 
   /** 分区框 DOM 注册表（拖框时直写样式，17.3） */
   const partitionElsRef = useRef(new Map<string, HTMLDivElement>())
@@ -947,7 +960,7 @@ export function Canvas({
     return () => root.removeEventListener('dblclick', handleDoubleClick)
   }, [])
 
-  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+A 全选 / Esc 取消选中
+  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === '0') {
@@ -959,6 +972,14 @@ export function Canvas({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
         event.preventDefault()
         onSelectCardsRef.current?.(cardsRef.current.map((card) => card.id))
+        return
+      }
+
+      // Ctrl+F：打开搜索浮层。preventDefault 是必需的 —— 浏览器/WebView 的
+      // 「页内查找」会抢这个组合键（且它查不到画布上的内容）。
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        onRequestSearchRef.current?.()
         return
       }
 
@@ -1051,6 +1072,13 @@ export function Canvas({
             selected={selectedSet.has(card.id)}
             registerEl={registerCardEl}
             grayscale={removedMode}
+            searchState={
+              card.id === searchActiveId
+                ? 'active'
+                : searchHitSet.has(card.id)
+                  ? 'hit'
+                  : undefined
+            }
           />
         ))}
       </Viewport>
