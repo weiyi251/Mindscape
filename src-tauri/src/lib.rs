@@ -19,6 +19,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        // 应用内检查更新。检查端点与签名公钥配置在 tauri.conf.json 的 plugins.updater，
+        // 这里只负责装配（17.5 铁律：本模块不含业务判断）。
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // 更新安装完成后重启应用
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![
             commands::fs_ops::list_dir,
             commands::fs_ops::create_dir,

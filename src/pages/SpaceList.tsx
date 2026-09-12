@@ -6,6 +6,8 @@
 //   · 点击卡片进入画布（T1.3 起真正读文件夹）
 //
 // 数据来源是 spacesStore（Zustand），本组件不发任何 Tauri 调用，只做展示与交互。
+// 顶栏的「检查更新」是自动更新的**手动入口**，只调用 updaterStore.open()，
+// 真正的检查与提示由 App 层的 UpdateDialog 呈现（2026-09-12 追加）。
 //
 // 实现任务：T1.1 / T1.2（阶段一）。
 // ============================================================================
@@ -16,7 +18,9 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { SPACE_TYPE_PRESETS } from '@/core/types'
+import { UPDATE_TEXT } from '@/core/updater/updater'
 import { useSpacesStore } from '@/core/store/spacesStore'
+import { useUpdaterStore } from '@/core/store/updaterStore'
 
 /** 自定义类型的哨兵值（选中它时展开输入框） */
 const CUSTOM_TYPE = '__custom__'
@@ -35,6 +39,7 @@ export function SpaceList() {
   const createSpace = useSpacesStore((state) => state.createSpace)
   const removeSpace = useSpacesStore((state) => state.removeSpace)
   const openSpace = useSpacesStore((state) => state.openSpace)
+  const openUpdateDialog = useUpdaterStore((state) => state.open)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [name, setName] = useState('')
@@ -121,7 +126,12 @@ export function SpaceList() {
             把文件夹变成思考空间 · 空间记录存于 %APPDATA%\Mindscape\spaces.json
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>新建空间</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => openUpdateDialog()}>
+            {UPDATE_TEXT.menuEntry}
+          </Button>
+          <Button onClick={() => setDialogOpen(true)}>新建空间</Button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-auto px-8 py-6">

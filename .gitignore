@@ -39,3 +39,8 @@ Thumbs.db
 
 # Vite 打包 vite.config.ts 时生成的临时文件；进程被强制结束时会残留
 vite.config.ts.timestamp-*.mjs
+
+# 自动更新签名私钥：应存放在仓库之外（默认 %USERPROFILE%\.tauri\mindscape.key）。
+# 这里加一道保险，防止误放进来后被提交 —— 私钥泄露等于任何人都能伪造更新包。
+# 公钥是纯文本，直接写在 tauri.conf.json 的 plugins.updater.pubkey 里，不需要文件。
+*.key
