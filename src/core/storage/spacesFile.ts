@@ -5,10 +5,12 @@
 //   内容：我有哪些空间、各自的文件夹在哪
 //
 // 为什么用 fs 插件而不是 Rust 命令：
-//   17.5 的命令清单里没有 spaces.json 的读写命令（read_layout/write_layout 只针对
-//   空间文件夹内的 .mindscape\layout.json），而 17.10 明确声明了 fs 插件权限 ——
+//   17.5 的命令清单里没有 spaces.json 的读写命令（read_layout/write_layout 针对的是
+//   空间文件夹内的内容），而 17.10 明确声明了 fs 插件权限 ——
 //   说明文档的意图就是「固定路径的应用元数据走 fs 插件，空间文件夹内的内容走 Rust 命令」。
 //   空间文件夹是用户任选的任意路径，fs 插件无法预置 scope，所以那部分必须走 Rust。
+//   （P1-2 起画布布局也落在家目录下 `$DATA/Mindscape/layouts/`，与 spaces.json 同样走 fs 插件，
+//     见 `core/storage/appLayoutStore.ts` —— 空间文件夹里只剩用户自己的文件。）
 //
 // 路径拿法：`$DATA`（Tauri 的 BaseDirectory::Data）在 Windows 上就是 %APPDATA%，
 //   与本文件在 capabilities 里声明的 scope（$DATA/Mindscape/**）严格对应。

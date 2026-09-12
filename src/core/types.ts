@@ -3,7 +3,8 @@
 // 数据 Schema 类型定义，对应开发计划书第 4 章「数据结构设计（地基）」。
 //
 //   4.1 空间元数据      → %APPDATA%\Mindscape\spaces.json
-//   4.2 画布布局数据    → <空间文件夹>\.mindscape\layout.json
+//   4.2 画布布局数据    → %APPDATA%\Mindscape\layouts\<空间 id>.json（P1-2 起；
+//                          旧位置 `<空间文件夹>\.mindscape\layout.json` 仍可读并自动迁移）
 //
 // 两个文件都带 version 版本号（用于将来数据迁移），并对每个对象预留 meta 自由字段、
 // 顶层预留 extensions 扩展位 —— 将来加功能往这两处塞，不改主结构（第十三章「准备 1」）。
