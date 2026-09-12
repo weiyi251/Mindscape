@@ -49,6 +49,8 @@ import { joinPath } from '@/core/utils/paths'
 import { StorageError } from '@/core/storage/StorageProvider'
 import type { DirEntry, StorageProvider } from '@/core/storage/StorageProvider'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
+import { localLayoutStore } from '@/core/storage/appLayoutStore'
+import type { AppLayoutStore } from '@/core/storage/appLayoutStore'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
 import { createCardsFromEntries } from '@/core/board/buildCards'
 import type { CardSize } from '@/core/board/buildCards'
@@ -220,36 +222,36 @@ function imageSizeNotice(sizes: ImageSizeBatchResult): string[] {
 }
 
 /**
- * 读 layout.json。
- * 返回 layout、只读标志与提示；任何失败都退回空布局（不阻断进入空间）。
+ * 读布局（P1-2 起位置改为软件目录）。
+ *
+ * 读取顺序：
+ *   ① \`%APPDATA%\Mindscape\layouts\<空间 id>.json\`（正式位置）
+ *   ② 软件目录没有、但空间文件夹里还留着旧的 \`.mindscape\layout.json\` → 读旧文件，
+ *      **成功解析后**才迁移写回软件目录（写失败不影响本次打开）
+ *
+ * 旧文件一律不删除（铁律③「不静默删除」），只给一句可照做的提示。
+ * 任何失败都退回空布局，不阻断进入空间。
  */
 async function readLayoutOrEmpty(
   provider: StorageProvider,
+  layoutStore: AppLayoutStore,
   space: Space,
 ): Promise<{ layout: Layout; readOnly: boolean; notices: string[] }> {
+  const notices: string[] = []
+  let raw: string | null = null
+  let migrated = false
+
   try {
-    const raw = await provider.readLayout(space.folderPath)
-    const parsed = parseLayout(raw)
+    raw = await layoutStore.read(space.id)
 
-    if (!parsed.ok) {
-      return {
-        layout: createEmptyLayout(),
-        readOnly: false,
-        notices: [`布局数据无法识别（${parsed.error}），已改用全新布局`],
-      }
+    if (raw === null && (await layoutStore.legacyLayoutExists(space.folderPath))) {
+      // 先用 list_dir 判存在，再读内容：旧命令在文件缺失时返回的是「空布局」而不是错误，
+      // 仅凭返回值无法区分「没有旧布局」与「旧布局恰好是空的」。
+      raw = await provider.readLayout(space.folderPath)
+      migrated = true
     }
-
-    const readOnly = parsed.data.version > DATA_VERSION
-    const notices = readOnly
-      ? [
-          `该空间的布局文件由更新版本创建（version ${parsed.data.version}），` +
-            '已按只读模式打开，部分数据可能无法显示',
-        ]
-      : []
-
-    return { layout: parsed.data, readOnly, notices }
   } catch (error) {
-    // 17.6：文件损坏时 Rust 侧已把原文件备份为 layout.json.bak，这里改用空布局继续
+    // 17.6：旧文件损坏时 Rust 侧已把原文件备份为 layout.json.bak，这里改用空布局继续
     if (error instanceof StorageError && error.isLayoutCorrupt) {
       return { layout: createEmptyLayout(), readOnly: false, notices: [error.message] }
     }
@@ -261,9 +263,51 @@ async function readLayoutOrEmpty(
       ],
     }
   }
+
+  if (raw === null) return { layout: createEmptyLayout(), readOnly: false, notices }
+
+  const parsed = parseLayout(raw)
+  if (!parsed.ok) {
+    return {
+      layout: createEmptyLayout(),
+      readOnly: false,
+      notices: [`布局数据无法识别（${parsed.error}），已改用全新布局`],
+    }
+  }
+
+  if (parsed.data.version > DATA_VERSION) {
+    // version > DATA_VERSION → 只读，且**一律不写盘**（用户裁决）
+    return {
+      layout: parsed.data,
+      readOnly: true,
+      notices: [
+        `该空间的布局文件由更新版本创建（version ${parsed.data.version}），` +
+          '已按只读模式打开，部分数据可能无法显示',
+      ],
+    }
+  }
+
+  if (migrated) {
+    try {
+      await layoutStore.write(space.id, raw)
+      notices.push(
+        '布局文件已迁移到软件目录（%APPDATA%\\Mindscape\\layouts）。' +
+          '空间文件夹里的旧 .mindscape 文件夹不再被使用，可以自行删除。',
+      )
+    } catch (error) {
+      notices.push(
+        `布局文件迁移失败（${error instanceof Error ? error.message : String(error)}），本次仍按旧文件打开。`,
+      )
+    }
+  }
+
+  return { layout: parsed.data, readOnly: false, notices }
 }
 
-export function createBoardStore(provider: StorageProvider = localStorageProvider) {
+export function createBoardStore(
+  provider: StorageProvider = localStorageProvider,
+  layoutStore: AppLayoutStore = localLayoutStore,
+) {
   /** 加载代数守卫：只有最后一次 loadSpace 允许写状态 */
   let loadToken = 0
 
@@ -566,7 +610,7 @@ export function createBoardStore(provider: StorageProvider = localStorageProvide
 
       try {
         // 1) 先读布局（T1.6）：拿不到就退回扫描文件夹
-        const { layout, readOnly, notices } = await readLayoutOrEmpty(provider, space)
+        const { layout, readOnly, notices } = await readLayoutOrEmpty(provider, layoutStore, space)
 
         // 2) 扫描根目录，分流出「文件」（卡片）与「子文件夹」（分区框，T2.5）
         const entries = await provider.listDir(space.folderPath)

@@ -47,6 +47,7 @@ import type { ViewportState } from '@/canvas/interaction/coordinates'
 import { useBoardStore } from '@/core/store/boardStore'
 import { useSpacesStore } from '@/core/store/spacesStore'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
+import { localLayoutStore } from '@/core/storage/appLayoutStore'
 import { LayoutWriter } from '@/core/board/layoutWriter'
 import { History } from '@/core/commands/history'
 import { createMoveCardsCommand, hasMeaningfulMove } from '@/core/commands/impl/moveCards'
@@ -210,7 +211,8 @@ export function Board() {
         write: async (json) => {
           const target = useSpacesStore.getState().getCurrentSpace()
           if (!target) return
-          await localStorageProvider.writeLayout(target.folderPath, json)
+          // P1-2：布局写进软件目录（layouts\<空间 id>.json），空间文件夹零新增文件
+          await localLayoutStore.write(target.id, json)
         },
         onError: (message) => setSaveError(message),
         onSuccess: () => setSaveError(null),

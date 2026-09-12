@@ -17,6 +17,7 @@ import { createRemoveCardsCommand } from '@/core/commands/impl/removeCards'
 import { StorageError } from '@/core/storage/StorageProvider'
 import type { Layout, RemovedEntry, Space } from '@/core/types'
 import type { DirEntry, ImageSize, StorageProvider } from '@/core/storage/StorageProvider'
+import type { AppLayoutStore } from '@/core/storage/appLayoutStore'
 
 /** 假 provider 默认返回的 layout.json 内容（空布局） */
 function emptyLayoutJson(): string {
@@ -35,6 +36,21 @@ const SPACE: Space = {
 
 function entry(name: string, isDir = false): DirEntry {
   return { name, path: `D:\\Mindscape\\01_项目A\\${name}`, isDir, size: 1024, modifiedAt: 1 }
+}
+
+/**
+ * 测试工厂：默认注入「软件目录里没有布局」的假 store，并让 legacyLayoutExists 恒为 true
+ * —— 这样既有用例继续走「读空间文件夹里的 .mindscape\layout.json」这条路径，断言不用改。
+ * P1-2 专项目录用 overrides 打开软件目录那条路径。
+ */
+function createStore(provider: StorageProvider, overrides: Partial<AppLayoutStore> = {}) {
+  const layoutStore: AppLayoutStore = {
+    read: async () => null,
+    write: async () => {},
+    legacyLayoutExists: async () => true,
+    ...overrides,
+  }
+  return createBoardStore(provider, layoutStore)
 }
 
 /**
@@ -64,14 +80,14 @@ function createFakeProvider(
 
 describe('boardStore.loadSpace', () => {
   it('初始为空闲状态', () => {
-    const store = createBoardStore(createFakeProvider([]))
+    const store = createStore(createFakeProvider([]))
     expect(store.getState().status).toBe('idle')
     expect(store.getState().cards).toEqual([])
     expect(store.getState().spaceId).toBeNull()
   })
 
   it('读取成功 → ready，卡片按网格铺开', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('a.jpg'), entry('b.jpg'), entry('总平面.pdf'), entry('参考资料', true)]),
     )
 
@@ -88,7 +104,7 @@ describe('boardStore.loadSpace', () => {
   })
 
   it('读取失败 → error 且 message 可直接展示（来自 Rust 的中文）', async () => {
-    const store = createBoardStore(createFakeProvider(new Error('路径不存在：D:\\Mindscape\\01_项目A')))
+    const store = createStore(createFakeProvider(new Error('路径不存在：D:\\Mindscape\\01_项目A')))
 
     await store.getState().loadSpace(SPACE)
 
@@ -99,17 +115,17 @@ describe('boardStore.loadSpace', () => {
   })
 
   it('切换空间时先清空上一批卡片，避免旧内容闪现', async () => {
-    const store = createBoardStore(createFakeProvider([entry('a.jpg')]))
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
     await store.getState().loadSpace(SPACE)
     expect(store.getState().cards).toHaveLength(1)
 
-    const errorStore = createBoardStore(createFakeProvider(new Error('读取失败')))
+    const errorStore = createStore(createFakeProvider(new Error('读取失败')))
     await errorStore.getState().loadSpace(SPACE)
     expect(errorStore.getState().cards).toEqual([])
   })
 
   it('空文件夹 → ready 且零卡片（对应「没有可显示的文件」空状态）', async () => {
-    const store = createBoardStore(createFakeProvider([entry('子目录', true)]))
+    const store = createStore(createFakeProvider([entry('子目录', true)]))
 
     await store.getState().loadSpace(SPACE)
 
@@ -119,7 +135,7 @@ describe('boardStore.loadSpace', () => {
 
   it('20 张图 → 20 张卡片、4 行（T1.3 验收场景）', async () => {
     const entries = Array.from({ length: 20 }, (_, i) => entry(`ref-${i + 1}.jpg`))
-    const store = createBoardStore(createFakeProvider(entries))
+    const store = createStore(createFakeProvider(entries))
 
     await store.getState().loadSpace(SPACE)
 
@@ -136,7 +152,7 @@ describe('boardStore.loadSpace', () => {
 describe('boardStore.loadSpace · 分区框（T2.5）', () => {
   it('子文件夹 → 自动建分区框，框内卡片带 group 与相对路径', async () => {
     const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('根图.jpg'), entry('参考资料', true)], {
         [dirPath]: [entry('a.jpg'), entry('b.jpg')],
       }),
@@ -167,7 +183,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
   it('分区行带互不重叠：两个子文件夹的框上下排布', async () => {
     const dirA = 'D:\\Mindscape\\01_项目A\\A'
     const dirB = 'D:\\Mindscape\\01_项目A\\B'
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('A', true), entry('B', true)], {
         [dirA]: [entry('a1.jpg')],
         [dirB]: [entry('b1.jpg')],
@@ -184,7 +200,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
   })
 
   it('保留目录（.mindscape / _已移除）不建框', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider(
         [entry('.mindscape', true), entry('_已移除', true), entry('正常', true)],
         {
@@ -216,7 +232,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
     ]
 
     const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
-    const storeWithLayout = createBoardStore({
+    const storeWithLayout = createStore({
       async listDir(path: string) {
         return path === dirPath ? [entry('a.jpg')] : [entry('根图.jpg'), entry('参考资料', true)]
       },
@@ -233,7 +249,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
 
   it('子文件夹读取失败 → 提示可展示，其余照常', async () => {
     const dirPath = 'D:\\Mindscape\\01_项目A\\坏文件夹'
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('根图.jpg'), entry('坏文件夹', true)], {
         [dirPath]: new Error('路径不存在'),
       }),
@@ -250,7 +266,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
 
   it('setPartitionPositions / setPartitionCollapsed 生效', async () => {
     const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('参考资料', true)], { [dirPath]: [entry('a.jpg')] }),
     )
     await store.getState().loadSpace(SPACE)
@@ -269,7 +285,7 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
 describe('boardStore · 分区选中与文件归属（2026-09-12）', () => {
   async function loadedStore() {
     const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
-    const store = createBoardStore(
+    const store = createStore(
       createFakeProvider([entry('参考资料', true)], { [dirPath]: [entry('a.jpg')] }),
     )
     await store.getState().loadSpace(SPACE)
@@ -326,7 +342,7 @@ describe('boardStore · 分区选中与文件归属（2026-09-12）', () => {
 
 describe('boardStore.reset', () => {
   it('清空画布状态', async () => {
-    const store = createBoardStore(createFakeProvider([entry('a.jpg')]))
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
     await store.getState().loadSpace(SPACE)
 
     store.getState().reset()
@@ -377,7 +393,7 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
   })
 
   it('图片卡片按原图尺寸还原原始宽高比（16:9 仍是 16:9）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('wide.jpg'), entry('square.png')], {
         'wide.jpg': sizeOf(8000, 4500),
         'square.png': sizeOf(800, 800),
@@ -392,7 +408,7 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
   })
 
   it('原图路径登记进资源表（= 空间文件夹 + filePath）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
@@ -404,10 +420,12 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
 
   it('非图片文件不调 readImageSize，使用类型默认尺寸', async () => {
     // sizes 里没有 pdf，若被调用会抛「未预期的图片」
-    const store = createBoardStore(
+    // 本用例只关心尺寸读取：关掉旧布局迁移，避免多出一条迁移提示干扰断言
+    const store = createStore(
       createSizeProvider([entry('总平面.pdf'), entry('a.jpg')], {
         'a.jpg': sizeOf(4000, 3000),
       }),
+      { legacyLayoutExists: async () => false },
     )
 
     await store.getState().loadSpace(SPACE)
@@ -420,12 +438,13 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
   })
 
   it('单张尺寸读取失败 → 该卡片退回默认尺寸，其余照常，并给出可展示的提示；原图路径仍登记', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider(
         [entry('bad.jpg'), entry('ok.jpg')],
         { 'ok.jpg': sizeOf(4000, 3000) },
         ['bad.jpg'],
       ),
+      { legacyLayoutExists: async () => false },
     )
 
     await store.getState().loadSpace(SPACE)
@@ -444,7 +463,7 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
   })
 
   it('切换空间时清空上一批资源路径', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
@@ -457,7 +476,7 @@ describe('boardStore.loadSpace · 尺寸读取与宽高比（T1.4 / 方案 A）'
   })
 
   it('资源路径先于卡片写入（渲染时一定能读到）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(4000, 3000) }),
     )
 
@@ -495,7 +514,7 @@ describe('boardStore.loadSpace · 竞态（快速切换空间）', () => {
       },
     } as unknown as StorageProvider
 
-    const store = createBoardStore(provider)
+    const store = createStore(provider)
 
     const firstLoad = store.getState().loadSpace(SPACE)
     const secondLoad = store.getState().loadSpace(SPACE)
@@ -529,7 +548,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('恢复卡片位置与 id（不是重新排网格）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(800, 600) }, [], layoutJson((layout) => {
         layout.cards.push({
           id: 'c_005',
@@ -558,7 +577,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('恢复视图状态（zoom / offset），对应「关掉再开视图还原」', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.canvas = { zoom: 2.5, offsetX: -300, offsetY: -120 }
       })),
@@ -570,7 +589,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('folder 里有新文件 → 接在既有卡片下方，已有位置不变', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider(
         [entry('a.jpg'), entry('新图.jpg')],
         {
@@ -605,7 +624,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('layout 里有、文件夹里没有的卡片不显示', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(800, 600) }, [], layoutJson((layout) => {
         layout.cards.push({
           id: 'c_001',
@@ -640,7 +659,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
       },
     } as unknown as StorageProvider
 
-    const store = createBoardStore(provider)
+    const store = createStore(provider)
     await store.getState().loadSpace(SPACE)
 
     const state = store.getState()
@@ -651,7 +670,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('数据无法识别（能读但不是合法布局）→ 退回全新布局并提示', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([], {}, [], JSON.stringify({ version: 1, cards: 'not-an-array' })),
     )
 
@@ -662,7 +681,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('version 高于当前版本 → 只读模式 + 提示（17.6）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.version = 9
       })),
@@ -675,7 +694,7 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
   })
 
   it('reset 清掉只读标志与提示', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider([], {}, [], layoutJson((layout) => {
         layout.version = 9
       })),
@@ -738,7 +757,7 @@ describe('移除卡片 → 级联断开连线', () => {
   }
 
   it('do 后相连连线消失；undo 后连线随卡片一起回来', async () => {
-    const store = createBoardStore(createFakeProvider([]))
+    const store = createStore(createFakeProvider([]))
     seed(store)
 
     const history = new History()
@@ -763,7 +782,7 @@ describe('移除卡片 → 级联断开连线', () => {
   })
 
   it('无关的连线在移除后仍然保留', async () => {
-    const store = createBoardStore(createFakeProvider([]))
+    const store = createStore(createFakeProvider([]))
     store.setState({
       spaceId: SPACE.id,
       cards: [
@@ -837,7 +856,7 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
   }
 
   it('新建卡片的 id 池包含 removed 记录 id（不再与已移除记录撞号）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider(
         [entry('a.jpg')],
         { 'a.jpg': sizeOf(800, 600) },
@@ -856,7 +875,7 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
   })
 
   it('脏 originalPath（恢复后残留 `_已移除/…`）回填为 filePath，并要求补一次落盘', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider(
         [entry('a.jpg')],
         { 'a.jpg': sizeOf(800, 600) },
@@ -888,7 +907,7 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
   })
 
   it('removed 记录 id 重复 → 去重并标记待落盘（否则恢复会按 id 匹配错文件）', async () => {
-    const store = createBoardStore(
+    const store = createStore(
       createSizeProvider(
         [],
         {},
@@ -909,8 +928,155 @@ describe('boardStore.loadSpace · 历史脏数据自愈', () => {
   })
 
   it('干净数据：needsMigration 为 false（不做无谓落盘）', async () => {
-    const store = createBoardStore(createSizeProvider([], {}, []))
+    const store = createStore(createSizeProvider([], {}, []))
     await store.getState().loadSpace(SPACE)
     expect(store.getState().needsMigration).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1-2：布局存软件目录（%APPDATA%\Mindscape\layouts\<空间 id>.json）
+// ---------------------------------------------------------------------------
+
+/** 造一张有位置的卡片（字段齐全，满足 Card 类型） */
+function layoutWithOneCard(x: number, y: number) {
+  return layoutJson((layout) => {
+    layout.cards.push({
+      id: 'c_100',
+      type: 'image',
+      filePath: 'a.jpg',
+      originalPath: 'a.jpg',
+      x,
+      y,
+      w: 240,
+      h: 180,
+      rotation: 0,
+      zIndex: 0,
+      note: '',
+      meta: {},
+    })
+  })
+}
+
+describe('boardStore.loadSpace · 布局存软件目录（P1-2）', () => {
+  beforeEach(() => {
+    clearCardAssets()
+  })
+
+  it('软件目录里有布局时优先用它，且不会去读空间文件夹里的旧文件', async () => {
+    let legacyReadCount = 0
+    const provider = {
+      async listDir() {
+        return [entry('a.jpg')]
+      },
+      async readLayout() {
+        legacyReadCount += 1
+        return layoutWithOneCard(9999, 9999)
+      },
+    } as unknown as StorageProvider
+
+    const store = createStore(provider, { read: async () => layoutWithOneCard(1500, 900) })
+    await store.getState().loadSpace(SPACE)
+
+    const card = store.getState().cards[0]
+    expect([card.x, card.y]).toEqual([1500, 900])
+    expect(legacyReadCount).toBe(0)
+  })
+
+  it('软件目录没有、空间文件夹里有旧布局 → 读旧文件、迁移写回并提示（不删旧文件）', async () => {
+    const writes: { id: string; json: string }[] = []
+    const provider = {
+      async listDir() {
+        return [entry('a.jpg')]
+      },
+      async readLayout() {
+        return layoutWithOneCard(1500, 900)
+      },
+    } as unknown as StorageProvider
+
+    const store = createStore(provider, {
+      write: async (id, json) => {
+        writes.push({ id, json })
+      },
+    })
+    await store.getState().loadSpace(SPACE)
+
+    // 布局生效
+    expect(store.getState().cards[0].x).toBe(1500)
+    // 已按空间 id 迁移写回软件目录
+    expect(writes).toHaveLength(1)
+    expect(writes[0].id).toBe(SPACE.id)
+    expect(JSON.parse(writes[0].json).cards[0].x).toBe(1500)
+    // 有可展示的迁移提示
+    expect(store.getState().notices.some((notice) => notice.includes('已迁移到软件目录'))).toBe(true)
+  })
+
+  it('迁移写回失败 → 仍按旧布局打开，并说明迁移失败', async () => {
+    const provider = {
+      async listDir() {
+        return [entry('a.jpg')]
+      },
+      async readLayout() {
+        return layoutWithOneCard(1500, 900)
+      },
+    } as unknown as StorageProvider
+
+    const store = createStore(provider, {
+      write: async () => {
+        throw new Error('磁盘写保护')
+      },
+    })
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().status).toBe('ready')
+    expect(store.getState().cards[0].x).toBe(1500)
+    expect(store.getState().notices.some((notice) => notice.includes('迁移失败'))).toBe(true)
+  })
+
+  it('全新空间（软件目录与空间文件夹都没有布局）→ 空布局、无提示、不写盘', async () => {
+    let writeCount = 0
+    const provider = {
+      async listDir() {
+        return [entry('a.jpg')]
+      },
+      async readLayout() {
+        throw new Error('不该被调用：没有旧布局就不该读旧位置')
+      },
+    } as unknown as StorageProvider
+
+    const store = createStore(provider, {
+      legacyLayoutExists: async () => false,
+      write: async () => {
+        writeCount += 1
+      },
+    })
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().status).toBe('ready')
+    expect(store.getState().notices).toEqual([])
+    expect(writeCount).toBe(0)
+  })
+
+  it('只读版本（version 超过 DATA_VERSION）不迁移写盘', async () => {
+    let writeCount = 0
+    const future = JSON.stringify({ ...JSON.parse(emptyLayoutJson()), version: 99 })
+    const provider = {
+      async listDir() {
+        return [entry('a.jpg')]
+      },
+      async readLayout() {
+        return future
+      },
+    } as unknown as StorageProvider
+
+    const store = createStore(provider, {
+      write: async () => {
+        writeCount += 1
+      },
+    })
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().readOnly).toBe(true)
+    expect(writeCount).toBe(0)
   })
 })

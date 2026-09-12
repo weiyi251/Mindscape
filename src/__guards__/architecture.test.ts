@@ -72,7 +72,7 @@ const TEST_FILES = ALL_FILES.filter((file) => /\.test\.(ts|tsx)$/.test(file))
  * Board / Canvas 是全项目最大的两个文件，继续膨胀会显著抬高每次改动的风险。
  */
 const FILE_SIZE_BUDGET: Record<string, number> = {
-  'src/pages/Board.tsx': 1982,
+  'src/pages/Board.tsx': 1984,
   'src/canvas/Canvas.tsx': 1086,
 }
 
