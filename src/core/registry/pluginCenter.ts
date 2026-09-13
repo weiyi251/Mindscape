@@ -33,6 +33,12 @@ export interface CardRenderProps {
   card: Card
   /** 是否处于选中态（渲染层需要据此画选中边框） */
   selected: boolean
+  /**
+   * 便签行内编辑中（2026-09-13）：便签本体会被一个 bg-transparent 的 textarea
+   * 覆盖，渲染层此时**不得**再画正文 / 占位文字（如「（空便签）」）——否则
+   * 占位文字透过透明底与用户正在输入的草稿重叠。仅便签类型会用到此标记。
+   */
+  noteEditing?: boolean
 }
 
 /** 卡片类型定义（插件接口 1） */

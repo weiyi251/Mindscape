@@ -346,8 +346,12 @@ function renderFile({ card, selected }: CardRenderProps): ReactNode {
   return shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [row, note, tags].filter(Boolean))
 }
 
-/** note：便签文字（保留换行） */
-function renderNote({ card, selected }: CardRenderProps): ReactNode {
+/** note：便签文字（保留换行）。
+ * 编辑态（noteEditing）不渲染正文与占位文字：行内编辑的 textarea 是
+ * bg-transparent（透出便签纸底色），底下的占位文字「（空便签）」若照常渲染，
+ * 会与用户正在输入的草稿重叠、显示不清（2026-09-13 用户截图反馈）——
+ * 编辑中正文完全交给 textarea，这里只留卡片盒与标签条。 */
+function renderNote({ card, selected, noteEditing }: CardRenderProps): ReactNode {
   const text = card.note.trim()
   const tags = tagBar(card)
   return shell(card, selected, `flex-col p-2 ${NOTE_VISUAL}`, [
@@ -358,10 +362,11 @@ function renderNote({ card, selected }: CardRenderProps): ReactNode {
         'data-placeholder': 'note-text',
         className: [
           'overflow-hidden whitespace-pre-wrap break-words text-[18px] leading-relaxed',
-          text ? '' : 'text-muted-foreground',
+          text && !noteEditing ? '' : 'text-muted-foreground',
         ].join(' '),
       },
-      text || '（空便签）',
+      // 编辑中一律渲染空字符串：占位文字立即消失，输入内容清晰可见
+      noteEditing ? '' : text || '（空便签）',
     ),
     tags,
   ].filter(Boolean))

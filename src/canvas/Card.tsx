@@ -112,7 +112,9 @@ export function CardView({
         className="h-full w-full transition-opacity"
         style={grayscale ? { filter: 'grayscale(1)', opacity: 0.75 } : undefined}
       >
-        {renderCard({ card, selected })}
+        {/* 编辑态把标记传进渲染层：renderNote 收到后不再画占位文字，
+            避免透过 bg-transparent 的 textarea 与输入中的草稿重叠 */}
+        {renderCard({ card, selected, noteEditing: noteEditing && card.type === 'note' })}
       </div>
 
       {/* 便签行内编辑：textarea 盖满卡片（inset-0），卡片盒子/样式/布局不变。

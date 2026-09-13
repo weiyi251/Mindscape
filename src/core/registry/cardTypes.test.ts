@@ -215,6 +215,32 @@ describe('三种核心类型的渲染可区分', () => {
     expect(html).toContain('（空便签）')
   })
 
+  it('note 编辑态不渲染正文与占位文字（textarea 透明底，占位文字会与输入草稿重叠）', () => {
+    // 2026-09-13 用户截图反馈：编辑时「（空便签）」压在正在输入的文字上。
+    // 编辑中正文交给覆盖整个卡片盒的 textarea，渲染层一律输出空内容
+    const emptyHtml = renderToStaticMarkup(
+      renderCard({
+        card: makeCard({ type: 'note', filePath: '', note: '' }),
+        selected: false,
+        noteEditing: true,
+      }),
+    )
+    expect(emptyHtml).not.toContain('（空便签）')
+
+    // 已有内容的便签进入编辑态同样不再重复渲染正文（避免两层文字叠加）
+    const withTextHtml = renderToStaticMarkup(
+      renderCard({
+        card: makeCard({ type: 'note', filePath: '', note: '旧内容' }),
+        selected: false,
+        noteEditing: true,
+      }),
+    )
+    expect(withTextHtml).not.toContain('旧内容')
+
+    // 卡片盒本体仍然渲染（textarea 只是覆盖层，底色/边框来自 shell）
+    expect(emptyHtml).toContain('data-card-type="note"')
+  })
+
   it('选中态输出 ring 高亮类名', () => {
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: true }),

@@ -46,6 +46,7 @@ import type { PartitionMoveResult } from './interaction/partitionDragController'
 import { PartitionResizeController } from './interaction/partitionResizeController'
 import type { PartitionResizeEdge } from './interaction/partitionResizeController'
 import { cardIdsInRect, normalizeRect } from './interaction/marquee'
+import { isResetViewShortcut, isZoomToFitShortcut } from './interaction/zoomKeys'
 import { computeSnap, snapThresholdInCanvas } from './interaction/snap'
 import { screenToCanvas } from './interaction/coordinates'
 import { contentRects } from './interaction/fitToContent'
@@ -1020,15 +1021,14 @@ export function Canvas({
   // Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // ⚠️ Ctrl+Shift+0 必须在 Ctrl+0 之前判断：带 Shift 的组合会被 `ctrlKey && key === '0'` 先命中
-      if (event.ctrlKey && event.shiftKey && event.key === '0') {
+      // ⚠️ 适应内容须先于复原视图判断；数字 0 用 zoomKeys 物理键位判断（Shift 会让 key 变上档字符）
+      if (isZoomToFitShortcut(event)) {
         event.preventDefault()
-        // 误拖到远处后一键找回全部内容；空画布时 fitToContent 返回 false，视图保持不动
         controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
         return
       }
 
-      if (event.ctrlKey && event.key === '0') {
+      if (isResetViewShortcut(event)) {
         event.preventDefault()
         controllerRef.current?.reset()
         return
