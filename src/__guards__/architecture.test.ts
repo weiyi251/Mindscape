@@ -85,6 +85,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 插件期拆分（2026-09-14，对应 docs/插件功能实施方案.md §7）：右键菜单组装整块
   // 搬到 pages/board/contextMenus.tsx，实际 **1977** 行。阈值随之下调，
   // 并刻意留 100 行余量给插件接线（钩子埋点 + pluginsStore 订阅 + 插件管理入口）。
+  // 插件接线落地（2026-09-14，提交见 HANDOVER §9）：画布桥注册（core/plugin/boardBridge
+  // 的消费端）+ 插件对话框宿主挂载 + 画布菜单透传 spacePath，实际 **2049** 行。
+  // 余量 31 行仍预留给 7 个钩子的埋点（每处 1~2 行）；
+  // 若埋点后仍要加东西，请先按 §7 的思路再拆一块出去，而不是直接抬高阈值。
   'src/pages/Board.tsx': 2080,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
@@ -163,7 +167,8 @@ const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/
 const RAW_COLOR_ALLOWLIST: Record<string, string> = {
   'src/core/board/partitions.ts': '分区调色板：8 个 hex 是给用户挑的数据，不是组件样式',
   'src/canvas/MiniMap.tsx': 'canvas 2D 的 fillStyle 只能收具体颜色；hex 是读不到 CSS 变量时的兜底',
-  'src/plugins/demoPlugin.ts': '示例插件的默认分区色，属数据默认值',
+  'src/plugins/demo/demoPlugin.ts': '示例插件的默认分区色，属数据默认值',
+  'src/plugins/colorCard/options.ts': '色板预设：hex 是给用户挑的数据（与 partitions.ts 同理），不是组件样式',
 }
 
 describe('规则 3：不得硬编码配色', () => {
@@ -430,11 +435,13 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/plugin-detail.tsx': '渲染层',
   'src/components/ui/plugin-dialog-host.tsx': '渲染层（状态在 core/store/pluginUiStore.ts 已测）',
   'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
+  'src/plugins/colorCard/dialog.tsx':
+    '插件界面（渲染层）：取值 / 校验 / 文件名 / 写盘编排全在 options.ts、png.ts、save.ts 里，均已单测',
   'src/pages/Board.tsx': '渲染层',
   'src/pages/DesktopRequired.tsx': '渲染层',
   'src/pages/SpaceList.tsx': '渲染层',
   'src/lib/utils.ts': 'shadcn 的 cn() 包装，无自有逻辑',
-  'src/plugins/index.ts': '插件目录占位（第一版无实现）',
+  'src/plugins/index.ts': '插件目录 barrel：只做转出（真正的逻辑在 bootstrap.ts / 各插件的 index）',
 
   // —— 待补测试的存量模块：不属渲染层，理论上可测，只是还没写。
   //    目标是逐步清零，新增文件不再走这条口子。

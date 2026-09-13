@@ -65,16 +65,25 @@ export interface CreateCardInput {
   relativePath: string
   /** 绝对路径（用于读取图片尺寸、写入资产缓存） */
   absolutePath: string
-  /** 卡片类型（插件注册的类型 id） */
+  /** 卡片类型（插件注册的类型 id，或核心三类型之一） */
   type: string
   /** 画布坐标；省略时由宿主放在视口中心 */
   x?: number
   y?: number
   w?: number
   h?: number
-  /** 插件私有数据（写入 card.meta[pluginId]） */
+  /**
+   * 插件私有数据。**由插件自己按 id 命名空间组织**（如 `{ 'vendor.plugin': {...} }`），
+   * 宿主做浅合并写入 card.meta —— 宿主不认识各个插件，不可能替它们决定嵌套层级。
+   */
   meta?: Record<string, unknown>
-  /** 是否记入撤销历史（默认 true） */
+  /**
+   * 是否记入撤销历史（默认 true）。
+   *
+   * ⚠️ 由插件现画的二进制文件（如色卡 PNG）应传 false：撤销一条 addCards 命令
+   * 会删除它记录的文件，而 redo 需要「源文件」才能重新复制 —— 插件生成的图没有源文件，
+   * 于是 undo 删掉用户刚要的图、redo 再也造不回来。卡片本身仍可被正常移除。
+   */
   undoable?: boolean
 }
 
@@ -95,7 +104,14 @@ export interface PluginHostApi extends PluginApi {
   /** 画布能力（由 pages/Board.tsx 注册的桥接实现，未打开空间时返回空值） */
   board: {
     currentSpacePath: () => string | null
-    createCardFromFile: (input: CreateCardInput) => boolean
+    /**
+     * 在画布上加一张「已存在于硬盘」的卡片；成功返回 true。
+     *
+     * 为什么是异步：宿主需要读图片原始尺寸、登记资源表、再走 addCards 命令 ——
+     * 这几步一步都不能省（省了卡片就没有正确的宽高比 / 图片显示不出来）。
+     * 未打开画布、或桥接被拒绝时返回 false（插件据此给用户一句中文说明）。
+     */
+    createCardFromFile: (input: CreateCardInput) => Promise<boolean>
   }
   /** 插件私有配置（存在 plugins.json，卸载不清除） */
   config: {

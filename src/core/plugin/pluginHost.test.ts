@@ -92,7 +92,7 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('init 发现插件', () => {
-  it('内置插件登记为「已安装」，带版本与来源', async () => {
+  it('内置插件首次登记即启用（随应用发布的第一方能力），带版本与来源', async () => {
     const host = createPluginHost({
       builtins: [makeBuiltin('com.example.builtin', { name: '演示色卡', version: '2.3.1' })],
       gateway: makeGateway().gateway,
@@ -107,13 +107,15 @@ describe('init 发现插件', () => {
       name: '演示色卡',
       version: '2.3.1',
       source: 'builtin',
-      state: 'installed',
+      // 2026-09-14：内置插件默认启用（否则用户得先去设置页点一次「启用」才能用）；
+      // 已登记过的记录一律尊重用户的选择，见 pluginHost.registerBuiltins 的注释
+      state: 'active',
       installDir: null,
     })
     expect(host.lastError()).toBeNull()
   })
 
-  it('外部插件从安装目录被扫描出来', async () => {
+  it('外部插件从安装目录被扫描出来，且只登记不自动启用', async () => {
     const host = createPluginHost({
       gateway: makeGateway().gateway,
       scanExternal: async () => [externalCandidate('com.example.color', 'E:/plugins/color')],
@@ -125,6 +127,7 @@ describe('init 发现插件', () => {
     expect(host.list()[0]).toMatchObject({
       id: 'com.example.color',
       source: 'external',
+      // 外部插件默认「已安装」不启用：用户从别处拿来的插件应先看清再启用
       state: 'installed',
       version: '0.1.0',
       installDir: 'E:/plugins/color',
@@ -679,12 +682,14 @@ describe('refresh / subscribe', () => {
     expect(listener).toHaveBeenCalled()
 
     const callsAfterInit = listener.mock.calls.length
-    await host.enable('com.example.a')
+    // 内置插件在 init 里就已经被激活（默认启用），重复 enable 是幂等的、不会通知；
+    // 因此这里用「停用」制造一次真实的状态变化
+    await host.disable('com.example.a')
     expect(listener.mock.calls.length).toBeGreaterThan(callsAfterInit)
 
     unsubscribe()
     const callsAfterUnsubscribe = listener.mock.calls.length
-    await host.disable('com.example.a')
+    await host.enable('com.example.a')
     expect(listener.mock.calls.length).toBe(callsAfterUnsubscribe)
   })
 })

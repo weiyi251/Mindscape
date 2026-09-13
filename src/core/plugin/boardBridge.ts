@@ -16,8 +16,11 @@ import type { CreateCardInput } from './types'
 export interface PluginBoardBridge {
   /** 当前空间文件夹绝对路径；未打开空间时为 null */
   currentSpacePath: () => string | null
-  /** 在画布上加一张「已存在于硬盘」的卡片；成功返回 true */
-  createCardFromFile: (input: CreateCardInput) => boolean
+  /**
+   * 在画布上加一张「已存在于硬盘」的卡片；成功返回 true。
+   * 异步的原因：需要读图片原始尺寸 + 登记资源表 + 走 addCards 命令（见 types.ts）。
+   */
+  createCardFromFile: (input: CreateCardInput) => Promise<boolean>
 }
 
 let bridge: PluginBoardBridge | null = null

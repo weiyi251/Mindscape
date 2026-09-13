@@ -1,6 +1,9 @@
 // ============================================================================
 // 模块说明（中文）
 // boardBridge.ts 的单元测试：注册 / 注销 / 未注册时的空值行为。
+//
+// createCardFromFile 是异步的（宿主侧要读图片尺寸、登记资源表、走 addCards 命令），
+// 因此断言的假实现也返回 Promise。
 // ============================================================================
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -17,10 +20,10 @@ describe('pluginBoardBridge', () => {
     expect(getPluginBoardBridge()).toBeNull()
   })
 
-  it('注册后取回同一个实现，注销后回到 null', () => {
+  it('注册后取回同一个实现，注销后回到 null', async () => {
     const bridge: PluginBoardBridge = {
       currentSpacePath: () => 'E:/空间',
-      createCardFromFile: () => true,
+      createCardFromFile: async () => true,
     }
 
     setPluginBoardBridge(bridge)
@@ -31,11 +34,14 @@ describe('pluginBoardBridge', () => {
     expect(getPluginBoardBridge()).toBeNull()
   })
 
-  it('后注册的实现覆盖先前的（Board 重新挂载）', () => {
-    const first: PluginBoardBridge = { currentSpacePath: () => 'A', createCardFromFile: () => false }
+  it('后注册的实现覆盖先前的（Board 重新挂载）', async () => {
+    const first: PluginBoardBridge = {
+      currentSpacePath: () => 'A',
+      createCardFromFile: async () => false,
+    }
     const second: PluginBoardBridge = {
       currentSpacePath: () => 'B',
-      createCardFromFile: vi.fn(() => true),
+      createCardFromFile: vi.fn(async () => true),
     }
 
     setPluginBoardBridge(first)
@@ -43,10 +49,12 @@ describe('pluginBoardBridge', () => {
 
     expect(getPluginBoardBridge()).toBe(second)
     expect(getPluginBoardBridge()?.currentSpacePath()).toBe('B')
-    expect(getPluginBoardBridge()?.createCardFromFile({
-      relativePath: 'a.png',
-      absolutePath: 'E:/空间/a.png',
-      type: 'image',
-    })).toBe(true)
+    await expect(
+      getPluginBoardBridge()?.createCardFromFile({
+        relativePath: 'a.png',
+        absolutePath: 'E:/空间/a.png',
+        type: 'image',
+      }),
+    ).resolves.toBe(true)
   })
 })

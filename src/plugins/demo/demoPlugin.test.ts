@@ -31,7 +31,7 @@ import {
   DEMO_CARD_TYPE,
   readDemoMeta,
   writeDemoMeta,
-} from '@/plugins/demoPlugin'
+} from '@/plugins/demo/demoPlugin'
 
 function makeCard(over: Partial<Card> = {}): Card {
   return zCardSchema.parse({

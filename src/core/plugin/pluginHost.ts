@@ -261,9 +261,18 @@ export function createPluginHost(options: PluginHostOptions = {}): PluginHost {
   function registerBuiltins(): void {
     for (const descriptor of builtins) {
       const id = descriptor.manifest.id
+
+      // 首次登记（plugins.json 里还没有这条记录）时把内置插件**默认设为启用**：
+      // 它是随应用一起发布的第一方能力（如色卡），要求用户先去设置页点一次
+      // 「启用」才能用，属多余的摩擦。已登记过的记录一律尊重用户的选择
+      // （enabled 保持原值），所以「用户在设置页停用它」不会被启动流程改回去。
+      // 外部插件不受影响 —— 用户从别处拿来的插件应先看清再启用。
+      const isFirstSeen = !entries.some((item) => item.id === id)
+
       const entry = entryOf(id)
       entry.source = 'builtin'
       entry.dir = null
+      if (isFirstSeen) entry.enabled = true
 
       const existing = runtimes.get(id)
       if (existing && existing.record.state === 'active') {

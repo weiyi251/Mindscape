@@ -28,6 +28,7 @@ import {
 } from '@/core/registry/menus'
 import { formatCombo } from '@/core/shortcuts/keys'
 import type { ShortcutId } from '@/core/shortcuts/keys'
+import { listRegisteredCanvasMenuItems } from '@/core/registry/pluginCenter'
 import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import type { Card, Connection, Partition } from '@/core/types'
 
@@ -208,6 +209,8 @@ export function buildConnectionMenuItems(params: ConnectionMenuParams): ContextM
 export interface CanvasMenuParams {
   /** 右键位置（画布坐标），新建便签按它定位 */
   canvasPoint: ScreenPoint
+  /** 当前空间文件夹绝对路径（插件菜单项的 action 需要它决定默认输出位置等） */
+  spacePath: string
   hasCopiedCards: boolean
   onCreateNote: (x: number, y: number) => void
   /** 点在画布上的粘贴（落点由调用方按规则解析） */
@@ -217,12 +220,27 @@ export interface CanvasMenuParams {
 }
 
 /**
- * 组装画布空白右键菜单：新建便签 / 粘贴 / 撤销 / 重做。
- * 后两者是 2026-09-13 取消顶栏可折叠工具栏后并入的；它们与 CARD_ACTION 一样
+ * 组装画布空白右键菜单：新建便签 / 粘贴 / 插件项 / 撤销 / 重做。
+ * 撤销、重做是 2026-09-13 取消顶栏可折叠工具栏后并入的；它们与 CARD_ACTION 一样
  * 属于核心画布动作，键位标签取快捷键注册中心的当前绑定。
+ *
+ * 插件项（2026-09-14 新增扩展点，见 core/registry/pluginCenter 的 CanvasMenuItem）
+ * 插在「创建类动作」与「撤销类动作」之间，**即时查表**：插件启用 / 停用后
+ * 菜单立刻跟着变，不需要额外的失效通知（注册表版本号只是给重渲染用的）。
+ * id 加 `plugin:` 前缀，避免与核心项（canvas.createNote 等）撞键。
  */
 export function buildCanvasMenuItems(params: CanvasMenuParams): ContextMenuItemData[] {
-  const { canvasPoint, hasCopiedCards, onCreateNote, onPaste, onUndo, onRedo } = params
+  const { canvasPoint, spacePath, hasCopiedCards, onCreateNote, onPaste, onUndo, onRedo } = params
+
+  const pluginItems: ContextMenuItemData[] = listRegisteredCanvasMenuItems().map(
+    (item, index) => ({
+      id: `plugin:${item.id}`,
+      label: item.label,
+      separatorBefore: index === 0,
+      run: () => item.action({ spacePath }),
+    }),
+  )
+
   return [
     {
       id: 'canvas.createNote',
@@ -236,6 +254,7 @@ export function buildCanvasMenuItems(params: CanvasMenuParams): ContextMenuItemD
     ...(hasCopiedCards
       ? [{ id: 'canvas.paste', label: '粘贴', run: () => onPaste(canvasPoint) }]
       : []),
+    ...pluginItems,
     {
       id: 'canvas.undo',
       label: withShortcutLabel('撤销', 'edit.undo'),

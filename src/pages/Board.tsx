@@ -28,6 +28,7 @@ import { ContextMenu } from '@/components/ui/context-menu'
 import type { ContextMenuState } from '@/components/ui/context-menu'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
+import { PluginDialogHost } from '@/components/ui/plugin-dialog-host'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SETTINGS_TEXT } from '@/components/ui/settingsText'
 import { CardSearchPanel } from '@/components/ui/card-search'
@@ -76,11 +77,12 @@ import { useCardSearch } from '@/core/hooks/useCardSearch'
 import { resolveShortcut } from '@/core/shortcuts/keys'
 import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
+import { setPluginBoardBridge } from '@/core/plugin/boardBridge'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
 import { zCardSchema } from '@/core/types'
 import type { Card, Connection, Partition } from '@/core/types'
-import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
+import { basenameOf, dirnameOf, joinPath, relativePathOf } from '@/core/utils/paths'
 import { cardSizeForImage } from '@/core/board/cardSize'
 import { cardTypeFor } from '@/core/board/imageTypes'
 import { setCardAsset } from '@/core/board/cardAssets'
@@ -739,6 +741,72 @@ export function Board() {
       : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
     return api.screenToCanvasPoint(center.x, center.y)
   }, [])
+
+  /**
+   * 插件画布桥（2026-09-14，插件期新增；设计见 core/plugin/boardBridge.ts）。
+   *
+   * 为什么由本组件注册：建卡要用到「画布坐标换算 + 读图片尺寸 + 资源表 + addCards
+   * 命令 + 落盘调度器」，这些能力只活在这里；而 core 层不能反向 import 上层
+   * （架构守卫规则 4）—— 所以反过来由画布把能力交给插件运行时。
+   * 卸载时注销，未打开空间时插件拿到 false 并自己提示，不会静默失败。
+   */
+  useEffect(() => {
+    setPluginBoardBridge({
+      currentSpacePath: () => useSpacesStore.getState().getCurrentSpace()?.folderPath ?? null,
+
+      createCardFromFile: async (input) => {
+        const space = useSpacesStore.getState().getCurrentSpace()
+        if (!space || useBoardStore.getState().readOnly) return false
+        const point = viewportCenterCanvasPoint()
+        if (!point) return false
+
+        // 与拖入 / 粘贴走同一条建卡路径：图片卡会读原始尺寸并登记资源表
+        const card = await buildIngestedCard({
+          id: nextCardId(usedCardIds()),
+          actualAbs: input.absolutePath,
+          spacePath: space.folderPath,
+          point,
+          offset: 0,
+        })
+
+        // 插件给的字段优先于推导值 —— 它比我们更知道这张卡该是什么样
+        card.filePath = input.relativePath || card.filePath
+        card.originalPath = card.filePath
+        if (input.type) card.type = input.type
+        if (input.w !== undefined && input.h !== undefined) {
+          card.w = input.w
+          card.h = input.h
+        }
+        if (input.meta) card.meta = { ...card.meta, ...input.meta }
+
+        // 文件落在某个分区文件夹内就归该分区（与拖入 / 粘贴同规则）
+        const fileDir = dirnameOf(input.absolutePath)
+        const partition = useBoardStore
+          .getState()
+          .partitions.find((item) => item.folderPath === relativePathOf(fileDir, space.folderPath))
+
+        const dest: DropDestination = {
+          destDir: fileDir,
+          partitionId: partition?.id ?? null,
+          groupName: partition?.name ?? null,
+        }
+        if (partition) card.group = partition.name
+
+        // undoable === false（插件现画的二进制文件）→ 只加卡不入撤销栈：
+        // 撤销会删掉命令记录的文件，而 redo 没有源文件可重新复制（见 types.ts）
+        if (input.undoable === false) {
+          useBoardStore.getState().addCards([card])
+          writer.schedule()
+        } else {
+          // createdFiles 传空：文件是插件写的，不属于本次命令，undo 不该删它
+          await commitIngestedCards([card], [], [{ src: '', destDir: fileDir }], dest)
+        }
+        return true
+      },
+    })
+
+    return () => setPluginBoardBridge(null)
+  }, [buildIngestedCard, commitIngestedCards, viewportCenterCanvasPoint, writer])
 
   /**
    * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」；
@@ -1560,6 +1628,8 @@ export function Board() {
     (canvasPoint: { x: number; y: number }, screen: { x: number; y: number }) => {
       const items = buildCanvasMenuItems({
         canvasPoint,
+        // 插件菜单项的 action 要拿它（如色卡的默认输出目录）
+        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
         hasCopiedCards: copiedCards.length > 0,
         onCreateNote: createNoteAt,
         // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
@@ -1971,6 +2041,8 @@ export function Board() {
       {/* T3.9 右键菜单 / 输入浮层（菜单项一律由配置中心生成） */}
       <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
       <PromptDialog state={prompt} onClose={() => setPrompt(null)} />
+      {/* 插件自己的对话框（如「新建色卡」）：插件交出 render 函数，宿主在这里挂载 */}
+      <PluginDialogHost />
     </div>
   )
 }

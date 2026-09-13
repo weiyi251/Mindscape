@@ -62,7 +62,10 @@ export function buildPluginApi(context: PluginApiContext): PluginHostApi {
 
     board: {
       currentSpacePath: () => getPluginBoardBridge()?.currentSpacePath() ?? null,
-      createCardFromFile: (input) => getPluginBoardBridge()?.createCardFromFile(input) ?? false,
+      // 未注册桥接（还没打开空间）时给一个明确的 false，而不是 undefined ——
+      // 插件只需判断布尔值，不必区分「没有画布」和「画布拒绝了」
+      createCardFromFile: (input) =>
+        getPluginBoardBridge()?.createCardFromFile(input) ?? Promise.resolve(false),
     },
 
     config: {

@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { PARTITION_PALETTE } from '@/core/board/partitions'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
 import { CARD_ACTION, CONNECTION_ACTION, PARTITION_ACTION } from '@/core/registry/menus'
+import { registerCanvasMenuItem, resetPluginCenter } from '@/core/registry/pluginCenter'
 import type { Card, Connection, Partition } from '@/core/types'
 
 import {
@@ -255,6 +256,7 @@ describe('buildConnectionMenuItems', () => {
 describe('buildCanvasMenuItems', () => {
   const base = {
     canvasPoint: { x: 300, y: 200 },
+    spacePath: 'E:\\Mindscape\\空间A',
     onCreateNote: vi.fn(),
     onPaste: vi.fn(),
     onUndo: vi.fn(),
@@ -289,5 +291,48 @@ describe('buildCanvasMenuItems', () => {
     const redo = items.find((item) => item.id === 'canvas.redo')
     expect(undo?.label.startsWith('撤销（')).toBe(true)
     expect(redo?.label.startsWith('重做（')).toBe(true)
+  })
+
+  // ---- 插件注册的画布菜单项（2026-09-14 扩展点）----
+
+  it('插件项插在「创建类」与「撤销类」之间，首项带分隔线，id 加 plugin: 前缀', () => {
+    resetPluginCenter()
+    registerCanvasMenuItem({
+      id: 'mindscape.color-card.create',
+      label: '新建色卡…',
+      action: vi.fn(),
+    })
+
+    const items = buildCanvasMenuItems({ ...base, hasCopiedCards: true })
+    expect(items.map((item) => item.id)).toEqual([
+      'canvas.createNote',
+      'canvas.paste',
+      'plugin:mindscape.color-card.create',
+      'canvas.undo',
+      'canvas.redo',
+    ])
+    expect(items[2].label).toBe('新建色卡…')
+    expect(items[2].separatorBefore).toBe(true)
+
+    resetPluginCenter()
+  })
+
+  it('插件项动作带上当前空间路径（插件据此决定默认输出位置等）', () => {
+    resetPluginCenter()
+    const action = vi.fn()
+    registerCanvasMenuItem({ id: 'demo.create', label: '演示项', action })
+
+    const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false })
+    items.find((item) => item.id === 'plugin:demo.create')?.run()
+
+    expect(action).toHaveBeenCalledWith({ spacePath: 'E:\\Mindscape\\空间A' })
+
+    resetPluginCenter()
+  })
+
+  it('没有插件贡献时菜单与插件功能上线前完全一致（不多出分隔线 / 空项）', () => {
+    resetPluginCenter()
+    const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false })
+    expect(items).toHaveLength(3)
   })
 })
