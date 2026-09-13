@@ -100,7 +100,10 @@ export function CardView({
       {...{ [CARD_ID_ATTR]: card.id }}
       style={cardStyle(card)}
       className={cn(
-        'absolute left-0 top-0 cursor-grab touch-none select-none rounded-sm bg-card shadow-sm',
+        // group：给卡片内部的悬停态子元素一个锚点（图片卡的悬浮标记 hoverLabel
+        // 靠 group-hover 淡入，见 core/registry/cardTypes.ts 的 hoverLabelChip）。
+        // 用纯 CSS 而不是 React 悬停 state —— 悬停是高频事件，进 state 会触发重渲染（17.3）。
+        'group absolute left-0 top-0 cursor-grab touch-none select-none rounded-sm bg-card shadow-sm',
         'transition-shadow hover:shadow-md',
         // 跳转目标用更粗的实线，盖过选中态的 2px 描边（两者同色，宽度不叠加以免粗细随类名顺序漂移）
         selected && searchState !== 'active' && 'outline outline-2 outline-primary',

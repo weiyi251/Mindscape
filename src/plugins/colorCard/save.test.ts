@@ -9,6 +9,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { HOVER_LABEL_META_KEY } from '@/core/board/cardMeta'
 import type { CreateCardInput } from '@/core/plugin/types'
 import { normalizeOptions } from './options'
 import { COLOR_CARD_META_KEY, isPathWithin, saveColorCard } from './save'
@@ -100,12 +101,54 @@ describe('saveColorCard · 正常路径', () => {
     })
     expect(harness.cards[0].meta).toEqual({
       [COLOR_CARD_META_KEY]: { color: '#5A7D6A', width: 400, height: 400 },
+      // 色号同时写进通用悬浮标记字段：色卡 PNG 默认不把色值画进图（用户裁决），
+      // 色号改由画布在悬停这张卡时显示在图片区域外的左上角
+      [HOVER_LABEL_META_KEY]: '#5A7D6A',
     })
 
     expect(result).toEqual({
       absolutePath: `${SPACE}\\色卡-5A7D6A-20260914-0012.png`,
       addedToCanvas: true,
       canvasSkipReason: null,
+    })
+  })
+
+  it('色号写进通用悬浮标记字段（画布悬停时才显示，默认不画进 PNG）', async () => {
+    const harness = makeHarness()
+
+    await saveColorCard(
+      { options: OPTIONS, spacePath: SPACE, addToCanvas: true },
+      harness.deps,
+    )
+
+    expect(harness.cards[0].meta?.[HOVER_LABEL_META_KEY]).toBe('#5A7D6A')
+  })
+
+  it('悬浮标记用归一化后的色值（三位简写先展开成六位，再写进 meta）', async () => {
+    const harness = makeHarness()
+
+    await saveColorCard(
+      { options: { ...OPTIONS, color: '#abc' }, spacePath: SPACE, addToCanvas: true },
+      harness.deps,
+    )
+
+    expect(harness.cards[0].meta?.[HOVER_LABEL_META_KEY]).toBe('#AABBCC')
+  })
+
+  it('渲染入参带上 showHex：是否把色值画进图片由用户勾选决定', async () => {
+    const render = vi.fn(async () => new Uint8Array([1]))
+    const harness = makeHarness({ render })
+
+    await saveColorCard(
+      { options: OPTIONS, spacePath: SPACE, addToCanvas: false },
+      harness.deps,
+    )
+
+    expect(render).toHaveBeenCalledWith({
+      color: '#5A7D6A',
+      width: 400,
+      height: 400,
+      showHex: true,
     })
   })
 

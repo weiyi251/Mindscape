@@ -376,3 +376,62 @@ describe('备注条与标签条的视觉区分', () => {
     expect(imageHtml).toMatch(/<path d="M1\.5 5\.2/)
   })
 })
+
+// ---------------------------------------------------------------------------
+// 悬浮标记（2026-09-14 用户裁决）：色号默认不显示，鼠标悬停在色卡上才淡入
+// 它是 core 的**通用**能力（meta.hoverLabel），核心不认识「色卡插件」
+// ---------------------------------------------------------------------------
+
+describe('图片卡悬浮标记（meta.hoverLabel）', () => {
+  function imageWith(meta: Card['meta']): string {
+    return renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image', meta }), selected: false }),
+    )
+  }
+
+  it('带 hoverLabel 时渲染标记，且文字就是色号', () => {
+    const html = imageWith({ hoverLabel: '#5A7D6A' })
+    expect(html).toContain('data-hover-label')
+    expect(html).toContain('#5A7D6A')
+  })
+
+  it('默认不可见：只有标记时整条外挂层 opacity-0，靠 group-hover 才淡入', () => {
+    const html = imageWith({ hoverLabel: '#5A7D6A' })
+    expect(html).toContain('opacity-0')
+    expect(html).toContain('group-hover:opacity-100')
+    // 不可交互，别抢画布的指针事件
+    expect(html).toContain('pointer-events-none')
+  })
+
+  it('与备注 / 标签同时出现时：容器常驻，只让标记自己淡入', () => {
+    const html = imageWith({ hoverLabel: '#5A7D6A', tags: ['参考'] })
+    // 容器不带 opacity-0（否则备注 / 标签也会跟着闪），标记自己带
+    const overlayTag = html.match(/<div data-image-overlay[^>]*>/)?.[0] ?? ''
+    expect(overlayTag).not.toContain('opacity-0')
+    expect(html).toContain('group-hover:opacity-100')
+    // 标记排在左上角第一项（在备注条 / 标签条之前）
+    expect(html.indexOf('data-hover-label')).toBeLessThan(html.indexOf('data-tag-bar'))
+  })
+
+  it('标记仍挂在卡片盒上方外侧（图片区域外，与图片零重叠）', () => {
+    const html = imageWith({ hoverLabel: '#5A7D6A' })
+    expect(html).toContain('absolute bottom-full left-0')
+  })
+
+  it('没有 hoverLabel 时不渲染标记（普通图片卡完全不受影响）', () => {
+    const html = imageWith({ tags: ['参考'] })
+    expect(html).not.toContain('data-hover-label')
+  })
+
+  it('hoverLabel 是脏数据时不渲染（非字符串 / 空白）', () => {
+    expect(imageWith({ hoverLabel: 42 })).not.toContain('data-hover-label')
+    expect(imageWith({ hoverLabel: '   ' })).not.toContain('data-hover-label')
+  })
+
+  it('悬浮标记是通用能力：file 卡不渲染（外挂层是图片卡专属）', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'file', meta: { hoverLabel: '#5A7D6A' } }), selected: false }),
+    )
+    expect(html).not.toContain('data-hover-label')
+  })
+})

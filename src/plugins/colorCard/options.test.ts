@@ -14,6 +14,8 @@ import { describe, expect, it } from 'vitest'
 import {
   COLOR_CARD_COLOR_PRESETS,
   COLOR_CARD_LIMITS,
+  COLOR_CARD_LONG_EDGE_PRESETS,
+  COLOR_CARD_RATIO_PRESETS,
   COLOR_CARD_SIZE_PRESETS,
   DEFAULT_COLOR_CARD_OPTIONS,
   clampSize,
@@ -21,15 +23,20 @@ import {
   colorPresetLabel,
   describeSize,
   isValidSize,
+  longEdgeOf,
+  matchRatioPreset,
   normalizeHex,
   normalizeOptions,
   optionsFromConfig,
   optionsToConfig,
+  ratioPresetLabel,
   sanitizeNamePrefix,
+  sizeForLongEdge,
+  sizeForRatio,
   sizePresetLabel,
   validateColorCardOptions,
 } from './options'
-import { COLOR_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
+import { COLOR_PRESET_LABELS, RATIO_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
 
 describe('normalizeHex', () => {
   it('接受带 # / 不带 # / 大小写混合的六位色值', () => {
@@ -72,6 +79,70 @@ describe('尺寸约束', () => {
 
   it('describeSize 产出「宽 × 高」', () => {
     expect(describeSize(600, 400)).toBe('600 × 400')
+  })
+
+  it('默认不把色值画进图片（色号改由画布悬停显示，2026-09-14 用户裁决）', () => {
+    expect(DEFAULT_COLOR_CARD_OPTIONS.showHex).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 比例 × 长边（2026-09-14 用户要求新增的两组预设）
+// ---------------------------------------------------------------------------
+
+describe('比例 × 长边', () => {
+  it('longEdgeOf 取较大边；非有限值返回 0', () => {
+    expect(longEdgeOf(1920, 1080)).toBe(1920)
+    expect(longEdgeOf(1080, 1920)).toBe(1920)
+    expect(longEdgeOf(400.4, 400.6)).toBe(401)
+    expect(longEdgeOf(Number.NaN, 100)).toBe(0)
+  })
+
+  it('sizeForRatio：长边恒等于给定像素，另一边按比例折算', () => {
+    expect(sizeForRatio(1, 1920)).toEqual({ width: 1920, height: 1920 })
+    expect(sizeForRatio(16 / 9, 1920)).toEqual({ width: 1920, height: 1080 })
+    expect(sizeForRatio(9 / 16, 1920)).toEqual({ width: 1080, height: 1920 })
+  })
+
+  it('sizeForRatio：长边越界被夹紧，比例非法退化成正方形', () => {
+    expect(sizeForRatio(16 / 9, 99999)).toEqual({
+      width: COLOR_CARD_LIMITS.maxSize,
+      height: 2304,
+    })
+    expect(sizeForRatio(0, 800)).toEqual({ width: 800, height: 800 })
+    expect(sizeForRatio(Number.NaN, 800)).toEqual({ width: 800, height: 800 })
+  })
+
+  it('sizeForRatio：极端比例下短边仍落在合法区间（不会算出 0 像素）', () => {
+    expect(sizeForRatio(1000, 1920).height).toBe(COLOR_CARD_LIMITS.minSize)
+  })
+
+  it('sizeForLongEdge：保持比例缩放长边', () => {
+    expect(sizeForLongEdge(400, 400, 1024)).toEqual({ width: 1024, height: 1024 })
+    expect(sizeForLongEdge(1200, 300, 600)).toEqual({ width: 600, height: 150 })
+  })
+
+  it('两组预设可任意顺序点：结果一致', () => {
+    const viaRatio = sizeForRatio(16 / 9, 1920)
+    const viaLongEdge = sizeForLongEdge(viaRatio.width, viaRatio.height, 1920)
+    expect(viaLongEdge).toEqual(viaRatio)
+  })
+
+  it('sizeForLongEdge：当前尺寸退化时给正方形，不除零', () => {
+    expect(sizeForLongEdge(0, 0, 512)).toEqual({ width: 512, height: 512 })
+  })
+
+  it('matchRatioPreset：认得出常用比例（容忍像素取整误差）', () => {
+    expect(matchRatioPreset(1920, 1080)).toBe('ratio-16-9')
+    expect(matchRatioPreset(2560, 1440)).toBe('ratio-16-9')
+    expect(matchRatioPreset(1080, 1920)).toBe('ratio-9-16')
+    expect(matchRatioPreset(512, 512)).toBe('ratio-1-1')
+  })
+
+  it('matchRatioPreset：自由比例返回 null（不打选中态）', () => {
+    expect(matchRatioPreset(600, 400)).toBeNull()
+    expect(matchRatioPreset(1200, 300)).toBeNull()
+    expect(matchRatioPreset(0, 400)).toBeNull()
   })
 })
 
@@ -205,15 +276,51 @@ describe('预设与标签一一对应', () => {
     }
   })
 
+  it('每个比例预设都有中文标签、且比值为正', () => {
+    for (const preset of COLOR_CARD_RATIO_PRESETS) {
+      expect(RATIO_PRESET_LABELS[preset.id], `比例预设 ${preset.id} 缺中文标签`).toBeTruthy()
+      expect(ratioPresetLabel(preset.id)).toBe(RATIO_PRESET_LABELS[preset.id])
+      expect(preset.ratio).toBeGreaterThan(0)
+    }
+  })
+
+  it('常用比例就是 1:1 / 16:9 / 9:16（用户点名的三项）', () => {
+    expect(COLOR_CARD_RATIO_PRESETS.map((preset) => RATIO_PRESET_LABELS[preset.id])).toEqual([
+      '1:1',
+      '16:9',
+      '9:16',
+    ])
+  })
+
+  it('长边像素预设都在合法区间内，且含 1920', () => {
+    expect(COLOR_CARD_LONG_EDGE_PRESETS.length).toBeGreaterThan(0)
+    for (const pixels of COLOR_CARD_LONG_EDGE_PRESETS) expect(isValidSize(pixels)).toBe(true)
+    expect(COLOR_CARD_LONG_EDGE_PRESETS).toContain(1920)
+  })
+
+  it('每个「比例 × 长边」组合都能算出合法尺寸', () => {
+    for (const preset of COLOR_CARD_RATIO_PRESETS) {
+      for (const pixels of COLOR_CARD_LONG_EDGE_PRESETS) {
+        const size = sizeForRatio(preset.ratio, pixels)
+        expect(isValidSize(size.width)).toBe(true)
+        expect(isValidSize(size.height)).toBe(true)
+        expect(longEdgeOf(size.width, size.height)).toBe(pixels)
+      }
+    }
+  })
+
   it('预设 id 不重复', () => {
     const colorIds = COLOR_CARD_COLOR_PRESETS.map((preset) => preset.id)
     const sizeIds = COLOR_CARD_SIZE_PRESETS.map((preset) => preset.id)
+    const ratioIds = COLOR_CARD_RATIO_PRESETS.map((preset) => preset.id)
     expect(new Set(colorIds).size).toBe(colorIds.length)
     expect(new Set(sizeIds).size).toBe(sizeIds.length)
+    expect(new Set(ratioIds).size).toBe(ratioIds.length)
   })
 
   it('未知 id 原样返回（不会变成 undefined 显示成空白按钮）', () => {
     expect(colorPresetLabel('unknown')).toBe('unknown')
     expect(sizePresetLabel('unknown')).toBe('unknown')
+    expect(ratioPresetLabel('unknown')).toBe('unknown')
   })
 })

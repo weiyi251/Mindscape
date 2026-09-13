@@ -21,14 +21,21 @@ import type { PluginHostApi } from '@/core/plugin/types'
 import {
   COLOR_CARD_COLOR_PRESETS,
   COLOR_CARD_LIMITS,
+  COLOR_CARD_LONG_EDGE_PRESETS,
+  COLOR_CARD_RATIO_PRESETS,
   COLOR_CARD_SIZE_PRESETS,
   colorPresetLabel,
   colorCardFileName,
   describeSize,
+  longEdgeOf,
+  matchRatioPreset,
   normalizeHex,
   normalizeOptions,
   optionsFromConfig,
   optionsToConfig,
+  ratioPresetLabel,
+  sizeForLongEdge,
+  sizeForRatio,
   sizePresetLabel,
   validateColorCardOptions,
 } from './options'
@@ -44,6 +51,13 @@ const FIELD_CLASS =
 /** 小按钮统一样式 */
 const SMALL_BUTTON =
   'rounded border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+
+/** 预设按钮（比例 / 长边两组共用）：选中态高亮，让用户一眼看出当前是哪一组值 */
+function presetButtonClass(active: boolean): string {
+  return [SMALL_BUTTON, active ? 'border-primary bg-primary/10 text-primary' : '']
+    .filter(Boolean)
+    .join(' ')
+}
 
 /** 主按钮 */
 const PRIMARY_BUTTON =
@@ -212,11 +226,55 @@ export function ColorCardDialog({ api, spacePath }: ColorCardDialogProps) {
           />
           {COLOR_CARD_TEXT.showHexLabel}
         </label>
+        <p className="text-[11px] leading-snug text-muted-foreground">
+          {COLOR_CARD_TEXT.showHexHint}
+        </p>
       </div>
 
       {/* ---------------- 尺寸 ---------------- */}
+      {/* 两组预设（2026-09-14 用户要求新增）：比例决定形状、长边决定像素。
+          两组可任意顺序点 —— 点比例时沿用当前长边，点长边时沿用当前比例，
+          因此「先 16:9 再 1920」与「先 1920 再 16:9」得到同一套尺寸（1920×1080）。 */}
       <div className="space-y-2">
         <SectionTitle>{COLOR_CARD_TEXT.sizeSection}</SectionTitle>
+
+        <div className="space-y-1">
+          <FieldLabel>{COLOR_CARD_TEXT.ratioPresetsLabel}</FieldLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {COLOR_CARD_RATIO_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className={presetButtonClass(
+                  matchRatioPreset(options.width, options.height) === preset.id,
+                )}
+                onClick={() =>
+                  patch(sizeForRatio(preset.ratio, longEdgeOf(options.width, options.height)))
+                }
+                title={`${ratioPresetLabel(preset.id)}：保持长边 ${longEdgeOf(options.width, options.height)} 像素，另一边按比例折算`}
+              >
+                {ratioPresetLabel(preset.id)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <FieldLabel>{COLOR_CARD_TEXT.longEdgePresetsLabel}</FieldLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {COLOR_CARD_LONG_EDGE_PRESETS.map((pixels) => (
+              <button
+                key={pixels}
+                type="button"
+                className={presetButtonClass(longEdgeOf(options.width, options.height) === pixels)}
+                onClick={() => patch(sizeForLongEdge(options.width, options.height, pixels))}
+                title={COLOR_CARD_TEXT.longEdgeTitle(pixels)}
+              >
+                {pixels}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="flex items-center gap-2">
           <div className="w-24 space-y-1">
@@ -243,7 +301,11 @@ export function ColorCardDialog({ api, spacePath }: ColorCardDialogProps) {
               aria-label={COLOR_CARD_TEXT.heightLabel}
             />
           </div>
-          <div className="flex flex-wrap gap-1.5 self-end pb-0.5">
+        </div>
+
+        <div className="space-y-1">
+          <FieldLabel>{COLOR_CARD_TEXT.sizePresetsLabel}</FieldLabel>
+          <div className="flex flex-wrap gap-1.5">
             {COLOR_CARD_SIZE_PRESETS.map((preset) => (
               <button
                 key={preset.id}

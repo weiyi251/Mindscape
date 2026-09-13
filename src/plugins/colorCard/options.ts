@@ -11,7 +11,7 @@
 // ============================================================================
 
 import { pad2 } from '@/core/utils/time'
-import { COLOR_CARD_TEXT, COLOR_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
+import { COLOR_CARD_TEXT, COLOR_PRESET_LABELS, RATIO_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
 
 /** 色卡尺寸的合法区间（像素） */
 export const COLOR_CARD_LIMITS = { minSize: 16, maxSize: 4096 } as const
@@ -52,6 +52,31 @@ export const COLOR_CARD_SIZE_PRESETS: SizePreset[] = [
   { id: 'banner-1200x300', width: 1200, height: 300 },
 ]
 
+/**
+ * 比例预设（2026-09-14 用户要求新增）：只有比值，没有像素。
+ *
+ * 为什么比例与像素分成两组：用户要「常用比例（1:1 / 16:9 / 9:16）」与「常用像素
+ * （如 1920）」两套选项，而单看任一组都无法确定一张色卡 —— 1:1 是多少像素？
+ * 1920 是宽还是高？两组相乘才是一套尺寸：**比例 × 长边像素**。
+ * 例如「16:9 + 1920」→ 1920×1080，「9:16 + 1920」→ 1080×1920。
+ * 点比例时沿用当前长边，点长边时沿用当前比例（见 sizeForRatio / sizeForLongEdge），
+ * 因此两个按钮组可以任意顺序点，结果总是可预期的。
+ */
+export interface RatioPreset {
+  id: string
+  /** 宽 / 高 */
+  ratio: number
+}
+
+export const COLOR_CARD_RATIO_PRESETS: RatioPreset[] = [
+  { id: 'ratio-1-1', ratio: 1 },
+  { id: 'ratio-16-9', ratio: 16 / 9 },
+  { id: 'ratio-9-16', ratio: 9 / 16 },
+]
+
+/** 常用长边像素（长边 = max(宽, 高)，因此横竖构图共用同一组数值） */
+export const COLOR_CARD_LONG_EDGE_PRESETS: number[] = [512, 1024, 1920, 2560]
+
 /** 色板预设 id → 中文标签 */
 export function colorPresetLabel(id: string): string {
   return COLOR_PRESET_LABELS[id] ?? id
@@ -62,6 +87,11 @@ export function sizePresetLabel(id: string): string {
   return SIZE_PRESET_LABELS[id] ?? id
 }
 
+/** 比例预设 id → 中文标签 */
+export function ratioPresetLabel(id: string): string {
+  return RATIO_PRESET_LABELS[id] ?? id
+}
+
 /** 完整的一套生成参数 */
 export interface ColorCardOptions {
   /** 归一化后的 #RRGGBB 色值 */
@@ -70,7 +100,14 @@ export interface ColorCardOptions {
   width: number
   /** 像素高 */
   height: number
-  /** 是否在色卡正中标注色值 */
+  /**
+   * 是否把色值画进 PNG 图片本身。
+   *
+   * 默认 **false**（2026-09-14 用户裁决）：色卡的正事是一整块颜色，色号写在图上
+   * 会污染它。色号改为写进 card.meta.hoverLabel，在画布上悬停该色卡时显示在
+   * 图片区域外的左上角（见 core/registry/cardTypes.ts 的 hoverLabelChip）。
+   * 需要「图片自带色号」（例如发给别人、脱离画布也能读到色值）时再手动勾选。
+   */
   showHex: boolean
   /** 文件名前缀（已净化，去掉了 Windows 非法字符） */
   namePrefix: string
@@ -82,7 +119,7 @@ export const DEFAULT_COLOR_CARD_OPTIONS: ColorCardOptions = {
   color: '#5A7D6A',
   width: 400,
   height: 400,
-  showHex: true,
+  showHex: false,
   namePrefix: '色卡',
   outputDir: '',
 }
@@ -144,6 +181,70 @@ export function clampSize(value: number, fallback = DEFAULT_COLOR_CARD_OPTIONS.w
 /** 尺寸的展示文案，如 `600 × 400` */
 export function describeSize(width: number, height: number): string {
   return `${width} × ${height}`
+}
+
+// ---------------------------------------------------------------------------
+// 比例 × 长边（2026-09-14 用户要求新增的两组预设）
+// ---------------------------------------------------------------------------
+
+/** 长边 = max(宽, 高)。宽高都不是有限数时返回 0（调用方据此走兜底） */
+export function longEdgeOf(width: number, height: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return 0
+  return Math.max(Math.round(width), Math.round(height))
+}
+
+/**
+ * 按「比例 + 长边」算出一套尺寸。
+ *
+ * 长边恒等于 longEdge，短边按比例折算 —— 因此横构图（16:9）与竖构图（9:16）
+ * 共用同一组「长边像素」预设，用户不必记「1920 在竖构图里是宽还是高」。
+ * 折算结果同样走 clampSize，比例极端的自定义值也不会越界。
+ *
+ * @param ratio 宽 / 高（> 1 横构图，< 1 竖构图，= 1 正方形）
+ */
+export function sizeForRatio(ratio: number, longEdge: number): { width: number; height: number } {
+  const long = clampSize(longEdge)
+  if (!Number.isFinite(ratio) || ratio <= 0) return { width: long, height: long }
+  return ratio >= 1
+    ? { width: long, height: clampSize(Math.round(long / ratio)) }
+    : { width: clampSize(Math.round(long * ratio)), height: long }
+}
+
+/**
+ * 保持当前宽高比，把长边缩放到 longEdge（点「长边像素」预设时用）。
+ * 于是「先点 16:9 再点 1920」与「先点 1920 再点 16:9」得到同一套尺寸。
+ * 当前尺寸退化（0 / 非数字）时给一个正方形，避免除零。
+ */
+export function sizeForLongEdge(
+  width: number,
+  height: number,
+  longEdge: number,
+): { width: number; height: number } {
+  const long = clampSize(longEdge)
+  const current = longEdgeOf(width, height)
+  if (current <= 0) return { width: long, height: long }
+  const scale = long / current
+  return {
+    width: clampSize(Math.round(Math.round(width) * scale)),
+    height: clampSize(Math.round(Math.round(height) * scale)),
+  }
+}
+
+/** 比例匹配的容差（相对值，1% —— 足够区分 16:9 与 3:2，又能容忍像素取整） */
+const RATIO_TOLERANCE = 0.01
+
+/**
+ * 当前尺寸匹配哪个比例预设？都不匹配（自由比例，如 600×400）时返回 null。
+ * 界面用它给比例按钮打选中态，故必须容忍取整误差：
+ * 1920×1080 的比值与 16/9 并不严格相等，但显然是 16:9。
+ */
+export function matchRatioPreset(width: number, height: number): string | null {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  const actual = width / height
+  for (const preset of COLOR_CARD_RATIO_PRESETS) {
+    if (Math.abs(actual - preset.ratio) <= RATIO_TOLERANCE * preset.ratio) return preset.id
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------

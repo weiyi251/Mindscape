@@ -33,11 +33,15 @@ export const COLOR_CARD_TEXT = {
   /* 尺寸区 */
   sizeSection: '尺寸',
   sizePresetsLabel: '常用尺寸',
+  ratioPresetsLabel: '常用比例',
+  longEdgePresetsLabel: '长边像素',
+  longEdgeTitle: (pixels: number) => `长边 ${pixels} 像素（短边按当前比例折算）`,
   widthLabel: '宽',
   heightLabel: '高',
   sizeUnit: '像素',
   sizeHint: (min: number, max: number) => `可填 ${min} ~ ${max}，填入超范围的值会自动收敛。`,
-  showHexLabel: '在色卡上标注色值',
+  showHexLabel: '在色卡图片上标注色值',
+  showHexHint: '默认关闭：色号只在画布上悬停这张色卡时显示。开启后色值会直接画进 PNG。',
 
   /* 输出区 */
   outputSection: '输出',
@@ -98,4 +102,14 @@ export const SIZE_PRESET_LABELS: Record<string, string> = {
   'square-800': '方形 800',
   'card-600x400': '卡片 600×400',
   'banner-1200x300': '横幅 1200×300',
+}
+
+/**
+ * 比例预设的中文标签（键 = options.ts 里 COLOR_CARD_RATIO_PRESETS 的 id）。
+ * 比例本身没有像素，具体尺寸由「长边像素」一起决定（见 options.sizeForRatio）。
+ */
+export const RATIO_PRESET_LABELS: Record<string, string> = {
+  'ratio-1-1': '1:1',
+  'ratio-16-9': '16:9',
+  'ratio-9-16': '9:16',
 }

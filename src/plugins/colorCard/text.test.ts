@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { COLOR_CARD_TEXT, COLOR_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
+import { COLOR_CARD_TEXT, COLOR_PRESET_LABELS, RATIO_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
 
 describe('COLOR_CARD_TEXT', () => {
   it('所有字符串文案都非空', () => {
@@ -51,10 +51,20 @@ describe('COLOR_CARD_TEXT', () => {
 
 describe('预设标签表', () => {
   it('没有空标签', () => {
-    for (const table of [COLOR_PRESET_LABELS, SIZE_PRESET_LABELS]) {
+    for (const table of [COLOR_PRESET_LABELS, SIZE_PRESET_LABELS, RATIO_PRESET_LABELS]) {
       for (const [id, label] of Object.entries(table)) {
         expect(label.trim().length, `标签 ${id} 为空`).toBeGreaterThan(0)
       }
     }
+  })
+
+  it('比例标签就是比值写法（按钮上直接显示它）', () => {
+    for (const label of Object.values(RATIO_PRESET_LABELS)) {
+      expect(label).toMatch(/^\d+:\d+$/)
+    }
+  })
+
+  it('长边像素的悬停说明把像素值带进结果里', () => {
+    expect(COLOR_CARD_TEXT.longEdgeTitle(1920)).toContain('1920')
   })
 })

@@ -12,6 +12,16 @@
 //   card.meta.tags: string[] —— meta 是 4.2 明确的「自由扩展字段」，随卡片一起
 //   经 zod 往返落盘；不新增 schema 字段，插件将来读标签也走同一约定。
 //
+// 【悬浮标记 hoverLabel（2026-09-14）】
+//   card.meta.hoverLabel: string —— 「鼠标悬停在这张卡上时，在图片区域外显示的短标记」。
+//   首个使用方是色卡插件：色卡 PNG 默认不再把色号画进图里（用户裁决），改为把色号
+//   写进 meta.hoverLabel，由渲染层在悬停时显示在卡片盒上方的左上角外挂层里。
+//
+//   为什么做成**通用字段**而不是「核心认识色卡」：插件系统有一条铁律 ——
+//   core 不认识任何具体插件（见 docs/插件系统-结构与实现要点.md §1）。
+//   核心只回答「这张卡有没有一个悬停标记」，至于标记是什么、由谁写的，与核心无关。
+//   任何插件（或核心自身的功能）都能往这个字段里写，无需新增扩展点。
+//
 // 纯函数，可单元测试。
 // ============================================================================
 
@@ -26,4 +36,23 @@ export function tagsOfMeta(meta: Meta): string[] {
 /** 生成带新标签的 meta 快照（不改动原对象） */
 export function metaWithTags(meta: Meta, tags: string[]): Meta {
   return { ...meta, tags }
+}
+
+/** 悬浮标记在 meta 里的键名（`card.meta.hoverLabel`） */
+export const HOVER_LABEL_META_KEY = 'hoverLabel'
+
+/**
+ * 读某张卡片的悬浮标记。非字符串 / 空串 / 纯空白一律返回 null（脏数据兜底）。
+ * 返回的是 trim 之后的文本：它会被当作单行标记渲染，多出来的空白没有意义。
+ */
+export function hoverLabelOfMeta(meta: Meta): string | null {
+  const value = meta[HOVER_LABEL_META_KEY]
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+/** 生成带悬浮标记的 meta 快照（不改动原对象） */
+export function metaWithHoverLabel(meta: Meta, label: string): Meta {
+  return { ...meta, [HOVER_LABEL_META_KEY]: label }
 }

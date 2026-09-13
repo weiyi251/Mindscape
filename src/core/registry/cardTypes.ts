@@ -27,7 +27,7 @@ import type { Card, CoreCardType } from '@/core/types'
 import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
-import { tagsOfMeta } from '@/core/board/cardMeta'
+import { hoverLabelOfMeta, tagsOfMeta } from '@/core/board/cardMeta'
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'
 import { getRegisteredCardType, listRegisteredCardTypes } from './pluginCenter'
 import { CORE_CARD_MENU_ITEMS } from './menus'
@@ -81,6 +81,13 @@ function extname(filePath: string): string {
 // 现改为**卡片盒上方外侧**（bottom-full 外挂），与图片内容零重叠；
 // 卡片盒（w / h 与锁定比例）完全不变，悬浮层随卡片一同移动。
 // 文件卡 / 便签仍用底部通栏（无图片比例问题）。
+//
+// 【悬浮标记 hoverLabel】（2026-09-14 用户裁决）：同一个外挂层还承载
+// `card.meta.hoverLabel`（通用字段，见 core/board/cardMeta.ts）。它**默认不显示**，
+// 鼠标悬停在卡片上时才淡入 —— 色卡插件把色号写在这里，于是色卡图片本身保持纯净的
+// 一整块颜色，色号只在需要时出现在图片区域外的左上角。
+// 显示与否走纯 CSS（group-hover），不经过 React state：悬停是高频事件，进 state
+// 会触发重渲染，违反 17.3「高频交互不进 state」的红线。
 // ---------------------------------------------------------------------------
 
 /** 12×12 线性小图标底座：尺寸 / 对齐统一，颜色随文字色（currentColor） */
@@ -209,18 +216,56 @@ function tagBar(card: Card, floating = false): ReactNode {
 }
 
 /**
- * 图片卡顶部外挂层（2026-09-13 用户裁决，两轮迭代）：承载备注条 + 标签条。
+ * 悬浮标记 chip（2026-09-14）：`card.meta.hoverLabel` 有值时出现。
+ * 这是**通用**能力 —— 核心只回答「这张卡有没有悬停标记」，至于标记是谁写的、
+ * 什么含义，与核心无关（首个使用方是色卡插件，把色号写在这里）。
+ *
+ * 默认不可见，鼠标悬停在卡片上才淡入：用纯 CSS（group-hover）而不是 React 悬停
+ * state —— 悬停是高频事件，进 state 会触发重渲染，违反 17.3 的红线。
+ * `group` 类挂在 Card.tsx 的卡片根元素上。
+ *
+ * @param fadeOnHover 与备注 / 标签同时出现时传 true（外层容器常驻，只让本 chip 淡入）；
+ *                    单独出现时传 false（整条外挂层随悬停淡入，见 imageOverlay）
+ */
+function hoverLabelChip(card: Card, fadeOnHover: boolean): ReactNode {
+  const label = hoverLabelOfMeta(card.meta)
+  if (label === null) return null
+  return createElement(
+    'span',
+    {
+      key: 'hover-label',
+      'data-hover-label': '',
+      // 等宽字体：色号是一串定长编码，等宽更整齐，也与「不是正文」的语义相符
+      className: [
+        'shrink-0 rounded border border-border/70 bg-muted/70 px-1.5 py-px font-mono text-[11px] leading-snug text-foreground',
+        fadeOnHover ? 'opacity-0 transition-opacity group-hover:opacity-100' : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    },
+    label,
+  )
+}
+
+/**
+ * 图片卡顶部外挂层（2026-09-13 用户裁决，两轮迭代）：承载悬浮标记 + 备注条 + 标签条。
  * 「图片之外」：absolute bottom-full 挂在卡片盒**上方外侧**（与图片零重叠）；
  * 定位祖先 = 卡片根元素（Card.tsx 的 absolute 定位容器），因此渲染在 shell
  * （带 overflow-hidden）之外也不会被裁剪。卡片盒的 w / h 与锁定比例完全不变，
  * 悬浮层随卡片一同移动。半透明底 + 模糊 + 边框 + 阴影：悬在画布上清晰可读。
  * 左缘与卡片对齐（left-0），多张卡片挂出的「标签牌」整齐统一。
  * 备注条与标签条**横排同行**（2026-09-13 第三轮用户反馈），超宽时整条换行。
+ *
+ * 悬浮标记排在最前（左上角），它只在悬停时可见；备注 / 标签常驻。
  */
 function imageOverlay(card: Card): ReactNode {
   const note = noteBar(card, true)
   const tags = tagBar(card, true)
-  if (!note && !tags) return null
+  const hasBars = Boolean(note || tags)
+  // 只有悬浮标记时，整条外挂层随悬停淡入 —— 否则会在卡片上方留一个空胶囊。
+  // 加 pointer-events-none：它不可交互，别去抢画布的指针事件。
+  const label = hoverLabelChip(card, hasBars)
+  if (!note && !tags && !label) return null
   return createElement(
     'div',
     {
@@ -229,10 +274,14 @@ function imageOverlay(card: Card): ReactNode {
       // 横排同行（2026-09-13 第三轮用户反馈）：备注条与标签条**同一行**显示，
       // flex-wrap 兜底 —— 两者合计超宽时整条换行，不截断内容；items-center 让
       // 备注文字与标签胶囊在行内垂直居中，排版更紧凑美观
-      className:
+      className: [
         'absolute bottom-full left-0 z-20 mb-1.5 flex max-w-full flex-row flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/70 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur-sm',
+        hasBars ? '' : 'pointer-events-none opacity-0 transition-opacity group-hover:opacity-100',
+      ]
+        .filter(Boolean)
+        .join(' '),
     },
-    [note, tags].filter(Boolean),
+    [label, note, tags].filter(Boolean),
   )
 }
 
@@ -280,8 +329,9 @@ function shell(
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
   const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
-  // 备注 / 标签走顶部外挂层（2026-09-13 用户裁决）：渲染在卡片盒**上方外侧**，
-  // 与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动（见 imageOverlay 说明）
+  // 悬浮标记 / 备注 / 标签走顶部外挂层（2026-09-13 用户裁决；悬浮标记 2026-09-14）：
+  // 渲染在卡片盒**上方外侧**，与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动
+  // （见 imageOverlay 说明）
   const overlay = imageOverlay(card)
 
   // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：

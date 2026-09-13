@@ -18,6 +18,7 @@
 //      卡片本身仍可被正常移除（走卡片自己的移除命令）。
 // ============================================================================
 
+import { metaWithHoverLabel } from '@/core/board/cardMeta'
 import type { CreateCardInput } from '@/core/plugin/types'
 import {
   DEFAULT_COLOR_CARD_OPTIONS,
@@ -141,13 +142,20 @@ export async function saveColorCard(
     // 色卡就是一张 PNG，按核心 image 类型建卡：刷新空间后文件会被扫描器
     // 重新识别为同一张图片卡，卡片不会「只在本次会话里存在」。
     type: 'image',
-    meta: {
-      [COLOR_CARD_META_KEY]: {
-        color: options.color,
-        width: options.width,
-        height: options.height,
+    // 色号写进**通用**悬浮标记字段（meta.hoverLabel），而不是只放在插件自己的
+    // 命名空间里：色卡 PNG 默认不把色值画进图（用户裁决），色号改由画布在悬停
+    // 这张卡时显示在图片区域外的左上角 —— 渲染层读的就是这个通用字段，
+    // 它不认识「色卡插件」（见 core/board/cardMeta.ts）。
+    meta: metaWithHoverLabel(
+      {
+        [COLOR_CARD_META_KEY]: {
+          color: options.color,
+          width: options.width,
+          height: options.height,
+        },
       },
-    },
+      options.color,
+    ),
     // 见文件头注释第 2 条：不进撤销栈
     undoable: false,
   })
