@@ -311,12 +311,15 @@ describe('备注条与标签条的视觉区分', () => {
     }),
   )
 
-  it('图片卡：备注 / 标签渲染在悬浮层内（不占布局，不改变图片比例）', () => {
+  it('图片卡：备注 / 标签挂在卡片盒上方外侧（与图片零重叠）', () => {
     expect(imageHtml).toContain('data-image-overlay')
     expect(imageHtml).toContain('data-note-bar')
     expect(imageHtml).toContain('data-tag-bar')
-    // 悬浮层 absolute 定位 + 半透明底：压在图片上可读
-    expect(imageHtml).toContain('absolute left-1.5 top-1.5')
+    // 外挂层 absolute bottom-full：整体位于卡片盒上方（2026-09-13 用户裁决，
+    // 第一版 left/top 压在图片内部被否）；左缘与卡片对齐
+    expect(imageHtml).toContain('absolute bottom-full left-0')
+    expect(imageHtml).not.toContain('left-1.5 top-1.5')
+    // 半透明底 + 模糊：悬在画布上可读
     expect(imageHtml).toContain('bg-background/95')
     // 图片元素盒始终占满卡片（flex-1），未被信息条挤矮
     expect(imageHtml).toContain('flex-1')

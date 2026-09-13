@@ -382,15 +382,16 @@ export function SpaceList() {
                   {space.favorite ? <span className="mr-1 text-primary">★</span> : null}
                   {space.name}
                 </h2>
-                {/* 悬停才出现的卡片操作（2026-09-13 用户反馈：按钮行占位会把长标题
-                    挤成「minds...」—— 改为 absolute 悬浮层不占布局，标题独占整行，
-                    超长时 truncate 省略 + title 提示全名；卡片根已是 relative） */}
-                <div className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-md border border-border bg-card/95 p-0.5 shadow-sm">
+                {/* 悬停才出现的卡片操作（两轮用户反馈迭代）：悬浮层放**右下角**
+                    —— 右上角静止时会留一个背景空框遮挡标题（2026-09-13 截图 1）；
+                    改为整体仅悬停时显示（opacity + pointer-events 一起切换），
+                    平时完全不可见，标题独占卡片顶部完整可读 */}
+                <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-0.5 rounded-md border border-border bg-card/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                   <button
                     type="button"
                     aria-label={`${space.favorite ? '取消收藏' : '收藏'} ${space.name}`}
                     title={space.favorite ? '取消收藏' : '收藏（排在列表前面）'}
-                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={(event) => {
                       event.stopPropagation()
                       handleToggleFavorite(space)
@@ -402,7 +403,7 @@ export function SpaceList() {
                     type="button"
                     aria-label={`重命名 ${space.name}`}
                     title="重命名（只改显示名，文件夹不动）"
-                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={(event) => {
                       event.stopPropagation()
                       setRenameTarget(space)
@@ -414,7 +415,7 @@ export function SpaceList() {
                     type="button"
                     aria-label={`导出空间布局 ${space.name}`}
                     title="把布局导出到文件夹（生成 mindscape-layout.json）"
-                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={(event) => {
                       event.stopPropagation()
                       void handleExportLayout(space)
@@ -425,7 +426,7 @@ export function SpaceList() {
                   <button
                     type="button"
                     aria-label={`移除空间 ${space.name}`}
-                    className="rounded px-1.5 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-destructive group-hover:opacity-100"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
                     onClick={(event) => {
                       event.stopPropagation()
                       void handleDelete(space.id, space.name)

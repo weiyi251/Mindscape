@@ -18,7 +18,7 @@
 // 实现任务：T0.10（准备层）/ T1.4（图片类型接入 asset 通道）。
 // ============================================================================
 
-import { createElement } from 'react'
+import { Fragment, createElement } from 'react'
 import type { ReactNode } from 'react'
 
 import type { Card, CoreCardType } from '@/core/types'
@@ -74,10 +74,10 @@ function extname(filePath: string): string {
 //   · 两者同用 border-t 分隔、px-1.5 左右对齐，纵向依次排列，左边线对齐卡片内容。
 // 图标用内联 SVG（stroke = currentColor），不引入任何图标库（10.1 约束）。
 //
-// 【悬浮变体】（2026-09-13 用户裁决）：图片卡上备注 / 标签**不得占据卡片布局** ——
-// 底部通栏会挤矮图片区（object-contain 随之留白，卡片比例观感改变）。
-// 图片卡改用 floating 悬浮层：absolute 叠加在图片**左上方**，带半透明底 +
-// 边框 + 阴影保证压图可读，不占 flex 布局、不改卡片尺寸，随卡片一同移动。
+// 【悬浮变体】（2026-09-13 用户裁决，两轮迭代）：图片卡上备注 / 标签**必须
+// 在图片之外**——第一版左上角悬浮层仍压在图片内部（用户截图 2 反馈），
+// 现改为**卡片盒上方外侧**（bottom-full 外挂），与图片内容零重叠；
+// 卡片盒（w / h 与锁定比例）完全不变，悬浮层随卡片一同移动。
 // 文件卡 / 便签仍用底部通栏（无图片比例问题）。
 // ---------------------------------------------------------------------------
 
@@ -207,11 +207,12 @@ function tagBar(card: Card, floating = false): ReactNode {
 }
 
 /**
- * 图片卡左上悬浮层（2026-09-13 用户裁决）：承载备注条 + 标签条。
- * absolute 定位不占 flex 布局 → 图片元素盒始终占满卡片，object-contain
- * 不再因底部信息条让位而留白，卡片比例稳定；随卡片一同移动。
- * 半透明底 + 模糊 + 边框 + 阴影：压在任意亮色图片上都能读。
- * 内容过长时整体限高裁剪（title 仍可看全文）。
+ * 图片卡顶部外挂层（2026-09-13 用户裁决，两轮迭代）：承载备注条 + 标签条。
+ * 「图片之外」：absolute bottom-full 挂在卡片盒**上方外侧**（与图片零重叠）；
+ * 定位祖先 = 卡片根元素（Card.tsx 的 absolute 定位容器），因此渲染在 shell
+ * （带 overflow-hidden）之外也不会被裁剪。卡片盒的 w / h 与锁定比例完全不变，
+ * 悬浮层随卡片一同移动。半透明底 + 模糊 + 边框 + 阴影：悬在画布上清晰可读。
+ * 左缘与卡片对齐（left-0），多张卡片挂出的「标签牌」整齐统一。
  */
 function imageOverlay(card: Card): ReactNode {
   const note = noteBar(card, true)
@@ -223,7 +224,7 @@ function imageOverlay(card: Card): ReactNode {
       key: 'image-overlay',
       'data-image-overlay': '',
       className:
-        'absolute left-1.5 top-1.5 z-10 flex max-h-[calc(100%-12px)] max-w-[calc(100%-12px)] flex-col items-stretch gap-1 overflow-hidden rounded-md border border-border/70 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm',
+        'absolute bottom-full left-0 z-20 mb-1.5 flex max-w-full flex-col items-stretch gap-1 rounded-md border border-border/70 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm',
     },
     [note, tags].filter(Boolean),
   )
@@ -273,16 +274,17 @@ function shell(
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
   const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
-  // 备注 / 标签走左上悬浮层（2026-09-13 用户裁决）：不占卡片布局、
-  // 不改变图片显示比例，随卡片一同移动 —— 不再用底部通栏（见 imageOverlay 说明）
+  // 备注 / 标签走顶部外挂层（2026-09-13 用户裁决）：渲染在卡片盒**上方外侧**，
+  // 与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动（见 imageOverlay 说明）
   const overlay = imageOverlay(card)
 
   // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：
   //   · 只给 w-full 时，img 元素盒的高度会按"宽度 × 原图比例"自己撑开；
   //     卡片比原图更宽更扁（例如 480×135 装 16:9 图）时元素盒会比卡片高，
   //     多出的部分被外壳的 overflow-hidden 裁掉 —— 表现就是"图片显示不完整"。
-  //   · 给成 flex-1（悬浮层不参与布局，图片元素盒恒占满卡片）后元素盒被容器约束，
-  //     object-contain 才真正做"等比缩放 + 居中留白"，任何卡片尺寸下都完整不变形。
+  //   · 给成 flex-1（外挂层在卡片盒之外，不参与布局，图片元素盒恒占满卡片）后
+  //     元素盒被容器约束，object-contain 才真正做"等比缩放 + 居中留白"，
+  //     任何卡片尺寸下都完整不变形。
   // ⚠️ 卡片缩放本身也已锁定原图比例（cardResizeController），这里是渲染层兜底：
   //    旧布局里已经失真的卡片都能正确显示。
   // 坐标写进 dataset，供原图懒加载在**不触发 React 更新**的前提下直接判交（17.3）；
@@ -307,7 +309,12 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     ].join(' '),
   })
 
-  return shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body, overlay].filter(Boolean))
+  const shellEl = shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body])
+
+  // 外挂层必须渲染在 shell **之外**（shell 有 overflow-hidden 会裁掉上挂部分）；
+  // Fragment 内 overlay 的 absolute 定位祖先仍是卡片根元素（Card.tsx 的定位容器）
+  if (!overlay) return shellEl
+  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay)
 }
 
 /** file：扩展名徽标 + 文件名（+ 备注条） */
