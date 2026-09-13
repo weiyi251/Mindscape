@@ -1,12 +1,17 @@
 // ============================================================================
 // 模块说明（中文）
-// CardResizeController（右下角手柄缩放）单元测试（T2.3）。
+// CardResizeController（缩放手柄）单元测试（T2.3；四向边缩放为 2026-09-13 增补）。
 // ============================================================================
 
 import { describe, expect, it } from 'vitest'
 
-import { CardResizeController, MIN_CARD_SIZE, ratioLockedSize } from './cardResizeController'
-import type { CardResizeSource } from './cardResizeController'
+import {
+  CardResizeController,
+  edgeResizeOutcome,
+  MIN_CARD_SIZE,
+  ratioLockedSize,
+} from './cardResizeController'
+import type { CardResizeEdge, CardResizeSource } from './cardResizeController'
 
 function fakePointer(pointerId: number, button: number, clientX: number, clientY: number) {
   return { pointerId, button, clientX, clientY } as PointerEvent
@@ -20,26 +25,39 @@ function fakeElement() {
   } as unknown as HTMLElement
 }
 
-function createHarness(initialSize = { w: 240, h: 180 }, zoom = 1, aspectRatio: number | null = null) {
+function createHarness(
+  initialSize = { w: 240, h: 180 },
+  zoom = 1,
+  aspectRatio: number | null = null,
+  initialPos = { x: 100, y: 80 },
+) {
   const sizes: Array<{ id: string; w: number; h: number }> = []
+  const positions: Array<{ id: string; x: number; y: number }> = []
   const events: Array<Record<string, unknown>> = []
   let currentZoom = zoom
 
   const source: CardResizeSource = {
     getCardSize: () => ({ ...initialSize }),
     setCardSize: (cardId, w, h) => sizes.push({ id: cardId, w, h }),
+    getCardPosition: () => ({ ...initialPos }),
+    setCardPosition: (cardId, x, y) => positions.push({ id: cardId, x, y }),
     getZoom: () => currentZoom,
     getAspectRatio: () => aspectRatio,
   }
   const delegate = {
     onResizeStart: (cardId: string) => events.push({ kind: 'start', cardId }),
-    onResizeEnd: (cardId: string, from: { w: number; h: number }, to: { w: number; h: number }) =>
-      events.push({ kind: 'end', cardId, from, to }),
+    onResizeEnd: (
+      cardId: string,
+      from: { w: number; h: number },
+      to: { w: number; h: number },
+      position?: { from: { x: number; y: number }; to: { x: number; y: number } },
+    ) => events.push({ kind: 'end', cardId, from, to, position }),
   }
 
   return {
     controller: new CardResizeController(source, delegate),
     sizes,
+    positions,
     events,
     setZoom: (value: number) => {
       currentZoom = value
@@ -174,5 +192,169 @@ describe('CardResizeController · 比例锁定', () => {
     harness.controller.move(fakePointer(1, 0, 120, 30))
 
     expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 360, h: 165 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 四向边缩放（2026-09-13）：便签支持上/下/左/右边中点手柄
+// ---------------------------------------------------------------------------
+
+describe('edgeResizeOutcome（纯函数）', () => {
+  const start = { x: 100, y: 80, w: 240, h: 180 }
+
+  it('e：左上角固定，宽随位移增长', () => {
+    expect(edgeResizeOutcome(start, 'e', 60, 30)).toEqual({ x: 100, y: 80, w: 300, h: 180 })
+  })
+
+  it('s：左上角固定，高随位移增长', () => {
+    expect(edgeResizeOutcome(start, 's', 60, 30)).toEqual({ x: 100, y: 80, w: 240, h: 210 })
+  })
+
+  it('w：右边缘固定，宽收缩时 x 右移联动', () => {
+    // 向右拖 60 → 宽 240-60=180，x = 100 + (240-180) = 160（右缘 340 不动）
+    expect(edgeResizeOutcome(start, 'w', 60, 0)).toEqual({ x: 160, y: 80, w: 180, h: 180 })
+  })
+
+  it('n：下边缘固定，高收缩时 y 下移联动', () => {
+    // 向下拖 30 → 高 180-30=150，y = 80 + (180-150) = 110（下缘 260 不动）
+    expect(edgeResizeOutcome(start, 'n', 0, 30)).toEqual({ x: 100, y: 110, w: 240, h: 150 })
+  })
+
+  it('w 向左拖（放大）：x 左移，右缘仍固定', () => {
+    // 宽 240+60=300，x = 100 + (240-300) = 40（右缘 340 不动）
+    expect(edgeResizeOutcome(start, 'w', -60, 0)).toEqual({ x: 40, y: 80, w: 300, h: 180 })
+  })
+
+  it('n 向上拖（放大）：y 上移，下缘仍固定', () => {
+    expect(edgeResizeOutcome(start, 'n', 0, -30)).toEqual({ x: 100, y: 50, w: 240, h: 210 })
+  })
+
+  it('w 拖过头被 MIN 抬回时位置同步停住（不会滑走）', () => {
+    // 向右拖 500 → 宽被钳在 40，x = 100 + (240-40) = 300
+    const outcome = edgeResizeOutcome(start, 'w', 500, 0)
+    expect(outcome.w).toBe(MIN_CARD_SIZE)
+    expect(outcome.x).toBe(start.x + (start.w - MIN_CARD_SIZE))
+  })
+
+  it('n 拖过头被 MIN 抬回时位置同步停住', () => {
+    const outcome = edgeResizeOutcome(start, 'n', 0, 500)
+    expect(outcome.h).toBe(MIN_CARD_SIZE)
+    expect(outcome.y).toBe(start.y + (start.h - MIN_CARD_SIZE))
+  })
+
+  it('se：位置不变（历史行为）', () => {
+    expect(edgeResizeOutcome(start, 'se', 60, 30)).toEqual({ x: 100, y: 80, w: 300, h: 210 })
+  })
+
+  it('非法位移（NaN）不产生 NaN 尺寸', () => {
+    const outcome = edgeResizeOutcome(start, 'e', Number.NaN, 0)
+    expect(outcome.w).toBe(MIN_CARD_SIZE)
+  })
+
+  it('每条边只动自己那一轴（拖 e 不改高、拖 s 不改宽）', () => {
+    expect(edgeResizeOutcome(start, 'e', 100, 100).h).toBe(start.h)
+    expect(edgeResizeOutcome(start, 's', 100, 100).w).toBe(start.w)
+  })
+})
+
+describe('CardResizeController · 四向边缩放', () => {
+  it('e 手柄：只改宽，位置不动，delegate 不带 position', () => {
+    const harness = createHarness(undefined, 1, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'e')
+    harness.controller.move(fakePointer(1, 0, 60, 0))
+    harness.controller.end(fakePointer(1, 0, 60, 0))
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 300, h: 180 })
+    expect(harness.positions).toEqual([]) // 位置没变：不直写 transform
+    expect(harness.events.at(-1)).toEqual({
+      kind: 'end',
+      cardId: 'c1',
+      from: { w: 240, h: 180 },
+      to: { w: 300, h: 180 },
+      position: undefined,
+    })
+  })
+
+  it('w 手柄：宽度与位置联动直写 DOM，松手交出位置快照', () => {
+    const harness = createHarness(undefined, 1, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'w')
+    harness.controller.move(fakePointer(1, 0, 60, 0))
+    harness.controller.end(fakePointer(1, 0, 60, 0))
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 180, h: 180 })
+    expect(harness.positions.at(-1)).toEqual({ id: 'c1', x: 160, y: 80 })
+    expect(harness.events.at(-1)).toMatchObject({
+      kind: 'end',
+      to: { w: 180, h: 180 },
+      position: { from: { x: 100, y: 80 }, to: { x: 160, y: 80 } },
+    })
+  })
+
+  it('n 手柄：高度与位置联动，zoom 参与换算', () => {
+    const harness = createHarness(undefined, 2, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'n')
+    // 屏幕向下拖 60 ÷ zoom 2 → 画布 30 → 高 150，y 110
+    harness.controller.move(fakePointer(1, 0, 0, 60))
+    harness.controller.end(fakePointer(1, 0, 0, 60))
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 240, h: 150 })
+    expect(harness.positions.at(-1)).toEqual({ id: 'c1', x: 100, y: 110 })
+  })
+
+  it('n 手柄拖过头：尺寸钳在 MIN，位置同步停住', () => {
+    const harness = createHarness(undefined, 1, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'n')
+    harness.controller.move(fakePointer(1, 0, 0, 500))
+    harness.controller.end(fakePointer(1, 0, 0, 500))
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 240, h: MIN_CARD_SIZE })
+    expect(harness.positions.at(-1)).toEqual({ id: 'c1', x: 100, y: 80 + 180 - MIN_CARD_SIZE })
+  })
+
+  it('边手柄不锁比例：即便 getAspectRatio 有值（防御）也走自由缩放', () => {
+    const harness = createHarness({ w: 240, h: 180 }, 1, 16 / 9)
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'e')
+    harness.controller.move(fakePointer(1, 0, 60, 0))
+
+    // 若误走锁比例分支，高度会跟着宽变 —— 边手柄只应动单轴
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 300, h: 180 })
+  })
+
+  it('边手柄 cancel：恢复按下时的尺寸与位置', () => {
+    const harness = createHarness(undefined, 1, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement(), 'w')
+    harness.controller.move(fakePointer(1, 0, 60, 0))
+    harness.controller.cancel()
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 240, h: 180 })
+    expect(harness.positions.at(-1)).toEqual({ id: 'c1', x: 100, y: 80 })
+    expect(harness.controller.isResizing).toBe(false)
+  })
+
+  it('边手柄原地点一下：尺寸位置均不变，不产生命令', () => {
+    const harness = createHarness(undefined, 1, null, { x: 100, y: 80 })
+    harness.controller.begin(fakePointer(1, 0, 10, 10), 'c1', fakeElement(), 'w')
+    harness.controller.end(fakePointer(1, 0, 10, 10))
+
+    expect(harness.events).toEqual([{ kind: 'start', cardId: 'c1' }])
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 240, h: 180 })
+    expect(harness.positions).toEqual([])
+  })
+
+  it('begin 缺省 edge 为 se（旧调用零改动）', () => {
+    const harness = createHarness({ w: 240, h: 180 }, 1, null)
+    harness.controller.begin(fakePointer(1, 0, 0, 0), 'c1', fakeElement())
+    harness.controller.move(fakePointer(1, 0, 60, 30))
+
+    expect(harness.sizes.at(-1)).toEqual({ id: 'c1', w: 300, h: 210 })
+    expect(harness.positions).toEqual([])
+  })
+})
+
+// 类型守卫：CardResizeEdge 枚举成员齐全（编译期即校验，运行期做一次形状断言）
+describe('CardResizeEdge', () => {
+  it('覆盖 n / s / e / w / se 五个方向', () => {
+    const edges: CardResizeEdge[] = ['n', 's', 'e', 'w', 'se']
+    expect(new Set(edges).size).toBe(5)
   })
 })

@@ -84,7 +84,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
   // 便签行内编辑（2026-09-13，用户要求）：editingNoteId 状态 + beginNoteEdit API +
   // dblclick 分支 + 编辑结束回调转发，约 +25 行（替代了 Board 的弹窗逻辑）
-  'src/canvas/Canvas.tsx': 1160,
+  // 便签编辑态选字 + 四向缩放（2026-09-13，用户要求）：编辑态早退分支 +
+  // resizeSource 增加位置读写通道 + delegate 传位置 + edge 手柄分流，净 +32 行
+  // （核心逻辑已在 cardResizeController.edgeResizeOutcome，此处只是接线）
+  'src/canvas/Canvas.tsx': 1192,
 }
 
 describe('规则 1：大文件行数只减不增', () => {

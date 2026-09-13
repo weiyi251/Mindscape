@@ -118,10 +118,14 @@ export function CardView({
       {/* 便签行内编辑：textarea 盖满卡片（inset-0），卡片盒子/样式/布局不变。
           字号行距内边距对齐便签正文（p-2 / text-[18px] / leading-relaxed），
           进出编辑不跳动。pointerdown / dblclick 必须拦下——否则会被画布
-          当成拖拽手势（先例：Partition 改名输入框） */}
+          当成拖拽手势（先例：Partition 改名输入框）。
+          2026-09-13：data-note-editing 供 Canvas 的根事件分流早退（编辑态
+          按下 = 选字/挪光标，不启动拖拽）；select-text 覆盖卡片根
+          select-none 的继承（user-select 会被子元素继承，不加则选不中文字） */}
       {noteEditing && card.type === 'note' ? (
         <textarea
           ref={noteInputRef}
+          {...{ 'data-note-editing': 'true' }}
           value={noteDraft}
           onChange={(event) => setNoteDraft(event.target.value)}
           onBlur={finishNoteEdit}
@@ -137,26 +141,57 @@ export function CardView({
             }
           }}
           spellCheck={false}
-          className="absolute inset-0 h-full w-full resize-none rounded-sm border-0 bg-card p-2 text-[18px] leading-relaxed text-foreground outline-none"
+          className="absolute inset-0 h-full w-full select-text resize-none rounded-sm border-0 bg-card p-2 text-[18px] leading-relaxed text-foreground outline-none"
         />
       ) : null}
 
       {/* 右下角缩放手柄（5.2：选中后拖右下角手柄）。11.6：仅在选中时出现。
-          pointerdown 靠冒泡进入 Viewport 的原生监听，由 Canvas 分流到缩放控制器 */}
+          pointerdown 靠冒泡进入 Viewport 的原生监听，由 Canvas 分流到缩放控制器。
+          2026-09-13：补 data-resize-edge="se"，Canvas 统一按 edge 分流 */}
       {selected ? (
         <div
           data-resize-handle={card.id}
+          data-resize-edge="se"
           className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-full border border-background bg-primary shadow-sm"
         />
       ) : null}
 
+      {/* 便签四向缩放手柄（2026-09-13）：上/下/左/右边中点，自由缩放（不锁比例）。
+          n / w 拖动时对边固定，位置联动由 cardResizeController 的 edgeResizeOutcome 处理。
+          只有便签渲染边手柄 —— 图片必须锁原图比例，四向边缩放与等比约束冲突 */}
+      {selected && card.type === 'note' ? (
+        <>
+          <div
+            data-resize-edge="n"
+            className="absolute -top-1.5 left-1/2 h-2 w-6 -translate-x-1/2 cursor-ns-resize rounded-full border border-background bg-primary shadow-sm"
+          />
+          <div
+            data-resize-edge="s"
+            className="absolute -bottom-1.5 left-1/2 h-2 w-6 -translate-x-1/2 cursor-ns-resize rounded-full border border-background bg-primary shadow-sm"
+          />
+          <div
+            data-resize-edge="e"
+            className="absolute -right-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
+          />
+          <div
+            data-resize-edge="w"
+            className="absolute -left-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
+          />
+        </>
+      ) : null}
+
       {/* 右缘中点连接手柄（T3.1：从边缘拖出箭头连到目标卡）。
-          仅选中时出现；pointerdown 由 Canvas 分流到连线拖拽，不触发卡片拖动 */}
+          仅选中时出现；pointerdown 由 Canvas 分流到连线拖拽，不触发卡片拖动。
+          2026-09-13：便签的连接手柄移到右上角 —— 右缘中点让位给 e 向缩放手柄；
+          图片 / 文件卡保持右缘中点不变 */}
       {selected ? (
         <div
           data-connect-handle={card.id}
           title="拖到目标卡片创建连线"
-          className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border border-background bg-primary/80 shadow-sm hover:bg-primary"
+          className={cn(
+            'absolute h-3 w-3 cursor-crosshair rounded-full border border-background bg-primary/80 shadow-sm hover:bg-primary',
+            card.type === 'note' ? '-right-1.5 -top-1.5' : '-right-1.5 top-1/2 -translate-y-1/2',
+          )}
         />
       ) : null}
     </div>

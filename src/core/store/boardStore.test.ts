@@ -283,6 +283,40 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
   })
 })
 
+describe('boardStore.setCardSizes · 可选位置（2026-09-13 便签四向缩放）', () => {
+  async function loadedStore() {
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
+    await store.getState().loadSpace(SPACE)
+    return store
+  }
+
+  it('只传 w / h：尺寸更新，x / y 保持原值', async () => {
+    const store = await loadedStore()
+    const id = store.getState().cards[0].id
+    const before = store.getState().cards[0]
+
+    store.getState().setCardSizes([{ id, w: 300, h: 200 }])
+    expect(store.getState().cards[0]).toMatchObject({ w: 300, h: 200, x: before.x, y: before.y })
+  })
+
+  it('带 x / y：位置一并更新（西 / 北边缩放联动）', async () => {
+    const store = await loadedStore()
+    const id = store.getState().cards[0].id
+
+    store.getState().setCardSizes([{ id, w: 180, h: 180, x: 160, y: 80 }])
+    expect(store.getState().cards[0]).toMatchObject({ w: 180, h: 180, x: 160, y: 80 })
+  })
+
+  it('x / y 部分缺省：缺的轴保持原值', async () => {
+    const store = await loadedStore()
+    const id = store.getState().cards[0].id
+    const before = store.getState().cards[0]
+
+    store.getState().setCardSizes([{ id, w: 200, h: 200, y: 999 }])
+    expect(store.getState().cards[0]).toMatchObject({ w: 200, h: 200, x: before.x, y: 999 })
+  })
+})
+
 describe('boardStore · 分区选中与文件归属（2026-09-12）', () => {
   async function loadedStore() {
     const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'

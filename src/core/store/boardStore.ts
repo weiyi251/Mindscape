@@ -126,9 +126,10 @@ export interface BoardState {
   setCardPositions: (positions: { id: string; x: number; y: number }[]) => void
   /**
    * 一次性写入多张卡片尺寸（手柄缩放松手 / 撤销重做都走它，T2.3）。
-   * 只动 w / h。
+   * 只动 w / h；2026-09-13 增补可选 x / y（便签西 / 北边缩放联动位置，
+   * 缺省字段表示「保持原值」，便于旧调用零改动）。
    */
-  setCardSizes: (sizes: { id: string; w: number; h: number }[]) => void
+  setCardSizes: (sizes: { id: string; w: number; h: number; x?: number; y?: number }[]) => void
   /**
    * 一次性写入多个分区框位置（拖框松手 / 撤销重做都走它，T2.5）。
    * 只动 x / y；框内卡片的位移由调用方一并写入 setCardPositions。
@@ -355,7 +356,15 @@ export function createBoardStore(
       set((state) => ({
         cards: state.cards.map((card) => {
           const next = byId.get(card.id)
-          return next ? { ...card, w: next.w, h: next.h } : card
+          if (!next) return card
+          return {
+            ...card,
+            w: next.w,
+            h: next.h,
+            // 可选位置：缺省 = 保持原值（旧调用 / 东南角缩放不走位置）
+            x: next.x ?? card.x,
+            y: next.y ?? card.y,
+          }
         }),
       }))
     },

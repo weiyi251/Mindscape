@@ -36,7 +36,11 @@ import { upgradeVisibleImages } from './lazyOriginal'
 import { CardDragController, DRAG_OPACITY, DRAG_THRESHOLD_PX } from './interaction/cardDragController'
 import type { CardDragDelegate, CardDragSource } from './interaction/cardDragController'
 import { CardResizeController, MIN_CARD_SIZE } from './interaction/cardResizeController'
-import type { CardResizeDelegate, CardResizeSource } from './interaction/cardResizeController'
+import type {
+  CardResizeDelegate,
+  CardResizeEdge,
+  CardResizeSource,
+} from './interaction/cardResizeController'
 import { PartitionDragController } from './interaction/partitionDragController'
 import type { PartitionMoveResult } from './interaction/partitionDragController'
 import { PartitionResizeController } from './interaction/partitionResizeController'
@@ -509,6 +513,16 @@ export function Canvas({
         element.style.width = `${w}px`
         element.style.height = `${h}px`
       },
+      // n / w 边缩放联动位置：与拖拽控制器同一通道（直写 transform，17.3）
+      getCardPosition: (cardId) => {
+        const card = cardsRef.current.find((item) => item.id === cardId)
+        return card ? { x: card.x, y: card.y } : { x: 0, y: 0 }
+      },
+      setCardPosition: (cardId, x, y) => {
+        const element = cardElsRef.current.get(cardId)
+        if (!element) return
+        element.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      },
       getZoom: () => controllerRef.current?.zoom ?? 1,
       getAspectRatio: (cardId, element) => {
         // 1) 首选"已加载原图的真实比例"：懒加载把原图写进 src 之后
@@ -532,8 +546,17 @@ export function Canvas({
   const resizeDelegate = useMemo<CardResizeDelegate>(
     () => ({
       onResizeStart: () => {},
-      onResizeEnd: (cardId, from, to) => {
-        onCommitResizeRef.current?.([{ id: cardId, from, to }])
+      onResizeEnd: (cardId, from, to, position) => {
+        onCommitResizeRef.current?.([
+          {
+            id: cardId,
+            from,
+            to,
+            // n / w 边缩放联动出的位置（可选；东南角缩放不传）
+            fromPos: position?.from,
+            toPos: position?.to,
+          },
+        ])
       },
     }),
     [],
@@ -646,6 +669,12 @@ export function Canvas({
       const cardElement = target?.closest(`[${CANVAS_ITEM_ATTR}]`) as HTMLElement | null
       if (!cardElement) return
 
+      // 便签编辑态（2026-09-13）：textarea 上的按下交给浏览器默认行为
+      // （选字 / 挪光标 / 双击选词）。必须在一切手势分流之前早退 ——
+      // Viewport 的原生根监听先于 React 合成事件触发，textarea 自己的
+      // stopPropagation 拦不住它，只有这里早退才能不让拖拽控制器接管
+      if (target?.closest('[data-note-editing]')) return
+
       // 挂起连线模式（T3.9 菜单「连线」）：下一张被点中的卡片成为目标
       const pendingFrom = pendingConnectRef.current
       if (pendingFrom) {
@@ -719,8 +748,11 @@ export function Canvas({
         return
       }
 
-      if (target?.closest('[data-resize-handle]')) {
-        resizeController.begin(event, cardId, cardElement)
+      // 缩放手柄（2026-09-13 起按 edge 分流：se=右下角，n/s/e/w=便签四边中点）
+      if (target?.closest('[data-resize-edge]')) {
+        const edgeHandle = target?.closest('[data-resize-edge]') as HTMLElement | null
+        const edge = (edgeHandle?.getAttribute('data-resize-edge') ?? 'se') as CardResizeEdge
+        resizeController.begin(event, cardId, cardElement, edge)
         return
       }
 
