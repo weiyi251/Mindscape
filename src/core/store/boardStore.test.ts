@@ -577,6 +577,57 @@ describe('boardStore.loadSpace · layout 恢复（T1.6）', () => {
     expect(card.note).toBe('上次的备注')
   })
 
+  it('便签与文件卡上的标签在重进空间后保留（2026-09-13 回归）', async () => {
+    const store = createStore(
+      createSizeProvider([entry('a.jpg')], { 'a.jpg': sizeOf(800, 600) }, [], layoutJson((layout) => {
+        layout.cards.push(
+          {
+            id: 'c_001',
+            type: 'image',
+            filePath: 'a.jpg',
+            originalPath: 'a.jpg',
+            x: 100,
+            y: 100,
+            w: 240,
+            h: 180,
+            rotation: 0,
+            zIndex: 0,
+            note: '',
+            meta: { tags: ['文件标签'] },
+          },
+          {
+            id: 'c_002',
+            type: 'note',
+            filePath: '',
+            originalPath: '',
+            x: 400,
+            y: 100,
+            w: 200,
+            h: 160,
+            rotation: 0,
+            zIndex: 0,
+            note: '想法',
+            meta: { tags: ['便签标签'] },
+          },
+        )
+      })),
+    )
+
+    await store.getState().loadSpace(SPACE)
+
+    const cards = store.getState().cards
+    const fileCard = cards.find((card) => card.id === 'c_001')
+    const noteCard = cards.find((card) => card.id === 'c_002')
+    // 文件卡：位置与标签以 layout 为准
+    expect(fileCard).toBeDefined()
+    expect(fileCard!.meta.tags).toEqual(['文件标签'])
+    // 便签（无文件）：整卡保留，标签与备注不丢（此前被当「文件已丢失」丢弃）
+    expect(noteCard).toBeDefined()
+    expect(noteCard!.type).toBe('note')
+    expect(noteCard!.meta.tags).toEqual(['便签标签'])
+    expect(noteCard!.note).toBe('想法')
+  })
+
   it('恢复视图状态（zoom / offset），对应「关掉再开视图还原」', async () => {
     const store = createStore(
       createSizeProvider([], {}, [], layoutJson((layout) => {

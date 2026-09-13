@@ -142,4 +142,71 @@ describe('mergeScannedWithLayout', () => {
     expect(result.cards).toEqual([])
     expect(result.missing).toHaveLength(1)
   })
+
+  // ---------------------------------------------------------------------------
+  // 2026-09-13 修复回归：便签（filePath 为空）重进空间后不得消失
+  // ---------------------------------------------------------------------------
+
+  /** 造一张 layout 里记录的便签（无文件，meta.tags 只存在于 layout） */
+  function savedNote(over: Partial<Card> = {}): Card {
+    return zCardSchema.parse({
+      id: 'c_900',
+      type: 'note',
+      filePath: '',
+      originalPath: '',
+      x: 400,
+      y: 100,
+      w: 200,
+      h: 160,
+      note: '想法',
+      meta: { tags: ['灵感'] },
+      ...over,
+    })
+  }
+
+  it('便签（filePath 为空）重进后原样保留（含标签与备注），不进 missing', () => {
+    const scanned = createCardsFromEntries([entry('a.jpg')])
+    const result = mergeScannedWithLayout(scanned, [
+      savedCard({ id: 'c_001', filePath: 'a.jpg' }),
+      savedNote(),
+    ])
+
+    const note = result.cards.find((card) => card.id === 'c_900')
+    expect(note).toBeDefined()
+    expect(note!.type).toBe('note')
+    expect(note!.note).toBe('想法')
+    expect(note!.meta.tags).toEqual(['灵感'])
+    expect(note!.x).toBe(400)
+    // 文件卡 missing 语义不变：便签不计入 missing
+    expect(result.missing).toEqual([])
+  })
+
+  it('空文件夹 + 只有便签 → 便签保留（此前会被整卡丢弃）', () => {
+    const result = mergeScannedWithLayout([], [savedNote()])
+
+    expect(result.cards).toHaveLength(1)
+    expect(result.cards[0].id).toBe('c_900')
+    expect(result.missing).toEqual([])
+  })
+
+  it('文件卡片上的 meta.tags 以 layout 为准保留', () => {
+    const scanned = createCardsFromEntries([entry('a.jpg')])
+    const saved = savedCard({ id: 'c_001', filePath: 'a.jpg', meta: { tags: ['参考', '待定'] } })
+
+    const result = mergeScannedWithLayout(scanned, [saved])
+
+    expect(result.cards[0].meta.tags).toEqual(['参考', '待定'])
+  })
+
+  it('便签场景同样幂等：合并结果再合并不变、不重复', () => {
+    const scanned = createCardsFromEntries([entry('a.jpg')])
+    const first = mergeScannedWithLayout(scanned, [
+      savedCard({ id: 'c_001', filePath: 'a.jpg' }),
+      savedNote(),
+    ])
+    const second = mergeScannedWithLayout(scanned, first.cards)
+
+    expect(second.cards).toEqual(first.cards)
+    expect(second.cards.filter((card) => card.id === 'c_900')).toHaveLength(1)
+  })
 })

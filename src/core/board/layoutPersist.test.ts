@@ -31,7 +31,7 @@ describe('布局持久化往返核对（T2.11）', () => {
           zIndex: 0,
           note: '',
           group: '参考资料',
-          meta: {},
+          meta: { tags: ['参考', '待定'], custom: { nested: 1 } },
         },
         {
           id: 'c_002',
@@ -74,13 +74,14 @@ describe('布局持久化往返核对（T2.11）', () => {
     const data = parsed.data
     // 视图
     expect(data.canvas).toEqual({ zoom: 0.67, offsetX: -120, offsetY: 45 })
-    // 卡片：位置 / 尺寸 / group / 备注
+    // 卡片：位置 / 尺寸 / group / 备注 / meta（标签等自由扩展字段）
     expect(data.cards[0]).toMatchObject({
       id: 'c_001',
       filePath: '参考资料/ref-01.jpg',
       x: 120,
       y: 200,
       group: '参考资料',
+      meta: { tags: ['参考', '待定'], custom: { nested: 1 } },
     })
     expect(data.cards[1].group).toBeUndefined()
     // 分区框：位置 / 折叠 / 颜色

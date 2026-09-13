@@ -11,6 +11,7 @@
 //   · 两边都有        → 保留 layout 的位置 / 尺寸 / 备注（用户的劳动成果）
 //   · 只在文件夹里有  → 新卡片，接在既有内容**下方**继续用网格铺（不覆盖已有位置）
 //   · 只在 layout 里有 → 文件已被删/移走，本次不显示（阶段二 T2.7 起交给 removed 记录处理）
+//   · filePath 为空   → 便签等无文件卡片，不参与匹配，原样保留（2026-09-13 修复：重进不再消失）
 //
 // 纯函数，可单元测试（不依赖 Tauri）。
 //
@@ -43,7 +44,14 @@ export function mergeScannedWithLayout(
   layoutCards: readonly Card[],
   grid: Required<GridOptions> = DEFAULT_GRID_OPTIONS,
 ): MergeResult {
-  const savedByPath = new Map(layoutCards.map((card) => [card.filePath, card]))
+  // 便签等「无文件卡片」（filePath 为空串）只活在 layout 里，不依赖文件夹扫描，
+  // 必须原样保留 —— 否则重进空间时会被下面的文件匹配当成「文件已丢失」而整卡丢弃
+  // （2026-09-13 修复的 bug：新建便签及其标签 / 备注在退出重进后消失）。
+  // 将来插件注册的无文件卡片类型同样按此规则走 layout 恢复。
+  const localCards = layoutCards.filter((card) => card.filePath === '')
+  const fileCards = layoutCards.filter((card) => card.filePath !== '')
+
+  const savedByPath = new Map(fileCards.map((card) => [card.filePath, card]))
 
   const kept: Card[] = []
   const fresh: Card[] = []
@@ -59,17 +67,17 @@ export function mergeScannedWithLayout(
     }
   }
 
-  const missing = layoutCards.filter((card) => !scanned.some((item) => item.filePath === card.filePath))
+  const missing = fileCards.filter((card) => !scanned.some((item) => item.filePath === card.filePath))
 
   if (fresh.length === 0) {
-    return { cards: kept, added: 0, missing }
+    return { cards: [...kept, ...localCards], added: 0, missing }
   }
 
   // 没有任何既有布局：扫描位置即最终位置。
   // ⚠️ 不能重铺 —— T2.5 起分区框卡片按「独立行带」扫描，重铺会打散分组排布、
   //    导致相邻分区框的包围盒相互重叠。
   if (kept.length === 0) {
-    return { cards: fresh, added: fresh.length, missing }
+    return { cards: [...fresh, ...localCards], added: fresh.length, missing }
   }
 
   // 新卡片接在既有内容的下方，避免与用户已经摆好的卡片重叠
@@ -88,5 +96,5 @@ export function mergeScannedWithLayout(
     return { ...card, id, x: positions[index].x, y: positions[index].y }
   })
 
-  return { cards: [...kept, ...placed], added: placed.length, missing }
+  return { cards: [...kept, ...placed, ...localCards], added: placed.length, missing }
 }
