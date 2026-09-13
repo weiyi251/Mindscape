@@ -46,8 +46,6 @@ import type { PartitionMoveResult } from './interaction/partitionDragController'
 import { PartitionResizeController } from './interaction/partitionResizeController'
 import type { PartitionResizeEdge } from './interaction/partitionResizeController'
 import { cardIdsInRect, normalizeRect } from './interaction/marquee'
-import { resolveShortcut } from '@/core/shortcuts/keys'
-import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import { computeSnap, snapThresholdInCanvas } from './interaction/snap'
 import { screenToCanvas } from './interaction/coordinates'
 import { contentRects } from './interaction/fitToContent'
@@ -56,6 +54,7 @@ import type { Point } from './interaction/connectionAnchor'
 import { visibleCanvasRect } from './lazyOriginal'
 import { SnapGuide } from './SnapGuide'
 import type { SnapGuideHandle } from './SnapGuide'
+import { useCanvasShortcuts } from './useCanvasShortcuts'
 import {
   computePartitionResizeLimits,
   PARTITION_TITLE_HEIGHT,
@@ -1020,55 +1019,18 @@ export function Canvas({
 
   // 快捷键（5.3）：一律交给「快捷键注册中心」派发 —— 有哪些操作、默认按什么键、
   // 遗留组合键都在 core/shortcuts/keys，用户可在设置页改绑（2026-09-13）。
-  // ⚠️ 按物理键位（event.code）匹配（Shift 把 key 变上档字符也不受影响）；
-  //    绑定同步读 getState()，不进 React 订阅（按键路径不能引起重渲染）。
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const action = resolveShortcut(event, useShortcutsStore.getState().bindings)
-      if (!action) return
-
-      switch (action) {
-        case 'view.fit':
-          event.preventDefault()
-          controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
-          return
-        case 'view.reset':
-          event.preventDefault()
-          controllerRef.current?.reset()
-          return
-        case 'canvas.selectAll':
-          event.preventDefault()
-          onSelectCardsRef.current?.(cardsRef.current.map((card) => card.id))
-          return
-        case 'canvas.search':
-          // preventDefault 是必需的 —— 浏览器/WebView 的「页内查找」会抢这个
-          // 组合键（且它查不到画布上的内容）
-          event.preventDefault()
-          onRequestSearchRef.current?.()
-          return
-        case 'canvas.escape':
-          onSelectCardsRef.current?.([])
-          return
-        case 'card.remove': {
-          // 已移除视图下不生效（T2.7 / 5.3）
-          if (removedModeRef.current) return
-          const ids = selectedIdsRef.current
-          if (ids.length > 0) {
-            event.preventDefault()
-            onRemoveCardsRef.current?.(ids)
-          }
-          return
-        }
-        default:
-          return
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [])
+  // 2026-09-14：监听与派发整块抽到 useCanvasShortcuts（本文件行数已顶死，
+  // 插件期还要往里埋钩子）。
+  useCanvasShortcuts({
+    controller: controllerRef,
+    cards: cardsRef,
+    partitions: partitionsRef,
+    removedMode: removedModeRef,
+    selectedIds: selectedIdsRef,
+    onSelectCards: onSelectCardsRef,
+    onRequestSearch: onRequestSearchRef,
+    onRemoveCards: onRemoveCardsRef,
+  })
 
   return (
     <div ref={wrapperRef} className="relative h-full w-full">

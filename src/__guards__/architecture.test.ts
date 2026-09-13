@@ -82,7 +82,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // ingestExternalFiles（拖入/粘贴共用）+ pasteExternalFiles + handleCopyCards
   // 写系统剪贴板 + Ctrl+V 外部分支，净 +79 行
   // 粘贴净化接线（2026-09-13，用户裁决）：cardWithoutEditables 调用 + 注释，净 +3 行
-  'src/pages/Board.tsx': 2117,
+  // 插件期拆分（2026-09-14，对应 docs/插件功能实施方案.md §7）：右键菜单组装整块
+  // 搬到 pages/board/contextMenus.tsx，实际 **1977** 行。阈值随之下调，
+  // 并刻意留 100 行余量给插件接线（钩子埋点 + pluginsStore 订阅 + 插件管理入口）。
+  'src/pages/Board.tsx': 2080,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
@@ -94,7 +97,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 便签编辑态选字 + 四向缩放（2026-09-13，用户要求）：编辑态早退分支 +
   // resizeSource 增加位置读写通道 + delegate 传位置 + edge 手柄分流，净 +32 行
   // （核心逻辑已在 cardResizeController.edgeResizeOutcome，此处只是接线）
-  'src/canvas/Canvas.tsx': 1192,
+  // 插件期拆分（2026-09-14，对应 docs/插件功能实施方案.md §7）：快捷键监听整块搬到
+  // canvas/useCanvasShortcuts.ts（派发逻辑仍单测覆盖），实际 **1154** 行。
+  // 阈值下调并留 31 行余量给插件接线（cardSelected / cardMoved 钩子埋点）。
+  'src/canvas/Canvas.tsx': 1185,
 }
 
 describe('规则 1：大文件行数只减不增', () => {

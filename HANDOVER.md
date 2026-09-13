@@ -62,10 +62,10 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
 - v0.4.0（2026-09-13）：架构守卫测试、布局改存软件目录 + 导出/导入空间、`Ctrl+F` 卡片搜索、`Ctrl+Shift+0` 缩放到全部内容、空间改名/收藏/排序、便签双击行内编辑；未分组文件直接落空间主目录（不再创建「未分类」文件夹）；修复便签及其标签重进空间后消失；移除未使用依赖
 - v0.5.0（2026-09-13）：跨应用剪贴板互通（空间文件 ↔ 系统剪贴板，clipboard-win）；便签四向拖拽缩放 + 编辑态可正常选字；图片卡备注/标签改卡片上方悬浮层并同行显示；空间卡操作按钮悬停显示在卡片外右上角；粘贴不再带出备注与标签；浅色便签纸配色
-- 全量基线（2026-09-14，插件开发前的代码清理与去重后）：Vitest **858 passed / 66 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **47 passed**、vite build 通过（403.00 kB / gzip 124.41 kB）
+- 全量基线（2026-09-14，插件开发前的代码清理 + 拆分 Board / Canvas 后）：Vitest **887 passed / 68 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **47 passed**、vite build 通过（404.21 kB / gzip 124.82 kB）
 - 代码清理已完成（2026-09-14，依据《代码审查报告-2026-09-13》批次 1–2 + 守卫规则 4 白名单化）：删 2 个孤儿图标；`safeZoom` / `pad2` / `toErrorMessage` / `core/geometry/rect.ts`（`unionRects` + `fitScale` + `centeredOffset` + `scaleToFit`）/ `core/storage/atomicWrite.ts` 各自收成唯一实现；`tagsOfMeta` / `metaWithTags` 迁到 `core/board/cardMeta.ts` 修掉层次倒置；过时注释 6 处订正；《缩略图重构计划》归档
 - 死代码清理（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
-- ⚠️ 仍未做（插件开发前必须做）：`pages/Board.tsx`（2094 行，棘轮上限 2117）与 `canvas/Canvas.tsx`（1192 行，**顶死**）的拆分 —— 插件接线的钩子埋点必然往这两个文件加行。详见 `docs/插件功能实施方案.md` §7
+- 硬前置已完成（2026-09-14）：`pages/Board.tsx`（2094 → **1977** 行）与 `canvas/Canvas.tsx`（1192 → **1154** 行）的拆分 —— 右键菜单组装搬到 `pages/board/contextMenus.tsx`，画布快捷键监听搬到 `canvas/useCanvasShortcuts.ts`，两处都留出了插件接线余量（详见 §9 与 `docs/插件功能实施方案.md` §7）。**下一步可以正式开始插件接线**（方案 §8 阶段 1 起）
 
 ## 4. 待办事项与已知问题
 
