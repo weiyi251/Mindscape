@@ -46,7 +46,8 @@ import type { PartitionMoveResult } from './interaction/partitionDragController'
 import { PartitionResizeController } from './interaction/partitionResizeController'
 import type { PartitionResizeEdge } from './interaction/partitionResizeController'
 import { cardIdsInRect, normalizeRect } from './interaction/marquee'
-import { isResetViewShortcut, isZoomToFitShortcut } from './interaction/zoomKeys'
+import { resolveShortcut } from '@/core/shortcuts/keys'
+import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import { computeSnap, snapThresholdInCanvas } from './interaction/snap'
 import { screenToCanvas } from './interaction/coordinates'
 import { contentRects } from './interaction/fitToContent'
@@ -1017,50 +1018,49 @@ export function Canvas({
     return () => root.removeEventListener('dblclick', handleDoubleClick)
   }, [])
 
-  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+Alt+0（兼容 Ctrl+Shift+0）缩放到全部内容
-  // （P1-4）/ Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
+  // 快捷键（5.3）：一律交给「快捷键注册中心」派发 —— 有哪些操作、默认按什么键、
+  // 遗留组合键都在 core/shortcuts/keys，用户可在设置页改绑（2026-09-13）。
+  // ⚠️ 按物理键位（event.code）匹配（Shift 把 key 变上档字符也不受影响）；
+  //    绑定同步读 getState()，不进 React 订阅（按键路径不能引起重渲染）。
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // ⚠️ 适应内容须先于复原视图判断；数字 0 用 zoomKeys 物理键位判断（Shift 会让 key 变上档字符）
-      if (isZoomToFitShortcut(event)) {
-        event.preventDefault()
-        controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
-        return
-      }
+      const action = resolveShortcut(event, useShortcutsStore.getState().bindings)
+      if (!action) return
 
-      if (isResetViewShortcut(event)) {
-        event.preventDefault()
-        controllerRef.current?.reset()
-        return
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-        event.preventDefault()
-        onSelectCardsRef.current?.(cardsRef.current.map((card) => card.id))
-        return
-      }
-
-      // Ctrl+F：打开搜索浮层。preventDefault 是必需的 —— 浏览器/WebView 的
-      // 「页内查找」会抢这个组合键（且它查不到画布上的内容）。
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault()
-        onRequestSearchRef.current?.()
-        return
-      }
-
-      if (event.key === 'Escape') {
-        onSelectCardsRef.current?.([])
-        return
-      }
-
-      // Delete / Backspace：移除选中卡片（T2.7 / 5.3）；已移除视图下不生效
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (removedModeRef.current) return
-        const ids = selectedIdsRef.current
-        if (ids.length > 0) {
+      switch (action) {
+        case 'view.fit':
           event.preventDefault()
-          onRemoveCardsRef.current?.(ids)
+          controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
+          return
+        case 'view.reset':
+          event.preventDefault()
+          controllerRef.current?.reset()
+          return
+        case 'canvas.selectAll':
+          event.preventDefault()
+          onSelectCardsRef.current?.(cardsRef.current.map((card) => card.id))
+          return
+        case 'canvas.search':
+          // preventDefault 是必需的 —— 浏览器/WebView 的「页内查找」会抢这个
+          // 组合键（且它查不到画布上的内容）
+          event.preventDefault()
+          onRequestSearchRef.current?.()
+          return
+        case 'canvas.escape':
+          onSelectCardsRef.current?.([])
+          return
+        case 'card.remove': {
+          // 已移除视图下不生效（T2.7 / 5.3）
+          if (removedModeRef.current) return
+          const ids = selectedIdsRef.current
+          if (ids.length > 0) {
+            event.preventDefault()
+            onRemoveCardsRef.current?.(ids)
+          }
+          return
         }
+        default:
+          return
       }
     }
 

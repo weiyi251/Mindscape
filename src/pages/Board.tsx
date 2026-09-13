@@ -29,14 +29,17 @@ import type { ContextMenuItemData, ContextMenuState } from '@/components/ui/cont
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
 import { SettingsPanel } from '@/components/ui/settings-panel'
+import { SETTINGS_TEXT } from '@/components/ui/settingsText'
 import { CardSearchPanel } from '@/components/ui/card-search'
-import { IconToolbar, TOOLBAR_PREF_KEY } from '@/components/ui/icon-toolbar'
-import type { IconToolbarItem } from '@/components/ui/icon-toolbar'
 import {
+  ArchiveIcon,
+  ArrowLeftIcon,
+  MoonIcon,
   NoteAddIcon,
   RedoIcon,
   RestoreIcon,
   SettingsIcon,
+  SunIcon,
   UndoIcon,
 } from '@/components/ui/icons'
 import { Canvas } from '@/canvas/Canvas'
@@ -79,6 +82,9 @@ import { registerAction } from '@/core/registry/actionRegistry'
 import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { useCardSearch } from '@/core/hooks/useCardSearch'
+import { formatCombo, resolveShortcut } from '@/core/shortcuts/keys'
+import type { ShortcutId } from '@/core/shortcuts/keys'
+import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
@@ -118,6 +124,15 @@ const CARD_COUNT_WARNING = 100
 function usedCardIds(): string[] {
   const state = useBoardStore.getState()
   return [...state.cards.map((card) => card.id), ...state.removed.map((entry) => entry.id)]
+}
+
+/**
+ * 右键菜单里的操作名带上当前快捷键（如「撤销（Ctrl+Z）」）。
+ * 同步读 store 的当前绑定 —— 菜单是「点开时才组装」的，因此改绑后立刻反映，
+ * 不需要为它挂 React 订阅。
+ */
+function withShortcutLabel(text: string, id: ShortcutId): string {
+  return `${text}（${formatCombo(useShortcutsStore.getState().bindings[id])}）`
 }
 
 export function Board() {
@@ -263,26 +278,10 @@ export function Board() {
     canvasApiRef.current?.centerOn(point)
   }, [])
 
-  // ---- 画布工具栏（2026-09-12 用户裁决）：顶栏操作类控件收进一条可折叠的纯图标工具栏 ----
-
-  /** 展开 / 收起偏好：localStorage 记忆，默认展开（不藏功能） */
-  const [toolbarExpanded, setToolbarExpanded] = useState(() => {
-    try {
-      return localStorage.getItem(TOOLBAR_PREF_KEY) !== 'collapsed'
-    } catch {
-      return true
-    }
-  })
-
-  const handleToolbarToggle = useCallback(() => {
-    const next = !toolbarExpanded
-    setToolbarExpanded(next)
-    try {
-      localStorage.setItem(TOOLBAR_PREF_KEY, next ? 'expanded' : 'collapsed')
-    } catch {
-      // localStorage 不可用（如无痕限制）：只影响记忆，不影响本次功能
-    }
-  }, [toolbarExpanded])
+  // ---- 画布工具栏（2026-09-12 用户裁决：顶栏操作类控件收进一条可折叠的纯图标工具栏） ----
+  // 2026-09-13 用户裁决：**取消这条折叠栏**，撤销 / 重做 / 新建便签 / 恢复选中
+  // 统一并入右键菜单（新建便签 → 画布空白菜单；撤销 / 重做 → 画布空白菜单；
+  // 恢复选中 → 已移除视图下的卡片菜单）。键盘快捷键不受影响。
 
   /** 单击卡片 / 空白（5.1）：全量替换选中集合 */
   const handleSelectCards = useCallback(
@@ -992,56 +991,9 @@ export function Board() {
     await ingestExternalFiles(paths, space.folderPath, dest, point, '粘贴')
   }, [ingestExternalFiles, resolvePasteDestination, viewportCenterCanvasPoint])
 
-  /** Ctrl+C 复制选中的图片卡片 / Ctrl+V 粘贴（应用内剪贴板优先于截图粘贴） */
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // 输入框里的复制 / 粘贴不拦截
-      const target = event.target as HTMLElement | null
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
-      ) {
-        return
-      }
-      if (removedView) return
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
-        if (selectedIds.length === 0) return
-        const snapshot = useBoardStore.getState()
-        const picked = snapshot.cards.filter(
-          (card) => selectedIds.includes(card.id) && isCopyableCard(card),
-        )
-        if (picked.length === 0) return
-        event.preventDefault()
-        void handleCopyCards(picked)
-        return
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
-        if (copiedCards.length === 0) {
-          // 应用内剪贴板为空：尝试系统剪贴板文件（2026-09-13 跨应用互通）。
-          // 剪贴板上没有文件（截图 / 纯文本）时这里静默返回，
-          // 原生 paste 事件照常触发截图粘贴（T3.8），因此不 preventDefault
-          void pasteExternalFiles()
-          return
-        }
-        event.preventDefault()
-        const point = viewportCenterCanvasPoint()
-        if (point) void pasteCards(point)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [
-    removedView,
-    selectedIds,
-    copiedCards,
-    handleCopyCards,
-    pasteCards,
-    pasteExternalFiles,
-    viewportCenterCanvasPoint,
-  ])
+  // 快捷键（Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / Delete / Esc）统一在
+  // 下方「快捷键派发」一处处理 —— 2026-09-13 起键位由快捷键注册中心决定，用户可改绑。
+  // 这里刻意不再单独挂监听：同一事件被多个 effect 各判一遍，最容易在改绑后出现「漏判」。
 
   // T3.6 拖入监听：必须用 Tauri v2 的 onDragDropEvent（17.4：HTML5 drop 拿不到真实路径）。
   // 只有 drop 落下才处理；enter/over 不做高亮（第一阶段保持简单）。
@@ -1255,19 +1207,6 @@ export function Board() {
     },
     [history, writer],
   )
-
-  /** 新建便签（工具栏入口，T3.4）：落在当前视口中心的画布坐标 */
-  const handleCreateNoteAtViewportCenter = useCallback(() => {
-    const api = canvasApiRef.current
-    if (!api) return
-    const root = document.querySelector('[data-canvas-root]')
-    const rect = root?.getBoundingClientRect()
-    const center = rect
-      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-      : { x: window.innerWidth / 2, y: window.innerHeight / 2 }
-    const point = api.screenToCanvasPoint(center.x, center.y)
-    createNoteAt(point.x - 100, point.y - 80)
-  }, [createNoteAt])
 
   /** 双击便签（T3.4）：浮层编辑内容，提交走 setCardNote 命令 */
   /**
@@ -1605,25 +1544,51 @@ export function Board() {
     pasteCards,
   ])
 
+  /** 撤销 / 重做（T2.9 / 7.4）：命令的 undo/redo 已含文件回滚，成功后同步落盘。
+   *  ⚠️ 定义位置必须早于下方右键菜单构造 —— 菜单的 deps 数组在渲染时就要求值，
+   *     放到后面会命中 const 的暂时性死区（TDZ）。 */
+  const handleUndo = useCallback(() => {
+    void history.undo().then((ok) => {
+      if (ok) writer.schedule()
+    })
+  }, [history, writer])
+
+  const handleRedo = useCallback(() => {
+    void history.redo().then((ok) => {
+      if (ok) writer.schedule()
+    })
+  }, [history, writer])
+
   // ---- T3.9 右键菜单的弹出入口：菜单数组一律来自配置中心 ----
 
   const handleCardContextMenu = useCallback(
     (card: Card, screen: { x: number; y: number }) => {
       const ctx = { spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '', card }
-      setContextMenu({
-        x: screen.x,
-        y: screen.y,
-        items: buildCardMenuFor(card).map((item) => ({
-          id: item.id,
-          label: item.label,
-          danger: item.id === CARD_ACTION.remove,
-          run: () => item.action(ctx),
-          // 「移动到…」展开二级文件夹选择菜单（2026-09-12 用户裁决）
-          ...(item.id === CARD_ACTION.move ? { run: () => handleCardMove(card, screen) } : {}),
-        })),
-      })
+      const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
+        id: item.id,
+        label: item.label,
+        danger: item.id === CARD_ACTION.remove,
+        run: () => item.action(ctx),
+        // 「移动到…」展开二级文件夹选择菜单（2026-09-12 用户裁决）
+        ...(item.id === CARD_ACTION.move ? { run: () => handleCardMove(card, screen) } : {}),
+      }))
+
+      // 「恢复」（2026-09-13 用户裁决）：原来挂在顶栏的可折叠工具栏上，
+      // 取消工具栏后并入右键菜单；右键的卡片若在选中集合里就整批恢复
+      if (removedView) {
+        const targets = selectedIds.includes(card.id) ? selectedIds : [card.id]
+        items.unshift({
+          id: 'card.restore',
+          label: targets.length > 1 ? `恢复选中的 ${targets.length} 张卡片` : '恢复此卡片',
+          icon: <RestoreIcon />,
+          separatorBefore: true,
+          run: () => handleRestoreCards(targets),
+        })
+      }
+
+      setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [handleCardMove],
+    [handleCardMove, removedView, selectedIds, handleRestoreCards],
   )
 
   const handlePartitionContextMenu = useCallback(
@@ -1676,8 +1641,9 @@ export function Board() {
 
   const handleCanvasContextMenu = useCallback(
     (canvasPoint: { x: number; y: number }, screen: { x: number; y: number }) => {
-      // 空白菜单：核心只放「新建便签」一项（配置中心之外的核心画布动作，
-      // 与 CARD_ACTION 一样走 actionRegistry 登记以保持一致）
+      // 空白菜单：新建便签 / 粘贴 / 撤销 / 重做（后者是 2026-09-13 取消顶栏
+      // 可折叠工具栏后并入的；配置中心之外的核心画布动作，与 CARD_ACTION 同样
+      // 走 actionRegistry 登记以保持一致）
       setContextMenu({
         x: screen.x,
         y: screen.y,
@@ -1685,6 +1651,7 @@ export function Board() {
           {
             id: 'canvas.createNote',
             label: '新建便签',
+            icon: <NoteAddIcon />,
             run: () => createNoteAt(canvasPoint.x - 100, canvasPoint.y - 20),
           },
           // 应用内剪贴板非空时：空白处也可直接粘贴。
@@ -1710,38 +1677,26 @@ export function Board() {
                 },
               ]
             : []),
+          {
+            id: 'canvas.undo',
+            label: withShortcutLabel('撤销', 'edit.undo'),
+            icon: <UndoIcon />,
+            separatorBefore: true,
+            run: handleUndo,
+          },
+          {
+            id: 'canvas.redo',
+            label: withShortcutLabel('重做', 'edit.redo'),
+            icon: <RedoIcon />,
+            run: handleRedo,
+          },
         ],
       })
     },
-    [createNoteAt, copiedCards.length, pasteCards],
+    [createNoteAt, copiedCards.length, pasteCards, handleUndo, handleRedo],
   )
 
-  // Delete 删除选中的连线（T3.2）。卡片删除由 Canvas 的 Delete 处理，二者互斥：
-  // 同时选中卡片和连线时优先删卡片（视觉焦点在卡片上）
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') return
-      if (selectedIds.length > 0 || selectedConnectionIds.length === 0) return
-      if (removedView) return
-
-      event.preventDefault()
-      handleRemoveConnections(selectedConnectionIds)
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [selectedIds.length, selectedConnectionIds, removedView, handleRemoveConnections])
-
-  // Esc 取消挂起连线（T3.9 提示条里的说明）
-  useEffect(() => {
-    if (!pendingConnectFrom) return
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      setPendingConnectFrom(null)
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [pendingConnectFrom])
+  // Delete 删除选中的连线 / Esc 取消挂起连线：同样收进下方「快捷键派发」一处处理
 
   // -------------------------------------------------------------------------
   // 进入 / 离开空间
@@ -1792,92 +1747,101 @@ export function Board() {
     }
   }, [writer])
 
-  /** 撤销 / 重做（T2.9 / 7.4）：命令的 undo/redo 已含文件回滚，成功后同步落盘 */
-  const handleUndo = useCallback(() => {
-    void history.undo().then((ok) => {
-      if (ok) writer.schedule()
-    })
-  }, [history, writer])
-
-  const handleRedo = useCallback(() => {
-    void history.redo().then((ok) => {
-      if (ok) writer.schedule()
-    })
-  }, [history, writer])
-
-  // Ctrl+Z 撤销 / Ctrl+Shift+Z（及 Ctrl+Y）重做（7.4）
+  // ---- 快捷键派发（2026-09-13 改绑支持）----
+  // 板级操作一处收齐：复制 / 粘贴 / 撤销 / 重做 / 立即保存 / 移除连线 / 取消挂起连线。
+  // 键位不再写死 —— resolveShortcut 按快捷键注册中心的当前绑定（含遗留组合键）派发，
+  // 用户在设置面板改绑后立刻生效（同步读 getState()，不进 React 订阅）。
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey && !event.metaKey) return
-      const key = event.key.toLowerCase()
+      const action = resolveShortcut(event, useShortcutsStore.getState().bindings)
+      if (!action) return
 
-      if (key === 'z' && !event.shiftKey) {
+      // Esc 取消挂起连线（T3.9 提示条里的说明）：挂在输入框守卫之前，
+      // 与旧实现一致（旧版 Esc 分支没有输入框判断）
+      if (action === 'canvas.escape') {
+        if (pendingConnectFrom) setPendingConnectFrom(null)
+        return
+      }
+
+      // 输入框里的按键不拦截（复制 / 粘贴 / 撤销在输入框里另有语义）
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return
+      }
+
+      if (action === 'edit.undo') {
         event.preventDefault()
         handleUndo()
         return
       }
-      if ((key === 'z' && event.shiftKey) || key === 'y') {
+      if (action === 'edit.redo') {
         event.preventDefault()
         handleRedo()
+        return
+      }
+      if (action === 'layout.save') {
+        event.preventDefault()
+        void writer.flush()
+        return
+      }
+
+      // 已移除视图下不提供复制 / 粘贴 / 删除
+      if (removedView) return
+
+      if (action === 'card.copy') {
+        if (selectedIds.length === 0) return
+        const snapshot = useBoardStore.getState()
+        const picked = snapshot.cards.filter(
+          (card) => selectedIds.includes(card.id) && isCopyableCard(card),
+        )
+        if (picked.length === 0) return
+        event.preventDefault()
+        void handleCopyCards(picked)
+        return
+      }
+
+      if (action === 'card.paste') {
+        if (copiedCards.length === 0) {
+          // 应用内剪贴板为空：尝试系统剪贴板文件（2026-09-13 跨应用互通）。
+          // 剪贴板上没有文件（截图 / 纯文本）时这里静默返回，
+          // 原生 paste 事件照常触发截图粘贴（T3.8），因此不 preventDefault
+          void pasteExternalFiles()
+          return
+        }
+        event.preventDefault()
+        const point = viewportCenterCanvasPoint()
+        if (point) void pasteCards(point)
+        return
+      }
+
+      // Delete 删除选中的连线（T3.2）。卡片删除由 Canvas 侧处理，二者互斥：
+      // 同时选中卡片和连线时优先删卡片（视觉焦点在卡片上）
+      if (action === 'card.remove') {
+        if (selectedIds.length > 0 || selectedConnectionIds.length === 0) return
+        event.preventDefault()
+        handleRemoveConnections(selectedConnectionIds)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleUndo, handleRedo])
-
-  // Ctrl+S 强制落盘（17.6）
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.key.toLowerCase() !== 's') return
-      event.preventDefault()
-      void writer.flush()
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [writer])
-
-  // -------------------------------------------------------------------------
-  // 工具栏条目（2026-09-12 用户裁决）
-  // 一律纯图标：文字只出现在原生 title / aria-label 上，按钮面不出现任何标签；
-  // 「恢复选中」的张数改用计数徽标承载，避免因为去文字而丢掉信息。
-  // -------------------------------------------------------------------------
-
-  const toolbarItems = useMemo<IconToolbarItem[]>(() => {
-    const items: IconToolbarItem[] = [
-      { id: 'undo', label: '撤销（Ctrl+Z）', icon: <UndoIcon />, onClick: handleUndo },
-      { id: 'redo', label: '重做（Ctrl+Shift+Z）', icon: <RedoIcon />, onClick: handleRedo },
-    ]
-
-    if (removedView) {
-      // 已移除视图才有「恢复选中」，且只有选中了灰卡才出现
-      if (selectedIds.length > 0) {
-        items.push({
-          id: 'restore',
-          label: `恢复选中的 ${selectedIds.length} 张卡片`,
-          icon: <RestoreIcon />,
-          badge: selectedIds.length,
-          onClick: () => handleRestoreCards(selectedIds),
-        })
-      }
-    } else {
-      items.push({
-        id: 'note',
-        label: '新建便签',
-        icon: <NoteAddIcon />,
-        onClick: handleCreateNoteAtViewportCenter,
-      })
-    }
-
-    return items
   }, [
+    removedView,
+    pendingConnectFrom,
+    selectedIds,
+    selectedConnectionIds,
+    copiedCards,
+    handleCopyCards,
+    pasteCards,
+    pasteExternalFiles,
+    viewportCenterCanvasPoint,
     handleUndo,
     handleRedo,
-    removedView,
-    selectedIds,
-    handleRestoreCards,
-    handleCreateNoteAtViewportCenter,
+    handleRemoveConnections,
+    writer,
   ])
 
   const handleBack = async () => {
@@ -1906,57 +1870,69 @@ export function Board() {
             {space?.folderPath}
           </p>
         </div>
-        {readOnly ? (
-          <span className="ml-auto shrink-0 rounded bg-destructive/15 px-1.5 py-0.5 text-[11px] text-destructive">
-            只读
+        {/* 右侧按钮组（2026-09-13 用户裁决）：显示已移除 → 切换深浅色模式 → 设置。
+            三者同属「全局开关」，合并进一个 ml-auto 容器 —— 只有一个自动外边距，
+            窄窗口换行时整组仍然贴右，不会出现按钮散落在行首的情况 */}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {readOnly ? (
+            <span className="shrink-0 rounded bg-destructive/15 px-1.5 py-0.5 text-[11px] text-destructive">
+              只读
+            </span>
+          ) : null}
+          <span className="shrink-0 rounded bg-secondary/15 px-1.5 py-0.5 text-[11px] text-secondary">
+            {space?.type}
           </span>
-        ) : null}
-        <span
-          className={[
-            'shrink-0 rounded bg-secondary/15 px-1.5 py-0.5 text-[11px] text-secondary',
-            readOnly ? '' : 'ml-auto',
-          ].join(' ')}
-        >
-          {space?.type}
-        </span>
 
-        {/* 画布工具栏（2026-09-12 用户裁决）：撤销 / 重做 / 新建便签（已移除视图下是恢复选中）
-            统一收进这条**可折叠**的**纯图标**工具栏；文字只保留在原生 title 上 */}
-        <IconToolbar
-          items={toolbarItems}
-          expanded={toolbarExpanded}
-          onToggle={handleToolbarToggle}
-        />
+          {/* 显示已移除（仅空间内有意义）：数量用计数徽标承载，不写成文字 */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="relative shrink-0"
+            title={
+              removedView
+                ? SETTINGS_TEXT.removedBack
+                : `${SETTINGS_TEXT.removedShow}${removed.length > 0 ? `（${removed.length}）` : ''}`
+            }
+            aria-label={removedView ? SETTINGS_TEXT.removedBack : SETTINGS_TEXT.removedShow}
+            onClick={handleToggleRemovedView}
+          >
+            {removedView ? <ArrowLeftIcon /> : <ArchiveIcon />}
+            {!removedView && removed.length > 0 ? (
+              <span className="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-primary px-0.5 text-center text-[9px] font-medium leading-[14px] text-primary-foreground">
+                {removed.length}
+              </span>
+            ) : null}
+          </Button>
 
-        {/* 设置（2026-09-12）：主题切换 / 显示已移除 / 检查更新 收进面板，顶栏只留一个**纯图标**入口 */}
-        <Button
-          variant={settingsOpen ? 'default' : 'outline'}
-          size="icon"
-          className="shrink-0"
-          title="设置（主题 / 已移除视图 / 检查更新）"
-          aria-label="设置"
-          onClick={() => setSettingsOpen((value) => !value)}
-        >
-          <SettingsIcon />
-        </Button>
+          {/* 切换深浅色模式：纯图标（太阳 / 月亮二选一），按钮面上不出现文字 */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            title={theme === 'dark' ? SETTINGS_TEXT.toLight : SETTINGS_TEXT.toDark}
+            aria-label={theme === 'dark' ? SETTINGS_TEXT.toLight : SETTINGS_TEXT.toDark}
+            onClick={handleToggleTheme}
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </Button>
+
+          {/* 设置（2026-09-13）：弹窗模式，内含「自定义快捷键」「版本更新」两页 */}
+          <Button
+            variant={settingsOpen ? 'default' : 'outline'}
+            size="icon"
+            className="shrink-0"
+            title="设置（自定义快捷键 / 版本更新）"
+            aria-label="设置"
+            onClick={() => setSettingsOpen((value) => !value)}
+          >
+            <SettingsIcon />
+          </Button>
+        </div>
       </header>
 
-      {/* 设置面板：绝对定位贴页面右上角（点外部关闭）。
-          ⚠️ 挂根容器而非头部按钮：绝对定位的 `right-3` 以最近定位祖先为基准，
-          挂进头部（flex-wrap 换行）后窄窗口会被按钮位置带到视口外。
-          2026-09-12：与主界面（SpaceList）复用同一个组件，功能与样式一致 */}
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        removedView={removedView}
-        removedCount={removed.length}
-        onToggleRemovedView={() => {
-          setSettingsOpen(false)
-          handleToggleRemovedView()
-        }}
-      />
+      {/* 设置弹窗（2026-09-13 改弹窗模式）：可拖动标题栏移动、右下角缩放，
+          位置尺寸记在 localStorage；不再依赖按钮位置，窄窗口也不会跑出视口 */}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {status === 'error' ? (
         <div className="border-b border-destructive/40 bg-destructive/5 px-5 py-2 text-xs text-destructive">

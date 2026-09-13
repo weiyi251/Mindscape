@@ -9,10 +9,11 @@
 //
 // 顶栏入口（2026-09-12 用户裁决）：全部收敛成**纯图标**——
 //   · ＋ 新建空间（原为带文字的按钮）；
-//   · ⚙ 设置：挂 SettingsPanel，与空间内（Board）**同一个组件**，
-//     功能与样式完全一致；「检查更新」（原独立按钮）随之收进面板。
-//     两处的差异只有一项：「显示已移除」只对空间内有意义，主界面不传该回调 → 不渲染。
+//   · ⚙ 设置：挂 SettingsPanel（2026-09-13 起为**可拖动弹窗**，与空间内 Board
+//     复用同一个组件；「检查更新」收在弹窗的「版本更新」页里）。
 //     图标按钮一律用 aria-label / title 承载语义（无文字）。
+// 2026-09-13 追加：主题切换也从面板里搬出来，变成设置左侧的太阳 / 月亮纯图标按钮
+//   （与空间内顶栏保持一致的顺序与外观）。
 //
 // 实现任务：T1.1 / T1.2（阶段一）。
 // ============================================================================
@@ -24,7 +25,8 @@ import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import { SettingsPanel } from '@/components/ui/settings-panel'
-import { ImportIcon, PlusIcon, SettingsIcon } from '@/components/ui/icons'
+import { SETTINGS_TEXT } from '@/components/ui/settingsText'
+import { ImportIcon, MoonIcon, PlusIcon, SettingsIcon, SunIcon } from '@/components/ui/icons'
 import { SPACE_TYPE_PRESETS, parseLayout } from '@/core/types'
 import type { Space } from '@/core/types'
 import { useTheme } from '@/core/hooks/useTheme'
@@ -321,25 +323,30 @@ export function SpaceList() {
           >
             <ImportIcon />
           </Button>
+          {/* 切换深浅色模式（2026-09-13）：从设置面板搬到顶栏，纯图标（太阳 / 月亮） */}
+          <Button
+            variant="outline"
+            size="icon"
+            title={theme === 'dark' ? SETTINGS_TEXT.toLight : SETTINGS_TEXT.toDark}
+            aria-label={theme === 'dark' ? SETTINGS_TEXT.toLight : SETTINGS_TEXT.toDark}
+            onClick={handleToggleTheme}
+          >
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+          </Button>
           <Button
             variant={settingsOpen ? 'default' : 'outline'}
             size="icon"
-            title="设置（主题 / 检查更新）"
+            title="设置（自定义快捷键 / 版本更新）"
             aria-label="设置"
             onClick={() => setSettingsOpen((value) => !value)}
           >
             <SettingsIcon />
           </Button>
-
-          <SettingsPanel
-            open={settingsOpen}
-            onClose={() => setSettingsOpen(false)}
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-            panelClassName="right-0 top-full mt-2"
-          />
         </div>
       </header>
+
+      {/* 设置弹窗（2026-09-13 改弹窗模式）：可拖动标题栏移动、右下角缩放 */}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <main className="flex-1 overflow-auto px-8 py-6">
         {corruptedNotice ? (

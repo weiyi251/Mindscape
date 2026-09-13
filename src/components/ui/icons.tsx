@@ -165,3 +165,50 @@ export function CloseIcon({ className }: IconProps) {
     </StrokeIcon>
   )
 }
+
+/** 太阳（2026-09-13：顶栏「切换深浅色模式」——当前深色时显示，表示可切到浅色） */
+export function SunIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </StrokeIcon>
+  )
+}
+
+/** 月亮（2026-09-13：顶栏「切换深浅色模式」——当前浅色时显示，表示可切到深色） */
+export function MoonIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z" />
+    </StrokeIcon>
+  )
+}
+
+/** 归档盒（2026-09-13：顶栏「显示已移除」——移入 `_已移除` 的卡片仍在硬盘上） */
+export function ArchiveIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <rect x="3" y="4" width="18" height="4" rx="1" />
+      <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+      <path d="M10 12h4" />
+    </StrokeIcon>
+  )
+}
+
+/** 左向箭头（2026-09-13：已移除视图下「返回画布」） */
+export function ArrowLeftIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="M19 12H5" />
+      <path d="m12 19-7-7 7-7" />
+    </StrokeIcon>
+  )
+}

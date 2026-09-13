@@ -11,6 +11,7 @@
 // ============================================================================
 
 import { useEffect, useRef } from 'react'
+import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
@@ -24,6 +25,10 @@ export interface ContextMenuItemData {
   /** 色板等自定义前缀色块 */
   swatch?: string
   disabled?: boolean
+  /** 行内图标（2026-09-13：撤销 / 重做等操作并入右键菜单后需要图形辅助识别） */
+  icon?: ReactNode
+  /** 在该项之前画一条分隔线（用于把「全局操作」与「针对本体的操作」分开） */
+  separatorBefore?: boolean
 }
 
 export interface ContextMenuState {
@@ -76,29 +81,33 @@ export function ContextMenu({ state, onClose }: ContextMenuProps) {
       onContextMenu={(event) => event.preventDefault()}
     >
       {state.items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          disabled={item.disabled}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs',
-            'hover:bg-accent hover:text-accent-foreground',
-            item.danger && 'text-destructive hover:bg-destructive/10',
-            item.disabled && 'cursor-default text-muted-foreground hover:bg-transparent',
-          )}
-          onClick={() => {
-            onClose()
-            if (!item.disabled) item.run()
-          }}
-        >
-          {item.swatch ? (
-            <span
-              className="h-3 w-3 shrink-0 rounded-full border border-border"
-              style={{ backgroundColor: item.swatch }}
-            />
-          ) : null}
-          {item.label}
-        </button>
+        <div key={item.id}>
+          {item.separatorBefore ? <div className="my-1 h-px bg-border" /> : null}
+          <button
+            type="button"
+            disabled={item.disabled}
+            className={cn(
+              'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs',
+              'hover:bg-accent hover:text-accent-foreground',
+              '[&_svg]:size-3.5 [&_svg]:shrink-0',
+              item.danger && 'text-destructive hover:bg-destructive/10',
+              item.disabled && 'cursor-default text-muted-foreground hover:bg-transparent',
+            )}
+            onClick={() => {
+              onClose()
+              if (!item.disabled) item.run()
+            }}
+          >
+            {item.swatch ? (
+              <span
+                className="h-3 w-3 shrink-0 rounded-full border border-border"
+                style={{ backgroundColor: item.swatch }}
+              />
+            ) : null}
+            {item.icon}
+            {item.label}
+          </button>
+        </div>
       ))}
     </div>
   )
