@@ -1,6 +1,7 @@
 // ============================================================================
 // 模块说明（中文）
-// 「缩放到全部内容」（P1-4，Ctrl+Shift+0）的纯计算层。
+// 「缩放到全部内容」（P1-4）的纯计算层。主快捷键 Ctrl+Alt+0
+// （2026-09-13 改绑：原 Ctrl+Shift+0 被本机输入法/系统吞键，旧键作为 legacyCombos 兼容保留）。
 //
 // 对应计划要求：计算所有卡片 / 分区包围盒 → 反解 zoom / offset，
 // 写入动作在 ViewportController.fitToContent（直写 style.transform，不经过
@@ -16,24 +17,23 @@
 //   · 包围盒中心对准视口中心
 //   · 空内容 / 视口尺寸非法 → 返回 null，由调用方决定退化行为（本产品选择不动）
 //
+// 2026-09-14 去重：本文件原先自带 `FitRect` 类型与 `unionRects` 实现，
+// 与 canvas/minimapGeometry.ts 逐行相同。现统一用 core/geometry/rect.ts 的
+// `Rect` / `unionRects` / `fitScale`，本文件只保留「钳制 zoom + 按视口中心对齐
+// + 输出 ViewportState」这层包装（小地图用同一个 fitScale，但偏移口径不同）。
+//
 // 纯函数，node 环境直接单测。
 //
 // 实现任务：P1-4。
 // ============================================================================
 
 import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
+import { fitScale, unionRects } from '@/core/geometry/rect'
+import type { Rect } from '@/core/geometry/rect'
 import type { Card, Partition } from '@/core/types'
 
 import { clampZoom } from './coordinates'
 import type { ViewportState } from './coordinates'
-
-/** 参与包围盒计算的矩形（画布坐标） */
-export interface FitRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
 
 /** 默认四周留白（CSS 像素）：完全贴边会显得顶格，不好看也不好点 */
 const FIT_PADDING = 40
@@ -42,7 +42,7 @@ const FIT_PADDING = 40
 export function contentRects(
   cards: readonly Pick<Card, 'x' | 'y' | 'w' | 'h'>[],
   partitions: readonly Partition[],
-): FitRect[] {
+): Rect[] {
   return [
     ...cards.map((card) => ({ x: card.x, y: card.y, w: card.w, h: card.h })),
     ...partitions.map((partition) => ({
@@ -52,22 +52,6 @@ export function contentRects(
       h: partition.collapsed ? PARTITION_TITLE_HEIGHT : partition.h,
     })),
   ]
-}
-
-/** 所有矩形的包围盒；空集合返回 null */
-export function unionRects(rects: readonly FitRect[]): FitRect | null {
-  if (rects.length === 0) return null
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const rect of rects) {
-    minX = Math.min(minX, rect.x)
-    minY = Math.min(minY, rect.y)
-    maxX = Math.max(maxX, rect.x + rect.w)
-    maxY = Math.max(maxY, rect.y + rect.h)
-  }
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
 
 export interface FitViewportOptions {
@@ -83,7 +67,7 @@ export interface FitViewportOptions {
  * 返回 null 的情况：没有内容、或视口尺寸非法（0 / NaN）—— 调用方应保持现状不动。
  */
 export function fitViewportState(
-  rects: readonly FitRect[],
+  rects: readonly Rect[],
   options: FitViewportOptions,
 ): ViewportState | null {
   const bounds = unionRects(rects)
@@ -93,17 +77,15 @@ export function fitViewportState(
   if (!(width > 0) || !(height > 0)) return null
 
   const padding = options.padding ?? FIT_PADDING
-  // 视口小到放不下两侧留白时，按 1px 可用区算，保证仍能得到一个合法 zoom
-  const usableWidth = Math.max(width - padding * 2, 1)
-  const usableHeight = Math.max(height - padding * 2, 1)
-  const boundsWidth = Math.max(bounds.w, 1)
-  const boundsHeight = Math.max(bounds.h, 1)
+  // ⚠️ 顺序不可颠倒：先由内容与可用区算出基础缩放比，**钳制之后**再用它算偏移。
+  //    若先用未钳制的 scale 算偏移、再把 zoom 钳小，内容会被摆到视口外
+  //    （「单卡片放大到 MAX_ZOOM」这一路会直接跑偏）。
+  const zoom = clampZoom(fitScale(bounds, { width, height }, padding))
 
-  const zoom = clampZoom(Math.min(usableWidth / boundsWidth, usableHeight / boundsHeight))
+  // 偏移按**视口中心**对齐包围盒中心；容器内坐标 = 画布坐标 × zoom + offset
   const centerX = bounds.x + bounds.w / 2
   const centerY = bounds.y + bounds.h / 2
 
-  // 容器内坐标 = 画布坐标 × zoom + offset；令包围盒中心落在视口中心
   return {
     zoom,
     offsetX: width / 2 - centerX * zoom,

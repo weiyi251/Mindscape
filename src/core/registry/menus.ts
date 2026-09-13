@@ -17,6 +17,7 @@
 //   · 菜单项的 action 不在本文件写业务，而是转交 actionRegistry（见该文件说明）。
 //
 // 实现任务：T0.10（准备层）。
+// ⚠️ 本文件早已接线投产：Board 的右键菜单直接调用 buildCardMenuFor / buildPartitionMenuFor。
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'

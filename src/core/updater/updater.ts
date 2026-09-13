@@ -20,6 +20,7 @@ import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 
 import { isDesktopRuntime } from '@/core/utils/runtime'
+import { toErrorMessage } from '@/core/utils/errorMessage'
 
 /** 更新流程涉及的全部中文文案，统一在此维护（组件内不硬编码中文） */
 export const UPDATE_TEXT = {
@@ -73,7 +74,7 @@ export async function checkForUpdate(): Promise<UpdateCheckResult> {
       update,
     }
   } catch (error) {
-    return { kind: 'error', message: toMessage(error) }
+    return { kind: 'error', message: toErrorMessage(error) }
   }
 }
 
@@ -105,9 +106,4 @@ export async function downloadAndInstall(
 /** 重启应用，使已安装的更新生效 */
 export async function restartApp(): Promise<void> {
   await relaunch()
-}
-
-function toMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  return String(error)
 }

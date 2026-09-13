@@ -11,21 +11,14 @@
 
 import { forwardRef, useImperativeHandle, useRef } from 'react'
 
+import type { Rect } from '@/core/geometry/rect'
 import type { GuideLine } from './interaction/snap'
-
-/** 可见画布区域（与 lazyOriginal 的可见矩形同一套坐标） */
-export interface CanvasBounds {
-  x: number
-  y: number
-  w: number
-  h: number
-}
 
 export interface SnapGuideHandle {
   /** 更新参考线；传 null 表示该轴当前无对齐 */
   update(
     guides: { vertical: GuideLine | null; horizontal: GuideLine | null },
-    bounds: CanvasBounds,
+    bounds: Rect,
   ): void
   hide(): void
 }

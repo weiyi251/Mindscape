@@ -10,12 +10,14 @@
 // 渲染时按 card.type 查表（getCardTypeDef），新增类型只需注册一条，不改渲染逻辑。
 // 插件类型由 pluginCenter.registerCardType 注册，本模块的查表函数会兜底到插件注册中心。
 //
-// ⚠️ 当前 render 的完成度：
-//    file / note 是极简可视占位（文件=扩展名徽标+文件名 / 便签=文字内容）；
-//    image 自 T1.4 起走真实图片渲染（经 17.10 的 assetProtocol 通道），
-//    2026-09-12 方案 A 起直接加载原图（可见时由懒加载写入 src，无缩略图）。
+// ⚠️ 当前 render 的完成度（2026-09-13 订正，原写「file / note 是极简可视占位」已不准确）：
+//    file  = 扩展名徽标 + 文件名（仍是轻量渲染）；
+//    note  = 完整便签（便签纸配色、行内编辑、四向缩放、备注条 / 标签条）；
+//    image = 自 T1.4 起走真实图片渲染（经 17.10 的 assetProtocol 通道），
+//            2026-09-12 方案 A 起直接加载原图（可见时由懒加载写入 src，无缩略图）。
 //
 // 实现任务：T0.10（准备层）/ T1.4（图片类型接入 asset 通道）。
+// ⚠️ 本文件早已接线投产（Board 与卡片渲染都在用），不再是「准备层骨架」。
 // ============================================================================
 
 import { Fragment, createElement } from 'react'
@@ -25,7 +27,7 @@ import type { Card, CoreCardType } from '@/core/types'
 import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
-import { tagsOfMeta } from '@/core/commands/impl/setCardMeta'
+import { tagsOfMeta } from '@/core/board/cardMeta'
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'
 import { getRegisteredCardType, listRegisteredCardTypes } from './pluginCenter'
 import { CORE_CARD_MENU_ITEMS } from './menus'

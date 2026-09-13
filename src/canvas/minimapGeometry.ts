@@ -1,22 +1,22 @@
 // ============================================================================
 // 模块说明（中文）
-// 小地图（2026-09-12 新增）的纯计算部分：内容包围盒、画布 → 小地图的映射变换。
+// 小地图（2026-09-12 新增）的纯计算部分：画布 → 小地图的映射变换。
 //
 // 为什么单独拆出来：绘制本身是 DOM/canvas 胶水（不进 React state，17.3），
-// 但「框住全部内容 + 等比缩放 + 坐标互转」是纯几何，可脱离 DOM 单测。
+// 但「等比缩放 + 坐标互转」是纯几何，可脱离 DOM 单测。
 // ⚠️ 文件名用 minimapGeometry（而不是 minimap）：与组件 MiniMap.tsx 在
 // Windows 大小写不敏感文件系统上只差一个字母，会触发 TS 大小写冲突。
 //
 // 映射约定：小地图坐标 = 画布坐标 × scale + offset（先等比缩放再平移居中）。
+//
+// 2026-09-14 去重：原先本文件自带一份 `unionRects` 与 `fitTransform`，
+// 与 canvas/interaction/fitToContent.ts 的实现逐行相同。现统一到
+// `core/geometry/rect.ts`（`Rect` / `unionRects` / `scaleToFit`），
+// 本文件只保留小地图特有的**命名与输出形态**。
 // ============================================================================
 
-/** 画布坐标系 / 小地图坐标系通用的矩形 */
-export interface BoundsRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
+import { scaleToFit } from '@/core/geometry/rect'
+import type { Rect } from '@/core/geometry/rect'
 
 /** 画布 → 小地图的线性变换：mx = x * scale + offsetX */
 export interface MinimapTransform {
@@ -26,49 +26,19 @@ export interface MinimapTransform {
 }
 
 /**
- * 一组矩形的并集包围盒；空输入（或全为 null）返回 null。
- * 用于把卡片 / 分区 / 当前视口框一起框进小地图视野。
- */
-export function unionRects(
-  rects: readonly (BoundsRect | null | undefined)[],
-): BoundsRect | null {
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-
-  for (const rect of rects) {
-    if (!rect) continue
-    minX = Math.min(minX, rect.x)
-    minY = Math.min(minY, rect.y)
-    maxX = Math.max(maxX, rect.x + rect.w)
-    maxY = Math.max(maxY, rect.y + rect.h)
-  }
-
-  if (!Number.isFinite(minX)) return null
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
-}
-
-/**
  * 计算把 bounds 等比缩放后居中放进 viewW × viewH（四周留 padding）的变换。
  * 退化输入（宽或高为 0，如空内容）按 1 处理，scale 兜底为 1，避免除零。
+ *
+ * 实现委托给 core/geometry/rect.ts 的 scaleToFit（同一算法，唯一的差异是本函数
+ * 收 viewW / viewH 两个参数而非 view 对象 —— 保持既有调用点不变）。
  */
 export function fitTransform(
-  bounds: BoundsRect,
+  bounds: Rect,
   viewW: number,
   viewH: number,
   padding: number,
 ): MinimapTransform {
-  const innerW = Math.max(1, viewW - padding * 2)
-  const innerH = Math.max(1, viewH - padding * 2)
-  const w = Math.max(1, bounds.w)
-  const h = Math.max(1, bounds.h)
-
-  const scale = Math.min(innerW / w, innerH / h)
-  const offsetX = padding + (innerW - w * scale) / 2 - bounds.x * scale
-  const offsetY = padding + (innerH - h * scale) / 2 - bounds.y * scale
-
-  return { scale, offsetX, offsetY }
+  return scaleToFit(bounds, { width: viewW, height: viewH }, padding)
 }
 
 /** 画布坐标 → 小地图坐标 */

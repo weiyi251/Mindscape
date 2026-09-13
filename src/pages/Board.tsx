@@ -69,7 +69,7 @@ import { createRemoveCardsCommand } from '@/core/commands/impl/removeCards'
 import { createRestoreCardsCommand } from '@/core/commands/impl/restoreCards'
 import { createSetCardsZIndexCommand, zIndexDeltasFor } from '@/core/commands/impl/setCardsZIndex'
 import { createSetCardNoteCommand } from '@/core/commands/impl/setCardNote'
-import { createSetCardMetaCommand, metaWithTags, tagsOfMeta } from '@/core/commands/impl/setCardMeta'
+import { createSetCardMetaCommand } from '@/core/commands/impl/setCardMeta'
 import { createSetPartitionColorCommand } from '@/core/commands/impl/setPartitionColor'
 import {
   createConnectionCommand,
@@ -81,6 +81,7 @@ import { createMoveCardToFolderCommand, currentTopFolderOf } from '@/core/comman
 import { registerAction } from '@/core/registry/actionRegistry'
 import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
+import { metaWithTags, tagsOfMeta } from '@/core/board/cardMeta'
 import { useCardSearch } from '@/core/hooks/useCardSearch'
 import { formatCombo, resolveShortcut } from '@/core/shortcuts/keys'
 import type { ShortcutId } from '@/core/shortcuts/keys'

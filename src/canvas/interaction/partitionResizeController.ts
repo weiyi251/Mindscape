@@ -14,6 +14,8 @@
 // 本控制器只做纯钳制数学 —— 保持可单测。
 // ============================================================================
 
+import { safeZoom } from './coordinates'
+
 /** 手柄方向：e = 右缘（宽）、s = 下缘（高）、se = 右下角（宽高） */
 export type PartitionResizeEdge = 'e' | 's' | 'se'
 
@@ -90,10 +92,9 @@ export class PartitionResizeController {
   move(event: PointerEvent): void {
     if (event.pointerId !== this.pointerId || this.partitionId === null || !this.element) return
 
-    const zoom = this.source.getZoom()
-    const safeZoom = zoom > 0 ? zoom : 1
-    const dx = (event.clientX - this.startScreen.x) / safeZoom
-    const dy = (event.clientY - this.startScreen.y) / safeZoom
+    const zoom = safeZoom(this.source.getZoom())
+    const dx = (event.clientX - this.startScreen.x) / zoom
+    const dy = (event.clientY - this.startScreen.y) / zoom
 
     const width =
       this.edge === 'e' || this.edge === 'se'

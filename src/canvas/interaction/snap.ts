@@ -12,6 +12,7 @@
 // 实现任务：T2.4。
 // ============================================================================
 
+import { safeZoom } from './coordinates'
 import type { Point } from './coordinates'
 
 /** 吸附触发距离（屏幕像素）。11.7：要「可感知但不抢手」 */
@@ -105,6 +106,5 @@ export function computeSnap(
 
 /** 把屏幕像素阈值换算成画布坐标阈值（zoom 越小，同样的屏幕距离覆盖越多画布单位） */
 export function snapThresholdInCanvas(zoom: number): number {
-  const safeZoom = zoom > 0 ? zoom : 1
-  return SNAP_THRESHOLD_SCREEN_PX / safeZoom
+  return SNAP_THRESHOLD_SCREEN_PX / safeZoom(zoom)
 }

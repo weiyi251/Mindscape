@@ -23,8 +23,9 @@
 // ============================================================================
 
 import { dataDir, join } from '@tauri-apps/api/path'
-import { copyFile, exists, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
+import { copyFile, exists, readTextFile } from '@tauri-apps/plugin-fs'
 
+import { atomicWriteTextFile } from '@/core/storage/atomicWrite'
 import { createEmptySpacesFile, parseSpacesFile } from '@/core/types'
 import type { Space, SpacesFile } from '@/core/types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
@@ -137,9 +138,8 @@ export function createSpacesFileGateway(provider: StorageProvider): SpacesFileGa
       await provider.createDir(await getSpacesDir())
 
       const filePath = await getSpacesFilePath()
-      const tmpPath = `${filePath}.tmp`
-      await writeTextFile(tmpPath, serializeSpacesFile(file))
-      await rename(tmpPath, filePath)
+      // 原子写（.tmp + rename）统一走 core/storage/atomicWrite.ts，与布局文件同一实现
+      await atomicWriteTextFile(filePath, serializeSpacesFile(file))
     },
   }
 }

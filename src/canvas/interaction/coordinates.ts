@@ -62,6 +62,23 @@ export function clampZoom(zoom: number): number {
 }
 
 /**
+ * 防御式「安全缩放」：非正数（含 0 / 负数 / NaN）回落 1（100%）。
+ *
+ * 用途：把屏幕位移换算成画布位移时充当**除数**（`delta / safeZoom`），
+ * 避免缩放值异常时除零，把卡片 / 分区算飞。
+ *
+ * ⚠️ 与 clampZoom 的区别：clampZoom 会把值**钳进** [10%, 400%]，而缩放控制器
+ * 在「带阻尼缩放」期间允许暂时越界，用 clampZoom 会把这个越界量悄悄改掉
+ * （见 zoomAroundScreenPoint 的 clamp 选项）。因此这两者不可互相替代。
+ *
+ * 原为 4 处重复的 `zoom > 0 ? zoom : 1`（cardDragController / cardResizeController /
+ * partitionResizeController / snap），2026-09-14 收拢到此处。
+ */
+export function safeZoom(zoom: number): number {
+  return zoom > 0 ? zoom : 1
+}
+
+/**
  * 给缩放目标加上**边界阻尼**（11.3「到边界有阻尼感」）。
  *
  * 行为：在 [10%, 400%] 内原样返回；越界后把超出部分乘 ZOOM_DAMPING_RATIO 衰减，

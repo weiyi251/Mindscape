@@ -24,9 +24,10 @@ import {
   applyTransform,
   fitTransform,
   invertTransform,
-  unionRects,
 } from './minimapGeometry'
-import type { BoundsRect, MinimapTransform } from './minimapGeometry'
+import type { MinimapTransform } from './minimapGeometry'
+import { unionRects } from '@/core/geometry/rect'
+import type { Rect } from '@/core/geometry/rect'
 
 /** 小地图显示偏好在 localStorage 的键（'visible' / 'hidden'） */
 export const MINIMAP_PREF_KEY = 'mindscape.minimap'
@@ -76,7 +77,7 @@ export function MiniMap({ cards, partitions, onJump, registerRedraw, onCollapse 
     // 当前视口矩形（可见区反算，与主画布懒加载同一套几何）
     const view = getViewportSnapshot()
     const root = document.querySelector('[data-canvas-root]')
-    const viewportRect: BoundsRect | null = root
+    const viewportRect: Rect | null = root
       ? visibleCanvasRect(view, root.clientWidth, root.clientHeight)
       : null
 

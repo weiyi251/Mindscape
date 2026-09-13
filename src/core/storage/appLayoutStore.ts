@@ -22,8 +22,9 @@
 // 实现任务：P1-2。
 // ============================================================================
 
-import { exists, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, readTextFile, rename } from '@tauri-apps/plugin-fs'
 
+import { atomicWriteTextFile } from '@/core/storage/atomicWrite'
 import { parseLayout } from '@/core/types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
@@ -91,10 +92,8 @@ export function createAppLayoutStore(provider: StorageProvider): AppLayoutStore 
       // 目录可能不存在（首次在本机保存）——createDir 是幂等的 create_dir_all
       await provider.createDir(dir)
 
-      const filePath = joinPath(dir, layoutFileName(spaceId))
-      const tmpPath = `${filePath}.tmp`
-      await writeTextFile(tmpPath, json)
-      await rename(tmpPath, filePath)
+      // 原子写（.tmp + rename）统一走 core/storage/atomicWrite.ts，与 spaces.json 同一实现
+      await atomicWriteTextFile(joinPath(dir, layoutFileName(spaceId)), json)
     },
 
     async legacyLayoutExists(spacePath: string): Promise<boolean> {

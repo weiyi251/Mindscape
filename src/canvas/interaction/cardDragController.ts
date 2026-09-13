@@ -17,6 +17,7 @@
 // 实现任务：T2.2（拖动）/ T2.3（多选拖动）/ T2.4（吸附在 move 管线上追加）。
 // ============================================================================
 
+import { safeZoom } from './coordinates'
 import type { Point } from './coordinates'
 import type { CardMoveDelta } from '@/core/commands/impl/moveCards'
 
@@ -153,11 +154,10 @@ export class CardDragController {
       this.delegate.onDragStart([this.cardId, ...this.companions.map((item) => item.id)])
     }
 
-    const zoom = this.source.getZoom()
-    // zoom 恒为正（clampZoom 保证），防御式兜底避免除零把卡片算飞
-    const safeZoom = zoom > 0 ? zoom : 1
-    const deltaX = dx / safeZoom
-    const deltaY = dy / safeZoom
+    // zoom 恒为正（clampZoom 保证）；safeZoom 仅作防御式兜底，避免除零把卡片算飞
+    const zoom = safeZoom(this.source.getZoom())
+    const deltaX = dx / zoom
+    const deltaY = dy / zoom
 
     const proposed: Point = {
       x: this.startPosition.x + deltaX,

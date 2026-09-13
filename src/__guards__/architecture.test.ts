@@ -11,7 +11,7 @@
 //   1. 大文件行数只减不增（棘轮阈值）
 //   2. window.confirm / alert / prompt 只许出现在 core/utils/nativeDialogs.ts
 //   3. 不得硬编码配色（Tailwind 调色板类名 / hex / rgb()）
-//   4. core 层不得 import canvas / pages / components / plugins / lib
+//   4. core 层只允许 import core 与自己（白名单；2026-09-14 由黑名单改来）
 //   5. 模块之间不得循环依赖
 //   6. 新增源文件必须带同名测试（存量用豁免清单锁定，只减不增）
 //
@@ -193,30 +193,11 @@ describe('规则 3：不得硬编码配色', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 规则 4：core 层不得依赖上层
+// 规则 4：core 层只允许依赖 core 与自己（白名单）
 // ---------------------------------------------------------------------------
 
-const CORE_FORBIDDEN_IMPORT = /from\s+'@\/(?:canvas|pages|components|plugins|lib)\//
-
-describe('规则 4：core 不依赖 canvas / pages / components / plugins / lib', () => {
-  it('src/core 下没有指向上层目录的 import', () => {
-    const offenders: string[] = []
-    for (const file of SOURCE_FILES) {
-      if (!rel(file).startsWith('src/core/')) continue
-      for (const { no, text } of codeLines(file)) {
-        if (CORE_FORBIDDEN_IMPORT.test(text)) offenders.push(`${rel(file)}:${no}`)
-      }
-    }
-    expect(
-      offenders,
-      'core 是最内层：需要坐标等结构类型就内联定义或用 core 自己的类型，别反向 import 上层。',
-    ).toEqual([])
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 规则 5：模块之间不得循环依赖
-// ---------------------------------------------------------------------------
+/** 去掉块注释，避免注释里的示例 import 被计入检查 */
+const stripBlockComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '')
 
 /** 把 import 说明符解析成仓库内的真实文件；外部包与无法解析的返回 null */
 function resolveImport(fromFile: string, specifier: string): string | null {
@@ -237,8 +218,100 @@ function resolveImport(fromFile: string, specifier: string): string | null {
   return null
 }
 
-/** 去掉块注释，避免注释里的示例 import 被计入依赖图 */
-const stripBlockComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '')
+/**
+ * 抽出文件里全部 `import/export … from 'x'` 的说明符并带上行号。
+ * 用 matchAll 而非逐行正则 —— **跨行 import**
+ * （`import {\n  a,\n} from '@/core/x'`）在逐行写法下会被整段漏掉。
+ */
+function importSpecifiers(file: string): { specifier: string; line: number }[] {
+  const text = stripBlockComments(read(file))
+  const out: { specifier: string; line: number }[] = []
+  for (const matched of text.matchAll(
+    /(?:^|\n)\s*(?:import|export)\s+(?:type\s+)?[\s\S]*?from\s*'([^']+)'/g,
+  )) {
+    const index = matched.index ?? 0
+    out.push({ specifier: matched[1], line: text.slice(0, index).split('\n').length })
+  }
+  return out
+}
+
+/**
+ * 一个 import 说明符在 `core/` 内是否合法（纯函数，可单测）。
+ *
+ * 白名单三类：
+ *   1. `@/core/**` —— core 内部
+ *   2. 相对路径，且解析后仍落在 `src/core/` 内
+ *   3. 外部包（不以 `@/` 开头、不以 `.` 开头的说明符，如 react / zod / @tauri-apps/*）
+ */
+function isAllowedCoreSpecifier(fromFile: string, specifier: string): boolean {
+  if (specifier.startsWith('@/')) return specifier.startsWith('@/core/')
+  if (!specifier.startsWith('.')) return true
+  const resolved = resolveImport(fromFile, specifier)
+  return resolved !== null && rel(resolved).startsWith('src/core/')
+}
+
+/**
+ * 为什么从黑名单改成白名单（2026-09-14，对应审查报告 §5.7）：
+ * 旧写法 `CORE_FORBIDDEN_IMPORT = /from\s+'@\/(?:canvas|pages|components|plugins|lib)\//`
+ * 只禁止 5 个**已知**目录 —— 任何新增的顶层目录都能绕过去：
+ * 计划中的 `src/platform/`（桌面平台桥）一旦建立，core 里写
+ * `import { toAssetUrl } from '@/platform/asset'` 就不会被拦下，
+ * 而核心规约是「core 不依赖任何运行时平台细节」。插件期目录只会更多，这个洞会张开。
+ *
+ * 白名单的代价是：新增「core 允许依赖的顶层目录」必须**显式改本文件**——
+ * 这正是想要的效果，让「这次破例」留下记录。
+ */
+describe('规则 4：core 只能依赖 core 与自己（白名单）', () => {
+  it('src/core 下没有指向 core 之外的 import', () => {
+    const offenders: string[] = []
+    for (const file of SOURCE_FILES) {
+      if (!rel(file).startsWith('src/core/')) continue
+      for (const { specifier, line } of importSpecifiers(file)) {
+        if (!isAllowedCoreSpecifier(file, specifier)) {
+          offenders.push(`${rel(file)}:${line} → ${specifier}`)
+        }
+      }
+    }
+    expect(
+      offenders,
+      'core 是最内层，只允许 import @/core/** 或 core 内的相对路径（外部包不限）。' +
+        '需要坐标 / 平台能力就下沉到 core，别反向 import 上层；确实要放开某个顶层目录，请显式修改本文件的规则 4。',
+    ).toEqual([])
+  })
+
+  it('白名单判定器本身正确（含「旧黑名单拦不住」的定点用例）', () => {
+    const coreFile = path.join(SRC_DIR, 'core/board/ingest.ts')
+
+    // 1) core 内部：@/ 与相对路径都放行
+    expect(isAllowedCoreSpecifier(coreFile, '@/core/types')).toBe(true)
+    expect(isAllowedCoreSpecifier(coreFile, './grid')).toBe(true)
+    expect(isAllowedCoreSpecifier(coreFile, '@/core/utils/paths')).toBe(true)
+
+    // 2) 外部包放行
+    expect(isAllowedCoreSpecifier(coreFile, 'react')).toBe(true)
+    expect(isAllowedCoreSpecifier(coreFile, '@tauri-apps/api/core')).toBe(true)
+
+    // 3) 上层目录：@/ 与非 core 相对路径都拦下
+    expect(isAllowedCoreSpecifier(coreFile, '@/canvas/Canvas')).toBe(false)
+    expect(isAllowedCoreSpecifier(coreFile, '@/pages/Board')).toBe(false)
+    expect(isAllowedCoreSpecifier(path.join(SRC_DIR, 'core/types.ts'), '../canvas/Canvas')).toBe(
+      false,
+    )
+
+    // 4) 关键回归：旧黑名单只列了 5 个目录，这两个**新增**顶层目录它拦不住
+    expect(isAllowedCoreSpecifier(coreFile, '@/platform/asset')).toBe(false)
+    expect(isAllowedCoreSpecifier(coreFile, '@/anything-new/whatever')).toBe(false)
+
+    // 5) 无法解析的相对路径也拦下（防拼错路径后静默通过）
+    expect(isAllowedCoreSpecifier(coreFile, './nope-not-exist')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 规则 5：模块之间不得循环依赖
+// ---------------------------------------------------------------------------
+
+// `resolveImport` / `stripBlockComments` 定义在规则 4 一节（规则 4、5 共用）。
 
 /**
  * 建立模块依赖图。跨行 import 也能匹配（正则跨行非贪婪），

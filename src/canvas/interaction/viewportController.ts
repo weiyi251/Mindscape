@@ -40,7 +40,7 @@ import {
 } from './coordinates'
 import type { ContainerOrigin, Point, ViewportState } from './coordinates'
 import { fitViewportState } from './fitToContent'
-import type { FitRect } from './fitToContent'
+import type { Rect } from '@/core/geometry/rect'
 
 /** 判断「是否越界」时留的浮点余量，避免合法值被误判成越界而触发无谓回弹 */
 const ZOOM_EPSILON = 1e-6
@@ -231,11 +231,11 @@ export class ViewportController {
   }
 
   /**
-   * 缩放到全部内容（P1-4，Ctrl+Shift+0）：把给定矩形集合的包围盒适配进当前视口。
+   * 缩放到全部内容（P1-4，主快捷键 Ctrl+Alt+0）：把给定矩形集合的包围盒适配进当前视口。
    * 与滚轮路径一样**直写 style.transform**，不经过 React state（守 17.3）。
    * 没有内容 / 视口尺寸非法时不动当前视图，返回 false 供调用方提示。
    */
-  fitToContent(rects: readonly FitRect[]): boolean {
+  fitToContent(rects: readonly Rect[]): boolean {
     const size = this.getViewportSize()
     const next = fitViewportState(rects, { width: size.width, height: size.height })
     if (!next) return false

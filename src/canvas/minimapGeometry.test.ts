@@ -1,35 +1,14 @@
 // ============================================================================
 // 模块说明（中文）
-// 小地图纯计算部分（minimapGeometry）的单元测试：
-// 包围盒并集、等比缩放变换、坐标互转（正逆一致）。
+// 小地图纯计算部分（minimapGeometry）的单元测试：等比缩放变换、坐标互转（正逆一致）。
+//
+// `unionRects` 的用例已于 2026-09-14 随实现迁到 core/geometry/rect.test.ts
+// （两份重复实现合并为一份，测试也合并）。
 // ============================================================================
 
 import { describe, expect, it } from 'vitest'
 
-import {
-  applyTransform,
-  fitTransform,
-  invertTransform,
-  unionRects,
-} from './minimapGeometry'
-
-describe('unionRects', () => {
-  it('并集包围盒：框住全部输入矩形', () => {
-    // rect1 (0,0,100,80) ∪ rect2 (200,-50,50,50)：minY=-50，maxY=max(80,0)=80 → h=130
-    expect(
-      unionRects([
-        { x: 0, y: 0, w: 100, h: 80 },
-        { x: 200, y: -50, w: 50, h: 50 },
-      ]),
-    ).toEqual({ x: 0, y: -50, w: 250, h: 130 })
-  })
-
-  it('空输入 / 全 null → null；null 项被跳过', () => {
-    expect(unionRects([])).toBeNull()
-    expect(unionRects([null, undefined])).toBeNull()
-    expect(unionRects([null, { x: 10, y: 10, w: 5, h: 5 }])).toEqual({ x: 10, y: 10, w: 5, h: 5 })
-  })
-})
+import { applyTransform, fitTransform, invertTransform } from './minimapGeometry'
 
 describe('fitTransform', () => {
   it('等比缩放并居中：取更紧的一边，另一侧留白居中', () => {

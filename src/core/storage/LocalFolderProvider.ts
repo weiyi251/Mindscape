@@ -13,6 +13,7 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import { assertDesktopRuntime } from '@/core/utils/runtime'
+import { toErrorMessage } from '@/core/utils/errorMessage'
 import {
   StorageError,
   type BatchMoveResult,
@@ -46,20 +47,13 @@ export const STORAGE_COMMANDS = {
   readImageSize: 'read_image_size',
 } as const
 
-/** 把任意 reject 值归一化成可直接展示的中文消息 */
-function toMessage(error: unknown): string {
-  if (typeof error === 'string') return error
-  if (error instanceof Error) return error.message
-  return String(error)
-}
-
 async function call<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   try {
     // 浏览器里没有 Rust 后端，invoke 会抛英文 TypeError；这里先换成可执行的中文提示
     assertDesktopRuntime()
     return await invoke<T>(command, args)
   } catch (error) {
-    throw new StorageError(toMessage(error), error)
+    throw new StorageError(toErrorMessage(error), error)
   }
 }
 

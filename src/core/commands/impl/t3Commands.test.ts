@@ -8,9 +8,10 @@ import { describe, expect, it } from 'vitest'
 
 import { createConnectionCommand, createRemoveConnectionsCommand, createSetConnectionLabelCommand } from './connections'
 import { createSetCardNoteCommand } from './setCardNote'
-import { createSetCardMetaCommand, metaWithTags, tagsOfMeta } from './setCardMeta'
+import { createSetCardMetaCommand } from './setCardMeta'
 import { createSetPartitionColorCommand } from './setPartitionColor'
 import { createSetCardsZIndexCommand, zIndexDeltasFor } from './setCardsZIndex'
+import { metaWithTags, tagsOfMeta } from '@/core/board/cardMeta'
 import type { Connection } from '@/core/types'
 
 const CONNECTION: Connection = {
@@ -80,17 +81,6 @@ describe('备注与标签命令（T3.3 / T3.9）', () => {
     expect(note).toBe('新')
     void command.undo()
     expect(note).toBe('旧')
-  })
-
-  it('meta 标签读写往返一致', () => {
-    const meta = metaWithTags({ a: 1 }, ['参考', '待定'])
-    expect(tagsOfMeta(meta)).toEqual(['参考', '待定'])
-    expect(meta.a).toBe(1) // 其余 meta 字段保留
-  })
-
-  it('tagsOfMeta 对脏数据兜底返回空数组', () => {
-    expect(tagsOfMeta({ tags: 'not-array' })).toEqual([])
-    expect(tagsOfMeta({})).toEqual([])
   })
 
   it('setCardMeta：do/undo 整体替换 meta', () => {

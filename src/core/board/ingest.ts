@@ -20,6 +20,7 @@
 
 import type { Card, Partition } from '@/core/types'
 import { joinPath } from '@/core/utils/paths'
+import { pad2 } from '@/core/utils/time'
 
 /**
  * 旧版「未分类」物理子文件夹名。
@@ -104,14 +105,10 @@ export function resolveDropDestination(
   }
 }
 
-/** 补零（2 位） */
-function pad2(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
 /**
  * 粘贴截图的文件名（T3.8 / 8.2）：`粘贴-YYYYMMDD-HHmm.png`。
  * 分钟精度；同一分钟内粘两张 → Rust 端 unique_path_in 自动加 `_1` 后缀。
+ * （补零复用 core/utils/time.ts 的 pad2，本文件不再自带一份。）
  */
 export function pasteFileName(now: Date): string {
   return `粘贴-${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}.png`

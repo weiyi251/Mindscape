@@ -23,6 +23,8 @@
 // 实现任务：T2.3（比例锁定为 2026-09-12 增补）。
 // ============================================================================
 
+import { safeZoom } from './coordinates'
+
 /** 卡片允许的最小宽 / 高（px，画布坐标）。锁比例时两轴都不得低于它 */
 export const MIN_CARD_SIZE = 40
 
@@ -232,10 +234,9 @@ export class CardResizeController {
   move(event: PointerEvent): void {
     if (event.pointerId !== this.pointerId || this.cardId === null) return
 
-    const zoom = this.source.getZoom()
-    const safeZoom = zoom > 0 ? zoom : 1
-    const deltaW = (event.clientX - this.startScreen.x) / safeZoom
-    const deltaH = (event.clientY - this.startScreen.y) / safeZoom
+    const zoom = safeZoom(this.source.getZoom())
+    const deltaW = (event.clientX - this.startScreen.x) / zoom
+    const deltaH = (event.clientY - this.startScreen.y) / zoom
 
     // 图片卡片锁原图比例（见文件顶部【图片卡片锁比例】），仅限右下角手柄；
     // 边中点手柄只出现在便签上，走 edgeResizeOutcome 的自由缩放分支。

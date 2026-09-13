@@ -12,15 +12,16 @@ import { describe, expect, it } from 'vitest'
 import { MAX_ZOOM, MIN_ZOOM } from './coordinates'
 import type { ViewportState } from './coordinates'
 import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
-import { contentRects, fitViewportState, unionRects } from './fitToContent'
-import type { FitRect } from './fitToContent'
+import { unionRects } from '@/core/geometry/rect'
+import type { Rect } from '@/core/geometry/rect'
+import { contentRects, fitViewportState } from './fitToContent'
 
-const rect = (x: number, y: number, w: number, h: number): FitRect => ({ x, y, w, h })
+const rect = (x: number, y: number, w: number, h: number): Rect => ({ x, y, w, h })
 
 const VIEW = { width: 1280, height: 800 }
 
 /** 断言包围盒经视口变换后完整落入视口（允许 0.5px 浮点余量） */
-function expectInsideViewport(rects: FitRect[], state: ViewportState, view = VIEW): void {
+function expectInsideViewport(rects: Rect[], state: ViewportState, view = VIEW): void {
   const bounds = unionRects(rects)!
   const left = bounds.x * state.zoom + state.offsetX
   const top = bounds.y * state.zoom + state.offsetY
@@ -34,21 +35,7 @@ function expectInsideViewport(rects: FitRect[], state: ViewportState, view = VIE
   expect(bottom).toBeLessThanOrEqual(view.height + 0.5)
 }
 
-describe('unionRects：包围盒', () => {
-  it('空集合返回 null', () => {
-    expect(unionRects([])).toBeNull()
-  })
-
-  it('单个矩形原样返回', () => {
-    expect(unionRects([rect(10, 20, 30, 40)])).toEqual(rect(10, 20, 30, 40))
-  })
-
-  it('多个矩形取并集', () => {
-    expect(unionRects([rect(-10, 0, 20, 20), rect(100, 500, 40, 30)])).toEqual(
-      rect(-10, 0, 150, 530),
-    )
-  })
-})
+// unionRects 自身的用例已迁到 core/geometry/rect.test.ts（实现合并为一份）
 
 describe('contentRects：内容集合', () => {
   it('卡片按自身尺寸，折叠分区按标题条高度', () => {

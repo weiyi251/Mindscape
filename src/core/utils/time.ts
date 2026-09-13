@@ -8,8 +8,12 @@
 // 实现任务：T1.1（阶段一）。
 // ============================================================================
 
-/** 补零到两位 */
-function pad2(value: number): string {
+/**
+ * 补零到两位（`5` → `"05"`）。
+ * 导出供其他需要拼时间戳的文件复用（如 `core/board/ingest.ts` 的粘贴文件名）；
+ * 2026-09-14 前它在 time.ts 与 ingest.ts 各有一份完全相同的私有实现。
+ */
+export function pad2(value: number): string {
   return String(value).padStart(2, '0')
 }
 

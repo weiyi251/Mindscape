@@ -2,7 +2,8 @@
 // 模块说明（中文）
 // 本地文件的显示通道。对应 17.10：启用 Tauri assetProtocol，通过
 //   http://asset.localhost/<encodeURIComponent(绝对路径)>
-// 让 WebView 直接读取硬盘上的图片（缩略图与原图），不需要经过 base64 或 blob。
+// 让 WebView 直接读取硬盘上的图片**原图**，不需要经过 base64 或 blob。
+// （方案 A 之后不再生成缩略图，图片卡片一律直载原图，见 HANDOVER §5 裁决 4。）
 //
 // 【为什么需要这一层】
 //   · Tauri 的 convertFileSrc 在非 Tauri 环境（浏览器 / 单元测试 / vite preview）
@@ -22,7 +23,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 /**
  * 绝对路径 → WebView 可用的资源 URL。
  *
- * @param absolutePath 硬盘上的绝对路径（缩略图或原图）
+ * @param absolutePath 硬盘上的绝对路径（图片卡片的原图，或需用系统程序打开的文件）
  * @returns 可放进 <img src> 的 URL；路径为空或当前不在 Tauri 环境时返回空串
  */
 export function toAssetUrl(absolutePath: string): string {
