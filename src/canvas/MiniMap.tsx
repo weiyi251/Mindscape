@@ -32,8 +32,8 @@ import type { BoundsRect, MinimapTransform } from './minimapGeometry'
 export const MINIMAP_PREF_KEY = 'mindscape.minimap'
 
 /** 面板体尺寸（CSS 像素）与四周留白 */
-export const MINIMAP_VIEW_W = 208
-export const MINIMAP_VIEW_H = 132
+const MINIMAP_VIEW_W = 208
+const MINIMAP_VIEW_H = 132
 const MINIMAP_PADDING = 8
 
 /** 从 CSS 变量读主题色（shadcn 的变量值是 HSL 三元组，需包一层 hsl()） */

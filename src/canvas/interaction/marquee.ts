@@ -25,7 +25,7 @@ export function normalizeRect(a: Point, b: Point): Rect {
 }
 
 /** 卡片与框选矩形**相交**即选中（11.5「框内卡片实时高亮」采用更宽容的相交判定，Figma 同款） */
-export function rectHitsCard(rect: Rect, card: { x: number; y: number; w: number; h: number }): boolean {
+function rectHitsCard(rect: Rect, card: { x: number; y: number; w: number; h: number }): boolean {
   return (
     rect.x < card.x + card.w &&
     rect.x + rect.w > card.x &&

@@ -55,11 +55,11 @@ export type TimerScheduler = (fn: () => void, ms: number) => number
 export type TimerClearer = (id: number) => void
 
 /** 越界后等待多久开始回弹（毫秒）。太短会打断连续滚轮，太长会让人觉得卡住 */
-export const ZOOM_SETTLE_DELAY_MS = 140
+const ZOOM_SETTLE_DELAY_MS = 140
 /** 回弹补间步数（按帧调度，配合 rAF 约 10 帧 ≈ 160ms） */
-export const ZOOM_SETTLE_STEPS = 10
+const ZOOM_SETTLE_STEPS = 10
 /** 每步推进剩余距离的比例（越大回弹越快） */
-export const ZOOM_SETTLE_RATIO = 0.28
+const ZOOM_SETTLE_RATIO = 0.28
 
 const defaultScheduler: Scheduler = (fn) => {
   if (typeof requestAnimationFrame === 'function') {

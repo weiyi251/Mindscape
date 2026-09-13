@@ -31,9 +31,9 @@ import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { assertDesktopRuntime } from '@/core/utils/runtime'
 
 /** 应用数据目录名（%APPDATA%\Mindscape） */
-export const SPACES_DIR_NAME = 'Mindscape'
+const SPACES_DIR_NAME = 'Mindscape'
 /** 空间元数据文件名 */
-export const SPACES_FILE_NAME = 'spaces.json'
+const SPACES_FILE_NAME = 'spaces.json'
 
 /** %APPDATA%\Mindscape */
 export async function getSpacesDir(): Promise<string> {
@@ -41,7 +41,7 @@ export async function getSpacesDir(): Promise<string> {
 }
 
 /** %APPDATA%\Mindscape\spaces.json */
-export async function getSpacesFilePath(): Promise<string> {
+async function getSpacesFilePath(): Promise<string> {
   return join(await getSpacesDir(), SPACES_FILE_NAME)
 }
 

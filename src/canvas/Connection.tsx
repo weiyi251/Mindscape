@@ -27,7 +27,7 @@ import type { Point, Rect } from './interaction/connectionAnchor'
 export const CONNECTION_ID_ATTR = 'data-connection-id'
 
 /** 单击选中连线的命中容差（画布坐标） */
-export const CONNECTION_HIT_WIDTH = 8
+const CONNECTION_HIT_WIDTH = 8
 
 /**
  * 连线 SVG 层的几何方案：**固定大尺寸 + 平移组**。

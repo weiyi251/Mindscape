@@ -41,7 +41,7 @@ export const MIN_ZOOM = 0.1
 export const MAX_ZOOM = 4
 
 /** 滚轮灵敏度：zoom 乘数按 exp(-deltaY * k) 变化，保证上下滚对称抵消 */
-export const WHEEL_ZOOM_SENSITIVITY = 0.0015
+const WHEEL_ZOOM_SENSITIVITY = 0.0015
 
 /**
  * 11.3「到边界有阻尼感」的两个参数：

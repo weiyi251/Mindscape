@@ -26,10 +26,10 @@ import type { Card, Partition } from '@/core/types'
 import { nextPartitionId } from '@/core/utils/id'
 
 /** 不生成分区框的特殊目录（第六章）。以 `.` 开头的隐藏目录一并排除 */
-export const PARTITION_RESERVED_NAMES = ['.mindscape', '_已移除'] as const
+const PARTITION_RESERVED_NAMES = ['.mindscape', '_已移除'] as const
 
 /** 文件夹名中的非法字符（第六章保护措施 ①）。与 Rust 侧 INVALID_FOLDER_CHARS 保持一致 */
-export const INVALID_FOLDER_CHARS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', '\0']
+const INVALID_FOLDER_CHARS = ['\\', '/', ':', '*', '?', '"', '<', '>', '|', '\0']
 
 /**
  * 检查新文件夹名是否合法（第六章保护措施 ①）。
@@ -52,7 +52,7 @@ export const PARTITION_PADDING = 24
 export const PARTITION_TITLE_HEIGHT = 32
 
 /** 分区框允许的最小宽 / 高（画布坐标）。空框也能缩到的下限 */
-export const MIN_PARTITION_SIZE = 120
+const MIN_PARTITION_SIZE = 120
 
 /** 拖拽调整分区大小时，与相邻分区的最小间距（画布坐标） */
 export const PARTITION_RESIZE_GAP = 8

@@ -36,7 +36,7 @@ export interface FitRect {
 }
 
 /** 默认四周留白（CSS 像素）：完全贴边会显得顶格，不好看也不好点 */
-export const FIT_PADDING = 40
+const FIT_PADDING = 40
 
 /** 卡片 + 分区 → 参与适配的矩形集合（折叠分区按标题条高度算，见文件顶部说明） */
 export function contentRects(
