@@ -9,7 +9,7 @@
 **Mindscape / 脑海空间** —— 本地桌面无限画布。不新建白板，而是**把一个已有的文件夹变成白板**：文件还在原处，画布只是视图。
 
 - **三条铁律**（产品哲学，不可违背）：① 文件夹是真相，画布是视图；② 不搬家（不主动挪动用户文件）；③ 不静默删除（只有「移出到 `_已移除`」）
-- 当前状态：v0.1.0 / v0.2.0 / v0.3.0 均已发布到 GitHub Release，支持应用内自动更新
+- 当前状态：v0.1.0 / v0.2.0 / v0.3.0 / v0.4.0 均已发布到 GitHub Release，支持应用内自动更新
 - 开源协议 MIT；仓库 https://github.com/weiyi251/Mindscape（公开，main 分支保护禁强推）
 
 ## 2. 技术栈与整体架构
@@ -60,7 +60,8 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
 - v0.3.0（2026-09-12）：小地图、设置面板统一、可折叠纯图标工具栏、卡片「移动到…」、分区选中；图标换成蓝橙无限符号图；方案 A（图片卡片直接加载原图，不再生成缩略图）；图片卡片缩放锁定原图宽高比
-- 全量基线（2026-09-13）：Vitest **721 passed / 58 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（387.69 kB / gzip 119.38 kB）
+- v0.4.0（2026-09-13）：架构守卫测试、布局改存软件目录 + 导出/导入空间、`Ctrl+F` 卡片搜索、`Ctrl+Shift+0` 缩放到全部内容、空间改名/收藏/排序、便签双击行内编辑；未分组文件直接落空间主目录（不再创建「未分类」文件夹）；修复便签及其标签重进空间后消失；移除未使用依赖
+- 全量基线（2026-09-13）：Vitest **726 passed / 58 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **43 passed**、vite build 通过（387.76 kB / gzip 119.37 kB）
 - 死代码清理已完成（2026-09-12）：全项目仅 1 处死代码（`ResizeSnapshot`）已删；`menu-list.tsx` / `toolbar.ts` / `demoPlugin.ts` / `actionRegistry` 的 `unregisterAction` 等是**有意预留的准备层 API，勿当死代码删**
 
 ## 4. 待办事项与已知问题
@@ -102,7 +103,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（721 tests）
+pnpm test           # vitest run（726 tests）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
