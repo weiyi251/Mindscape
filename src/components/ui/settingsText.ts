@@ -18,6 +18,7 @@ export const SETTINGS_TEXT = {
   /* 页面名（弹窗左侧页签；新增页面在这里加一条并注册到 SETTINGS_PAGES） */
   pageShortcuts: '自定义快捷键',
   pageUpdate: '版本更新',
+  pagePlugins: '插件',
   /* 顶栏图标按钮的 title / aria-label */
   toLight: '切换到浅色模式',
   toDark: '切换到深色模式',

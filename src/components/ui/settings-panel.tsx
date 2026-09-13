@@ -20,13 +20,14 @@ import type { ReactNode } from 'react'
 
 import { FloatingModal } from './floating-modal'
 import { floatingModalPrefKey } from './floatingModalGeometry'
+import { SettingsPluginsPage } from './settings-plugins'
 import { SettingsShortcutsPage } from './settings-shortcuts'
 import { SettingsUpdatePage } from './settings-update'
 import { SETTINGS_TEXT } from './settingsText'
 import { cn } from '@/lib/utils'
 
 /** 设置页标识（新增页面时在这里补一个字面量） */
-type SettingsPageId = 'shortcuts' | 'update'
+type SettingsPageId = 'shortcuts' | 'update' | 'plugins'
 
 interface SettingsPage {
   id: SettingsPageId
@@ -43,6 +44,7 @@ interface SettingsPage {
 const SETTINGS_PAGES: SettingsPage[] = [
   { id: 'shortcuts', label: SETTINGS_TEXT.pageShortcuts, Component: SettingsShortcutsPage },
   { id: 'update', label: SETTINGS_TEXT.pageUpdate, Component: SettingsUpdatePage },
+  { id: 'plugins', label: SETTINGS_TEXT.pagePlugins, Component: SettingsPluginsPage },
 ]
 
 export interface SettingsPanelProps {

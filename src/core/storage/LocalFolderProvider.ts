@@ -39,6 +39,7 @@ export const STORAGE_COMMANDS = {
   dirExists: 'dir_exists',
   deleteFile: 'delete_file',
   writeFileBytes: 'write_file_bytes',
+  deleteDir: 'delete_dir',
   readLayout: 'read_layout',
   writeLayout: 'write_layout',
   makeThumbnail: 'make_thumbnail',
@@ -94,6 +95,10 @@ export class LocalFolderProvider implements StorageProvider {
   writeFileBytes(destDir: string, fileName: string, bytes: Uint8Array): Promise<string> {
     // Tauri invoke 的参数序列化：Uint8Array → JSON 数组（Rust 端收 Vec<u8>）
     return call<string>(STORAGE_COMMANDS.writeFileBytes, { destDir, fileName, bytes: Array.from(bytes) })
+  }
+
+  deleteDir(path: string): Promise<void> {
+    return call<void>(STORAGE_COMMANDS.deleteDir, { path })
   }
 
   readLayout(spacePath: string): Promise<string> {

@@ -34,6 +34,7 @@ pub fn run() {
             commands::fs_ops::rename_dir,
             commands::fs_ops::delete_file,
             commands::fs_ops::write_file_bytes,
+            commands::fs_ops::delete_dir,
             commands::layout::read_layout,
             commands::layout::write_layout,
             commands::thumbnail::make_thumbnail,

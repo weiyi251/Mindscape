@@ -40,11 +40,14 @@ const COMMANDS_FROM_DOC_17_5 = [
   'read_image_size',
 ] as const
 
-/** 17.5 清单 + 各阶段任务新增的命令（rename_dir 属 T2.6，delete_file / write_file_bytes 属 T3.6/T3.8） */
+/** 17.5 清单 + 各阶段任务新增的命令
+ *  （rename_dir 属 T2.6；delete_file / write_file_bytes 属 T3.6/T3.8；
+ *    delete_dir 属插件期 —— 卸载外部插件要递归删目录，是命令清单里唯一的递归删除） */
 const COMMANDS_IMPLEMENTED = [
   ...COMMANDS_FROM_DOC_17_5,
   'delete_file',
   'write_file_bytes',
+  'delete_dir',
 ] as const
 
 describe('StorageProvider ↔ 17.5 命令一一对应', () => {
@@ -109,6 +112,7 @@ describe('替换实现不影响上层', () => {
       createDir: () => Promise.resolve(),
       deleteFile: () => Promise.resolve(),
       writeFileBytes: notImplemented('writeFileBytes'),
+      deleteDir: notImplemented('deleteDir'),
       writeLayout: () => Promise.resolve(),
       makeThumbnail: notImplemented('makeThumbnail'),
       openWithDefault: () => Promise.resolve(),

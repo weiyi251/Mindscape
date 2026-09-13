@@ -426,6 +426,10 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/settings-shortcuts.tsx': '渲染层（键位匹配/冲突检测在 core/shortcuts/keys.ts 已测）',
   'src/components/ui/settings-update.tsx': '渲染层（版本状态在 core/store/updaterStore.ts 已测）',
   'src/components/ui/update-dialog.tsx': '渲染层',
+  'src/components/ui/plugin-list-item.tsx': '渲染层（可用性判定在 core/plugin/lifecycle.ts 已测）',
+  'src/components/ui/plugin-detail.tsx': '渲染层',
+  'src/components/ui/plugin-dialog-host.tsx': '渲染层（状态在 core/store/pluginUiStore.ts 已测）',
+  'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
   'src/pages/Board.tsx': '渲染层',
   'src/pages/DesktopRequired.tsx': '渲染层',
   'src/pages/SpaceList.tsx': '渲染层',
@@ -449,6 +453,11 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/core/registry/actionRegistry.ts': '待补测试（存量）',
   'src/core/storage/StorageProvider.ts': '待补测试（存量，接口声明为主）',
   'src/core/utils/media.ts': '待补测试（存量）',
+
+  // —— 插件期新增：纯类型 / 接线层（无可测逻辑）
+  'src/core/plugin/types.ts': '纯类型声明（插件系统的全部 interface）',
+  'src/core/plugin/pluginApi.ts':
+    '宿主能力接线层：把 pluginCenter / 存储 / 对话框 / 画布桥拼成插件 API，无自有业务逻辑',
 }
 
 /** 同名测试的判定：`xxx.ts` / `xxx.tsx` ↔ `xxx.test.ts` / `xxx.test.tsx` */

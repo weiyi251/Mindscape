@@ -107,6 +107,14 @@ export interface StorageProvider {
   /** 写入二进制数据到目标目录（T3.8 粘贴截图落盘）。重名自动加 _1；返回实际写入的完整路径 */
   writeFileBytes(destDir: string, fileName: string, bytes: Uint8Array): Promise<string>
 
+  // ---- fs_ops.rs · 插件期新增（卸载外部插件要递归删目录）----
+  /**
+   * 递归删除整个目录。**命令清单里唯一的递归删除**，Rust 侧有严格边界校验
+   * （空路径 / 盘符根 / 末段 `..` 一律拒绝；不是目录一律拒绝；不存在视为成功）。
+   * ⚠️ 破坏性操作：调用方必须先经用户确认。
+   */
+  deleteDir(path: string): Promise<void>
+
   // ---- layout.rs · 布局文件 ----
   /**
    * 读取 layout.json 的**原始 JSON 字符串**（不做结构解析，结构校验由 core/types.ts 的 zod 负责）。

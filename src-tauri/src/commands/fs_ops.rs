@@ -415,6 +415,64 @@ pub fn write_file_bytes(
 }
 
 // ---------------------------------------------------------------------------
+// 插件期新增 · 递归删除目录（卸载外部插件用）
+// ---------------------------------------------------------------------------
+
+/// 递归删除整个目录（含子目录与文件）。
+///
+/// 用途：卸载外部插件 —— 删除 `%APPDATA%\Mindscape\plugins\<插件id>\`。
+/// **这是整个命令清单里唯一的递归删除**，因此安全边界写得比别处更严：
+///   1. 空路径 → Err
+///   2. 路径不存在 → Ok（幂等，与 delete_file 同风格：用户已手动删过也算成功）
+///   3. 不是目录 → Err（绝不在这里删文件）
+///   4. 末段为 `.` / `..` / 空，或整条路径没有父目录（盘符根 `C:\`、`/`）→ Err
+///
+/// 调用方（前端 `pluginHost`）只会在「插件的安装目录」上调用它，
+/// 且调用前必须先经过用户确认框。
+#[tauri::command]
+pub fn delete_dir(path: String) -> Result<(), String> {
+    if path.trim().is_empty() {
+        return Err("路径不能为空".to_string());
+    }
+
+    // 先按原始字符串查末段：`..` / `.` 在 `Path::file_name()` 里会返回 None，
+    // 与「盘符根」混在同一个分支里，分不清是哪种问题。这里提前区分，给出更准的提示。
+    let last_segment = path
+        .trim_end_matches(|c| c == '\\' || c == '/')
+        .rsplit(|c| c == '\\' || c == '/')
+        .next()
+        .unwrap_or("");
+    if last_segment.is_empty() || last_segment == "." || last_segment == ".." {
+        return Err(format!("路径不合法：{path}"));
+    }
+
+    let target = Path::new(&path);
+
+    if !target.exists() {
+        return Ok(());
+    }
+    if !target.is_dir() {
+        return Err(format!("不是文件夹：{path}"));
+    }
+
+    match target.file_name().map(|name| name.to_string_lossy().into_owned()) {
+        None => return Err(format!("拒绝删除根目录：{path}")),
+        Some(name) if name.is_empty() || name == "." || name == ".." => {
+            return Err(format!("路径不合法：{path}"))
+        }
+        Some(_) => {}
+    }
+
+    // 再确认一次「有父目录」：`C:\` 这类盘符根在上面已被 file_name() 拦下，
+    // 这里是对 `C:` 之类写法的兜底。
+    if target.parent().is_none() {
+        return Err(format!("拒绝删除根目录：{path}"));
+    }
+
+    fs::remove_dir_all(target).map_err(|err| io_error_message(&path, &err))
+}
+
+// ---------------------------------------------------------------------------
 // T2.6 · 重命名文件夹
 // ---------------------------------------------------------------------------
 
@@ -937,6 +995,57 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("不是文件夹"), "实际：{err}");
+
+        cleanup(&root);
+    }
+
+    // ---- 插件期 acceptance: delete_dir（卸载外部插件） ----
+
+    #[test]
+    fn delete_dir_removes_tree_and_is_idempotent() {
+        let root = unique_dir("delete-dir");
+        let plugins_root = root.join("plugins");
+        let plugin_dir = plugins_root.join("com.example.color-card");
+        fs::create_dir_all(plugin_dir.join("assets")).unwrap();
+        fs::write(plugin_dir.join("manifest.json"), b"{}").unwrap();
+        fs::write(plugin_dir.join("index.js"), b"export const activate = () => {}").unwrap();
+        fs::write(plugin_dir.join("assets").join("icon.png"), b"x").unwrap();
+
+        delete_dir(plugin_dir.to_string_lossy().into_owned()).unwrap();
+        assert!(!plugin_dir.exists(), "整个插件目录应被递归删除");
+        assert!(plugins_root.is_dir(), "父目录必须原样保留");
+
+        // 幂等：再删一次不报错
+        delete_dir(plugin_dir.to_string_lossy().into_owned()).unwrap();
+
+        cleanup(&root);
+    }
+
+    #[test]
+    fn delete_dir_rejects_file_empty_path_and_traversal() {
+        let root = unique_dir("delete-dir-guard");
+        let file = root.join("a.txt");
+        fs::write(&file, b"x").unwrap();
+
+        // 不是目录：绝不能顺手把文件删了
+        let err = delete_dir(file.to_string_lossy().into_owned()).unwrap_err();
+        assert!(err.contains("不是文件夹"), "实际：{err}");
+        assert!(file.is_file(), "文件必须原样保留");
+
+        // 空路径
+        let err = delete_dir("   ".to_string()).unwrap_err();
+        assert!(err.contains("路径不能为空"), "实际：{err}");
+
+        // 盘符根
+        let err = delete_dir("C:\\".to_string()).unwrap_err();
+        assert!(
+            err.contains("拒绝删除根目录") || err.contains("路径不合法"),
+            "实际：{err}"
+        );
+
+        // 路径遍历（末段为 ..）
+        let err = delete_dir(root.join("..").to_string_lossy().into_owned()).unwrap_err();
+        assert!(err.contains("路径不合法"), "实际：{err}");
 
         cleanup(&root);
     }
