@@ -15,6 +15,7 @@ export interface KeyComboLike {
   code: string
   ctrlKey: boolean
   shiftKey: boolean
+  altKey: boolean
 }
 
 /** 数字 0 键（物理键位）：主键盘 Digit0 / 小键盘 Numpad0；key 兜底兼容非标准布局 */
@@ -22,12 +23,18 @@ export function isZeroKey(event: KeyComboLike): boolean {
   return event.code === 'Digit0' || event.code === 'Numpad0' || event.key === '0'
 }
 
-/** Ctrl+Shift+0：缩放到全部内容（适应内容，P1-4） */
+/**
+ * Ctrl+Alt+0：缩放到全部内容（适应内容，P1-4）——**推荐组合键**。
+ * ⚠️ 2026-09-13 用户实测：Ctrl+Shift+0 在本机被输入法/系统占走（探针显示只收到
+ * Control / Shift，数字 0 的 keydown 根本没送达应用），代码层面无法绕过；
+ * Ctrl+Alt+0 无人占用，故作为主组合键，Ctrl+Shift+0 继续兼容（见下）
+ */
 export function isZoomToFitShortcut(event: KeyComboLike): boolean {
-  return event.ctrlKey && event.shiftKey && isZeroKey(event)
+  if (!isZeroKey(event)) return false
+  return (event.ctrlKey && event.altKey) || (event.ctrlKey && event.shiftKey)
 }
 
-/** Ctrl+0（不带 Shift）：复原视图 */
+/** Ctrl+0（不带 Shift / Alt）：复原视图 */
 export function isResetViewShortcut(event: KeyComboLike): boolean {
-  return event.ctrlKey && !event.shiftKey && isZeroKey(event)
+  return event.ctrlKey && !event.shiftKey && !event.altKey && isZeroKey(event)
 }

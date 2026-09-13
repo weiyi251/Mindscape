@@ -86,6 +86,9 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
+  // 快捷键组合键调整（2026-09-13，用户实测）：本机 Ctrl+Shift+0 被输入法/系统吞掉
+  // （数字 0 的 keydown 不送达应用，代码层无法绕过），主组合键改 Ctrl+Alt+0；
+  // 匹配逻辑抽到 interaction/zoomKeys.ts（纯函数 + 单测），Canvas 侧只留一行调用，行数持平
   // 便签行内编辑（2026-09-13，用户要求）：editingNoteId 状态 + beginNoteEdit API +
   // dblclick 分支 + 编辑结束回调转发，约 +25 行（替代了 Board 的弹窗逻辑）
   // 便签编辑态选字 + 四向缩放（2026-09-13，用户要求）：编辑态早退分支 +

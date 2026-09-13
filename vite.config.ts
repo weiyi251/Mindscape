@@ -25,7 +25,12 @@ export default defineConfig(() => ({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // 开发服务必须双栈监听（2026-09-13 白屏排查）：默认 `false` 让 Node 只解析到
+    // 单个地址（本机实测只绑 [::1]），而 WebView2 可能先连 127.0.0.1 ——
+    // 两条 SYN 打不通 → 窗口白屏。'::' 在 Windows 上是双栈套接字（Node 默认
+    // ipv6Only=false），IPv4 / IPv6 两种解析都能连上，消除随机性。
+    // TAURI_DEV_HOST（移动端调试）优先，保持原行为
+    host: host || '::',
     hmr: host
       ? {
           protocol: 'ws',

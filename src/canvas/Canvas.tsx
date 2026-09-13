@@ -1017,8 +1017,8 @@ export function Canvas({
     return () => root.removeEventListener('dblclick', handleDoubleClick)
   }, [])
 
-  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+Shift+0 缩放到全部内容（P1-4）/
-  // Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
+  // 快捷键（5.3）：Ctrl+0 复原视图 / Ctrl+Alt+0（兼容 Ctrl+Shift+0）缩放到全部内容
+  // （P1-4）/ Ctrl+A 全选 / Ctrl+F 搜索（P1-3）/ Esc 取消选中
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // ⚠️ 适应内容须先于复原视图判断；数字 0 用 zoomKeys 物理键位判断（Shift 会让 key 变上档字符）
@@ -1065,7 +1065,9 @@ export function Canvas({
     }
 
     window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
   }, [])
 
   return (
@@ -1171,12 +1173,10 @@ export function Canvas({
           type="button"
           className="rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
           onClick={() =>
-            controllerRef.current?.fitToContent(
-              contentRects(cardsRef.current, partitionsRef.current),
-            )
+            controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
           }
         >
-          适应内容（Ctrl+Shift+0）
+          适应内容（Ctrl+Alt+0）
         </button>
         <button
           type="button"
