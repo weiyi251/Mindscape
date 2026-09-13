@@ -81,7 +81,8 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 跨应用剪贴板互通（2026-09-13，用户批准 clipboard-win）：外部文件导入抽公共端
   // ingestExternalFiles（拖入/粘贴共用）+ pasteExternalFiles + handleCopyCards
   // 写系统剪贴板 + Ctrl+V 外部分支，净 +79 行
-  'src/pages/Board.tsx': 2114,
+  // 粘贴净化接线（2026-09-13，用户裁决）：cardWithoutEditables 调用 + 注释，净 +3 行
+  'src/pages/Board.tsx': 2117,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行

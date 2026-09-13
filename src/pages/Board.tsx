@@ -89,6 +89,7 @@ import { cardSizeForImage } from '@/core/board/cardSize'
 import { cardTypeFor } from '@/core/board/imageTypes'
 import { setCardAsset } from '@/core/board/cardAssets'
 import {
+  cardWithoutEditables,
   expandedBounds,
   isCopyableCard,
   pasteFileName,
@@ -943,7 +944,9 @@ export function Board() {
           if (dest.groupName) card.group = dest.groupName
 
           usedIds.push(id)
-          cards.push(card)
+          // 2026-09-13 用户裁决：粘贴仅复制内容本身（图片 = 复制原图字节），
+          // 原卡的备注与标签不带到新卡；尺寸位置分组等其余行为不变
+          cards.push(cardWithoutEditables(card))
           createdFiles.push(actualAbs)
           sources.push({ src, destDir: dest.destDir })
           offset += 24

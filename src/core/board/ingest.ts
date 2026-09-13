@@ -40,6 +40,20 @@ export function isCopyableCard(card: Pick<Card, 'type' | 'filePath'>): boolean {
   return card.type === 'note' || card.filePath !== ''
 }
 
+/**
+ * 粘贴进空间的文件 / 图片卡片字段净化（2026-09-13 用户裁决）：
+ * 复制粘贴**仅搬运内容本身**（文件字节 = 原图），原卡的备注与标签是编辑层
+ * 信息，不随副本走 —— 粘贴出的新卡一律不带它们；其余信息（尺寸、位置、
+ * 分组归属）的复制行为保持不变。
+ *
+ * ⚠️ 只对文件 / 图片卡使用：便签的 note 就是内容本体，克隆时必须保留。
+ * 现状 buildIngestedCard 构建的新卡本就不带这些字段，这里是显式固化裁决
+ * 的防线（防止未来构建链路变化时悄悄带出）。
+ */
+export function cardWithoutEditables(card: Card): Card {
+  return { ...card, note: '', meta: {} }
+}
+
 /** 一次拖入 / 粘贴的落点判定结果 */
 export interface DropDestination {
   /** 目标文件夹绝对路径（可能尚不存在，由 copy 命令自动创建） */

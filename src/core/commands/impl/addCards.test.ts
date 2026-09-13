@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createAddCardsCommand } from './addCards'
 import {
+  cardWithoutEditables,
   expandedBounds,
   isCopyableCard,
   pasteFileName,
@@ -200,5 +201,33 @@ describe('isCopyableCard', () => {
   it('图片 / 文件：filePath 为空（文件缺失）时不可复制', () => {
     expect(isCopyableCard({ type: 'image', filePath: '' })).toBe(false)
     expect(isCopyableCard({ type: 'file', filePath: '' })).toBe(false)
+  })
+})
+
+describe('cardWithoutEditables（2026-09-13 用户裁决：粘贴不复制备注与标签）', () => {
+  it('清空备注与 meta（含标签），其余字段原样保留', () => {
+    const source = {
+      ...makeCard('c1', 12, 34),
+      note: '原图的备注',
+      meta: { tags: ['图标'] },
+    } as Parameters<typeof cardWithoutEditables>[0]
+
+    const cleaned = cardWithoutEditables(source)
+
+    expect(cleaned.note).toBe('')
+    expect(cleaned.meta).toEqual({})
+    // 其余信息（内容本体与位置尺寸）复制行为不变
+    expect(cleaned).toMatchObject({
+      id: 'c1',
+      type: 'image',
+      filePath: 'c1.png',
+      x: 12,
+      y: 34,
+      w: 100,
+      h: 100,
+    })
+    // 不改动源卡（复制语义）
+    expect(source.note).toBe('原图的备注')
+    expect(source.meta).toEqual({ tags: ['图标'] })
   })
 })
