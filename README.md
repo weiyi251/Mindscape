@@ -46,7 +46,7 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 43 passed |
 | 代码检查 | `pnpm lint` | 无错误 |
 | 生产构建 | `pnpm build` | 通过 |
-| 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.88 MB / NSIS 2.59 MB（含自动更新组件） |
+| 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.89 MB / NSIS 2.60 MB（含自动更新组件） |
 
 > 界面截图待补充。
 
