@@ -25,23 +25,13 @@ import { confirmDialog } from '@/core/utils/nativeDialogs'
 
 import { Button } from '@/components/ui/button'
 import { ContextMenu } from '@/components/ui/context-menu'
-import type { ContextMenuItemData, ContextMenuState } from '@/components/ui/context-menu'
+import type { ContextMenuState } from '@/components/ui/context-menu'
 import { PromptDialog } from '@/components/ui/prompt-dialog'
 import type { PromptDialogState } from '@/components/ui/prompt-dialog'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SETTINGS_TEXT } from '@/components/ui/settingsText'
 import { CardSearchPanel } from '@/components/ui/card-search'
-import {
-  ArchiveIcon,
-  ArrowLeftIcon,
-  MoonIcon,
-  NoteAddIcon,
-  RedoIcon,
-  RestoreIcon,
-  SettingsIcon,
-  SunIcon,
-  UndoIcon,
-} from '@/components/ui/icons'
+import { ArchiveIcon, ArrowLeftIcon, MoonIcon, SettingsIcon, SunIcon } from '@/components/ui/icons'
 import { Canvas } from '@/canvas/Canvas'
 import type { CanvasApi } from '@/canvas/Canvas'
 import { MiniMap, MINIMAP_PREF_KEY } from '@/canvas/MiniMap'
@@ -79,12 +69,11 @@ import {
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
 import { createMoveCardToFolderCommand, currentTopFolderOf } from '@/core/commands/impl/moveCardToFolder'
 import { registerAction } from '@/core/registry/actionRegistry'
-import { buildCardMenuFor, buildPartitionMenuFor, buildConnectionMenuFor, CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
-import { PARTITION_PALETTE, PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
+import { CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
+import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { metaWithTags, tagsOfMeta } from '@/core/board/cardMeta'
 import { useCardSearch } from '@/core/hooks/useCardSearch'
-import { formatCombo, resolveShortcut } from '@/core/shortcuts/keys'
-import type { ShortcutId } from '@/core/shortcuts/keys'
+import { resolveShortcut } from '@/core/shortcuts/keys'
 import { useShortcutsStore } from '@/core/store/shortcutsStore'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
@@ -101,7 +90,6 @@ import {
   isCopyableCard,
   pasteFileName,
   resolveDropDestination,
-  UNCLASSIFIED_DIR,
 } from '@/core/board/ingest'
 import type { DropDestination } from '@/core/board/ingest'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
@@ -110,6 +98,14 @@ import { isValidFolderName } from '@/core/board/partitions'
 import { readClipboardFiles, writeClipboardFiles, writeClipboardText } from '@/core/system/clipboard'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
+import {
+  buildCardMenuItems,
+  buildCardMoveItems,
+  buildCanvasMenuItems,
+  buildConnectionMenuItems,
+  buildPartitionColorItems,
+  buildPartitionMenuItems,
+} from '@/pages/board/contextMenus'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -125,15 +121,6 @@ const CARD_COUNT_WARNING = 100
 function usedCardIds(): string[] {
   const state = useBoardStore.getState()
   return [...state.cards.map((card) => card.id), ...state.removed.map((entry) => entry.id)]
-}
-
-/**
- * 右键菜单里的操作名带上当前快捷键（如「撤销（Ctrl+Z）」）。
- * 同步读 store 的当前绑定 —— 菜单是「点开时才组装」的，因此改绑后立刻反映，
- * 不需要为它挂 React 订阅。
- */
-function withShortcutLabel(text: string, id: ShortcutId): string {
-  return `${text}（${formatCombo(useShortcutsStore.getState().bindings[id])}）`
 }
 
 export function Board() {
@@ -1310,50 +1297,32 @@ export function Board() {
     [history, writer],
   )
 
-  /** 指定分区颜色（T3.9）：弹出色板二级菜单 */
-  const handlePartitionColor = useCallback((partitionId: string, screen: { x: number; y: number }) => {
-    const current = useBoardStore
-      .getState()
-      .partitions.find((partition) => partition.id === partitionId)
-    if (!current) return
+  /** 指定分区颜色（T3.9）：弹出色板二级菜单（项由 pages/board/contextMenus 组装） */
+  const handlePartitionColor = useCallback(
+    (partitionId: string, screen: { x: number; y: number }) => {
+      const current = useBoardStore
+        .getState()
+        .partitions.find((partition) => partition.id === partitionId)
+      if (!current) return
 
-    const items: ContextMenuItemData[] = [
-      {
-        id: `${PARTITION_ACTION.setColor}:auto`,
-        label: '自动（8 色轮换）',
-        run: () => {
-          void history
-            .execute(
-              createSetPartitionColorCommand(
-                partitionId,
-                current.color,
-                'auto',
-                (id, color) => useBoardStore.getState().setPartitionColor(id, color),
-              ),
-            )
-            .then(() => writer.schedule())
-        },
-      },
-      ...PARTITION_PALETTE.map((colorKey, index) => ({
-        id: `${PARTITION_ACTION.setColor}:${colorKey}`,
-        label: `颜色 ${index + 1}`,
-        swatch: colorKey,
-        run: () => {
-          void history
-            .execute(
-              createSetPartitionColorCommand(
-                partitionId,
-                current.color,
-                colorKey,
-                (id, color) => useBoardStore.getState().setPartitionColor(id, color),
-              ),
-            )
-            .then(() => writer.schedule())
-        },
-      })),
-    ]
-    setContextMenu({ x: screen.x, y: screen.y, items })
-  }, [history, writer])
+      // 记下改色前的值，命令的 undo 用它还原
+      const previousColor = current.color
+      const items = buildPartitionColorItems((color) => {
+        void history
+          .execute(
+            createSetPartitionColorCommand(
+              partitionId,
+              previousColor,
+              color,
+              (id, next) => useBoardStore.getState().setPartitionColor(id, next),
+            ),
+          )
+          .then(() => writer.schedule())
+      })
+      setContextMenu({ x: screen.x, y: screen.y, items })
+    },
+    [history, writer],
+  )
 
   /**
    * 移动卡片到文件夹（2026-09-12 用户裁决「画布内切换图片所属文件夹」）：
@@ -1372,8 +1341,6 @@ export function Board() {
         return
       }
       if (card.filePath === '') return
-
-      const currentFolder = currentTopFolderOf(card.filePath)
 
       const move = (
         targetFolderRel: string,
@@ -1408,28 +1375,11 @@ export function Board() {
           })
       }
 
-      const items: ContextMenuItemData[] = [
-        // 「未分类」= 空间主目录（2026-09-13 用户裁决：不再是物理「未分类」文件夹）。
-        // 文件已在根目录时跳过（移到原地没有意义）；旧版留在 `未分类\` 里的文件
-        // 也会列出这一项 —— 用户点它即把文件移出旧文件夹、回到空间主目录
-        ...(currentFolder !== ''
-          ? [
-              {
-                id: `${CARD_ACTION.move}:unclassified`,
-                label: UNCLASSIFIED_DIR,
-                run: () => move('', undefined, null),
-              },
-            ]
-          : []),
-        ...snapshot.partitions
-          // 卡片当前所在分区不列（no-op）；其余分区按画布顺序列出
-          .filter((partition) => partition.folderPath !== currentFolder)
-          .map((partition) => ({
-            id: `${CARD_ACTION.move}:${partition.id}`,
-            label: partition.name,
-            run: () => move(partition.folderPath, partition.name, partition),
-          })),
-      ]
+      const items = buildCardMoveItems({
+        partitions: snapshot.partitions,
+        currentFolder: currentTopFolderOf(card.filePath),
+        onMove: move,
+      })
 
       if (items.length === 0) {
         setActionError('没有可移动到的其他文件夹')
@@ -1560,60 +1510,35 @@ export function Board() {
     })
   }, [history, writer])
 
-  // ---- T3.9 右键菜单的弹出入口：菜单数组一律来自配置中心 ----
+  // ---- T3.9 右键菜单的弹出入口：菜单数组由 pages/board/contextMenus 组装 ----
+  // 这里只负责「取上下文 + 放入浮层 state」；菜单项配置与回调映射都在那边。
 
   const handleCardContextMenu = useCallback(
     (card: Card, screen: { x: number; y: number }) => {
-      const ctx = { spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '', card }
-      const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
-        id: item.id,
-        label: item.label,
-        danger: item.id === CARD_ACTION.remove,
-        run: () => item.action(ctx),
-        // 「移动到…」展开二级文件夹选择菜单（2026-09-12 用户裁决）
-        ...(item.id === CARD_ACTION.move ? { run: () => handleCardMove(card, screen) } : {}),
-      }))
-
-      // 「恢复」（2026-09-13 用户裁决）：原来挂在顶栏的可折叠工具栏上，
-      // 取消工具栏后并入右键菜单；右键的卡片若在选中集合里就整批恢复
-      if (removedView) {
-        const targets = selectedIds.includes(card.id) ? selectedIds : [card.id]
-        items.unshift({
-          id: 'card.restore',
-          label: targets.length > 1 ? `恢复选中的 ${targets.length} 张卡片` : '恢复此卡片',
-          icon: <RestoreIcon />,
-          separatorBefore: true,
-          run: () => handleRestoreCards(targets),
-        })
-      }
-
+      const items = buildCardMenuItems({
+        card,
+        screen,
+        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+        removedView,
+        selectedIds,
+        onMove: handleCardMove,
+        onRestore: handleRestoreCards,
+      })
       setContextMenu({ x: screen.x, y: screen.y, items })
     },
     [handleCardMove, removedView, selectedIds, handleRestoreCards],
   )
 
   const handlePartitionContextMenu = useCallback(
-    (partition: import('@/core/types').Partition, screen: { x: number; y: number }) => {
-      const ctx = {
-        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+    (partition: Partition, screen: { x: number; y: number }) => {
+      const items = buildPartitionMenuItems({
         partition,
-      }
-      setContextMenu({
-        x: screen.x,
-        y: screen.y,
-        items: buildPartitionMenuFor(partition)
-          // 「粘贴」只在应用内剪贴板非空时显示
-          .filter((item) => item.id !== PARTITION_ACTION.paste || copiedCards.length > 0)
-          .map((item) => ({
-            id: item.id,
-            label: item.label,
-            run: () => item.action(ctx),
-            // 「指定颜色」展开二级色板
-            ...(item.id === PARTITION_ACTION.setColor
-              ? { run: () => handlePartitionColor(partition.id, screen) }
-              : {}),
-          })),
+        screen,
+        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+        hasCopiedCards: copiedCards.length > 0,
+        onSetColor: handlePartitionColor,
       })
+      setContextMenu({ x: screen.x, y: screen.y, items })
     },
     [handlePartitionColor, copiedCards.length],
   )
@@ -1622,77 +1547,35 @@ export function Board() {
     (connectionId: string, screen: { x: number; y: number }) => {
       const connection = useBoardStore.getState().connections.find((item) => item.id === connectionId)
       if (!connection) return
-      const ctx = {
-        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+      const items = buildConnectionMenuItems({
         connection,
-      }
-      setContextMenu({
-        x: screen.x,
-        y: screen.y,
-        items: buildConnectionMenuFor().map((item) => ({
-          id: item.id,
-          label: item.label,
-          danger: item.id === CONNECTION_ACTION.remove,
-          run: () => item.action(ctx),
-        })),
+        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
       })
+      setContextMenu({ x: screen.x, y: screen.y, items })
     },
     [],
   )
 
   const handleCanvasContextMenu = useCallback(
     (canvasPoint: { x: number; y: number }, screen: { x: number; y: number }) => {
-      // 空白菜单：新建便签 / 粘贴 / 撤销 / 重做（后者是 2026-09-13 取消顶栏
-      // 可折叠工具栏后并入的；配置中心之外的核心画布动作，与 CARD_ACTION 同样
-      // 走 actionRegistry 登记以保持一致）
-      setContextMenu({
-        x: screen.x,
-        y: screen.y,
-        items: [
-          {
-            id: 'canvas.createNote',
-            label: '新建便签',
-            icon: <NoteAddIcon />,
-            run: () => createNoteAt(canvasPoint.x - 100, canvasPoint.y - 20),
-          },
-          // 应用内剪贴板非空时：空白处也可直接粘贴。
-          // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
-          // 分区的文件夹，点在空白归空间主目录（2026-09-13 起「未分类」不再是文件夹）
-          ...(copiedCards.length > 0
-            ? [
-                {
-                  id: 'canvas.paste',
-                  label: '粘贴',
-                  run: () => {
-                    const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
-                    if (!spacePath) return
-                    void pasteCards(
-                      canvasPoint,
-                      resolveDropDestination(
-                        canvasPoint,
-                        useBoardStore.getState().partitions,
-                        spacePath,
-                      ),
-                    )
-                  },
-                },
-              ]
-            : []),
-          {
-            id: 'canvas.undo',
-            label: withShortcutLabel('撤销', 'edit.undo'),
-            icon: <UndoIcon />,
-            separatorBefore: true,
-            run: handleUndo,
-          },
-          {
-            id: 'canvas.redo',
-            label: withShortcutLabel('重做', 'edit.redo'),
-            icon: <RedoIcon />,
-            run: handleRedo,
-          },
-        ],
+      const items = buildCanvasMenuItems({
+        canvasPoint,
+        hasCopiedCards: copiedCards.length > 0,
+        onCreateNote: createNoteAt,
+        // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
+        // 分区的文件夹，点在空白归空间主目录（2026-09-13 起「未分类」不再是文件夹）
+        onPaste: (point) => {
+          const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
+          if (!spacePath) return
+          void pasteCards(
+            point,
+            resolveDropDestination(point, useBoardStore.getState().partitions, spacePath),
+          )
+        },
+        onUndo: handleUndo,
+        onRedo: handleRedo,
       })
+      setContextMenu({ x: screen.x, y: screen.y, items })
     },
     [createNoteAt, copiedCards.length, pasteCards, handleUndo, handleRedo],
   )
