@@ -382,11 +382,14 @@ export function SpaceList() {
                   {space.favorite ? <span className="mr-1 text-primary">★</span> : null}
                   {space.name}
                 </h2>
-                {/* 悬停才出现的卡片操作（两轮用户反馈迭代）：悬浮层放**右下角**
-                    —— 右上角静止时会留一个背景空框遮挡标题（2026-09-13 截图 1）；
-                    改为整体仅悬停时显示（opacity + pointer-events 一起切换），
-                    平时完全不可见，标题独占卡片顶部完整可读 */}
-                <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-0.5 rounded-md border border-border bg-card/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                {/* 悬停才出现的卡片操作（三轮用户反馈迭代）：悬浮层挂在**卡片外部右上角**
+                    —— 右上角静止时会留背景空框遮挡标题（截图 1）→ 右下角又不够醒目；
+                    现用 bottom-full 外挂到卡片上边缘之外、right-0 右对齐，与卡片本体
+                    零重叠（2026-09-13 截图 3）。⚠️ 不留垂直间隙：鼠标从卡片移向按钮
+                    的路径必须连续，一旦有 margin，中途离开卡片 → group-hover 失效 →
+                    按钮瞬间消失、永远点不到。整体仅悬停时显示（opacity + pointer-events
+                    一起切换），平时完全不可见；z-20 保证盖过上方相邻卡片（grid 有 gap-4） */}
+                <div className="pointer-events-none absolute bottom-full right-0 z-20 flex items-center gap-0.5 whitespace-nowrap rounded-md border border-border bg-card/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                   <button
                     type="button"
                     aria-label={`${space.favorite ? '取消收藏' : '收藏'} ${space.name}`}

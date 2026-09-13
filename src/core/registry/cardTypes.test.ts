@@ -321,6 +321,10 @@ describe('备注条与标签条的视觉区分', () => {
     expect(imageHtml).not.toContain('left-1.5 top-1.5')
     // 半透明底 + 模糊：悬在画布上可读
     expect(imageHtml).toContain('bg-background/95')
+    // 备注条与标签条**横排同行**（2026-09-13 第三轮用户反馈「排版不够美观」）：
+    // 容器 flex-row + flex-wrap（超宽整条换行兜底）、行内垂直居中
+    expect(imageHtml).toContain('flex-row flex-wrap items-center')
+    expect(imageHtml).not.toContain('flex-col items-stretch')
     // 图片元素盒始终占满卡片（flex-1），未被信息条挤矮
     expect(imageHtml).toContain('flex-1')
   })

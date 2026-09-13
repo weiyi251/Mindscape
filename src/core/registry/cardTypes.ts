@@ -158,7 +158,7 @@ function noteBar(card: Card, floating = false): ReactNode {
       'data-note-bar': '',
       className: [
         'flex items-start gap-1 text-[18px] leading-snug text-muted-foreground',
-        floating ? 'max-w-full' : 'shrink-0 border-t border-border/60 bg-muted/40 px-1.5 py-1',
+        floating ? 'min-w-0 max-w-full' : 'shrink-0 border-t border-border/60 bg-muted/40 px-1.5 py-1',
       ].join(' '),
       title: card.note,
     },
@@ -187,7 +187,7 @@ function tagBar(card: Card, floating = false): ReactNode {
       'data-tag-bar': '',
       className: [
         'flex flex-wrap items-center gap-1',
-        floating ? 'max-w-full' : 'shrink-0 border-t border-border/40 bg-primary/5 px-1.5 py-1',
+        floating ? 'min-w-0 max-w-full' : 'shrink-0 border-t border-border/40 bg-primary/5 px-1.5 py-1',
       ].join(' '),
     },
     tagIcon(),
@@ -213,6 +213,7 @@ function tagBar(card: Card, floating = false): ReactNode {
  * （带 overflow-hidden）之外也不会被裁剪。卡片盒的 w / h 与锁定比例完全不变，
  * 悬浮层随卡片一同移动。半透明底 + 模糊 + 边框 + 阴影：悬在画布上清晰可读。
  * 左缘与卡片对齐（left-0），多张卡片挂出的「标签牌」整齐统一。
+ * 备注条与标签条**横排同行**（2026-09-13 第三轮用户反馈），超宽时整条换行。
  */
 function imageOverlay(card: Card): ReactNode {
   const note = noteBar(card, true)
@@ -223,8 +224,11 @@ function imageOverlay(card: Card): ReactNode {
     {
       key: 'image-overlay',
       'data-image-overlay': '',
+      // 横排同行（2026-09-13 第三轮用户反馈）：备注条与标签条**同一行**显示，
+      // flex-wrap 兜底 —— 两者合计超宽时整条换行，不截断内容；items-center 让
+      // 备注文字与标签胶囊在行内垂直居中，排版更紧凑美观
       className:
-        'absolute bottom-full left-0 z-20 mb-1.5 flex max-w-full flex-col items-stretch gap-1 rounded-md border border-border/70 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm',
+        'absolute bottom-full left-0 z-20 mb-1.5 flex max-w-full flex-row flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/70 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur-sm',
     },
     [note, tags].filter(Boolean),
   )
