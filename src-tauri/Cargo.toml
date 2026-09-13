@@ -43,6 +43,14 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 
 
+# 跨平台依赖到此为止；平台特有依赖见下方 target 段。
+
+# Windows 专有：系统剪贴板文件互通（2026-09-13 用户批准引入）。
+# Tauri 官方 clipboard 插件只支持文本/图片，无法读写文件列表（CF_HDROP）；
+# clipboard-win 专门负责「空间内复制 → 资源管理器粘贴」与反向链路。
+[target.'cfg(windows)'.dependencies]
+clipboard-win = "5"
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1

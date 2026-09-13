@@ -40,6 +40,9 @@ pub fn run() {
             commands::system::read_image_size,
             commands::system::open_with_default,
             commands::system::reveal_in_explorer,
+            commands::clipboard::write_clipboard_files,
+            commands::clipboard::write_clipboard_text,
+            commands::clipboard::read_clipboard_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

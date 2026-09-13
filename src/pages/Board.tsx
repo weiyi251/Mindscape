@@ -99,6 +99,7 @@ import type { DropDestination } from '@/core/board/ingest'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { isValidFolderName } from '@/core/board/partitions'
+import { readClipboardFiles, writeClipboardFiles, writeClipboardText } from '@/core/system/clipboard'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
 
@@ -660,22 +661,19 @@ export function Board() {
   )
 
   /**
-   * T3.6 / T3.7 拖入文件：paths 来自 Tauri onDragDropEvent（真实路径，17.4 铁律），
-   * screenPoint 是 drop 的窗口内逻辑坐标。复制模式：原件保留，副本进项目文件夹。
+   * 外部文件导入的公共执行端（2026-09-13 自拖入链路抽出，拖入与系统剪贴板粘贴共用）：
+   * 逐个 copy 进空间（铁律②：原件不动）→ 建卡 → 汇总失败 → 撤销栈。
+   * dest（落盘目标 + 分区归属）与 point（首卡落点）由调用方按各自规则决定——
+   * 拖入看落点命中、粘贴看确定性规则（2026-09-12 用户裁决：不靠落点猜测）。
    */
-  const handleDropFiles = useCallback(
-    async (paths: string[], screenPoint: { x: number; y: number }) => {
-      const api = canvasApiRef.current
-      const space = useSpacesStore.getState().getCurrentSpace()
-      if (!api || !space || paths.length === 0) return
-      if (useBoardStore.getState().readOnly) {
-        setActionError('布局由更新版本创建，处于只读模式，无法拖入文件')
-        return
-      }
-
-      const point = api.screenToCanvasPoint(screenPoint.x, screenPoint.y)
-      const dest = resolveDropDestination(point, useBoardStore.getState().partitions, space.folderPath)
-
+  const ingestExternalFiles = useCallback(
+    async (
+      paths: string[],
+      spacePath: string,
+      dest: DropDestination,
+      point: Point,
+      failLabel: '拖入' | '粘贴',
+    ): Promise<void> => {
       const cards: Card[] = []
       const createdFiles: string[] = []
       const sources: AddCardsSource[] = []
@@ -693,11 +691,11 @@ export function Board() {
           const card = await buildIngestedCard({
             id,
             actualAbs,
-            spacePath: space.folderPath,
+            spacePath,
             point,
             offset,
           })
-          // 拖入的卡归入命中分区（T3.7）
+          // 拖入 / 粘贴到分区的卡归入该分区（T3.7）
           if (dest.groupName) card.group = dest.groupName
 
           usedIds.push(id)
@@ -711,7 +709,7 @@ export function Board() {
       }
 
       if (failures.length > 0) {
-        setActionError(`以下文件拖入失败：${failures.join('；')}`)
+        setActionError(`以下文件${failLabel}失败：${failures.join('；')}`)
       }
       if (cards.length === 0) return
 
@@ -719,6 +717,27 @@ export function Board() {
       await commitIngestedCards(cards, createdFiles, sources, dest)
     },
     [buildIngestedCard, commitIngestedCards],
+  )
+
+  /**
+   * T3.6 / T3.7 拖入文件：paths 来自 Tauri onDragDropEvent（真实路径，17.4 铁律），
+   * screenPoint 是 drop 的窗口内逻辑坐标。复制模式：原件保留，副本进项目文件夹。
+   */
+  const handleDropFiles = useCallback(
+    async (paths: string[], screenPoint: { x: number; y: number }) => {
+      const api = canvasApiRef.current
+      const space = useSpacesStore.getState().getCurrentSpace()
+      if (!api || !space || paths.length === 0) return
+      if (useBoardStore.getState().readOnly) {
+        setActionError('布局由更新版本创建，处于只读模式，无法拖入文件')
+        return
+      }
+
+      const point = api.screenToCanvasPoint(screenPoint.x, screenPoint.y)
+      const dest = resolveDropDestination(point, useBoardStore.getState().partitions, space.folderPath)
+      await ingestExternalFiles(paths, space.folderPath, dest, point, '拖入')
+    },
+    [ingestExternalFiles],
   )
 
   /** 视口中心的画布坐标（Ctrl+V 落点；与新建便签同规则） */
@@ -810,12 +829,43 @@ export function Board() {
 
   // ---- 复制 / 粘贴卡片（2026-09-11 用户裁决：三种类型全支持，同空间跨分区复制）----
 
-  /** 复制卡片（菜单 / Ctrl+C 共用）：只存快照，粘贴时才拷贝文件或克隆便签 */
-  const handleCopyCards = useCallback((cards: Card[]) => {
+  /**
+   * 复制卡片（菜单 / Ctrl+C 共用）：应用内快照（粘贴回空间用）+ 系统剪贴板互通
+   * （2026-09-13 用户裁决「文件优先」）。
+   *   · 选区含文件卡 → 把绝对路径写入系统剪贴板（Windows CF_HDROP），
+   *     资源管理器 / 桌面等外部软件 Ctrl+V 即粘贴文件；便签无磁盘文件不同步，
+   *     但仍留在应用内剪贴板，可粘贴回空间；
+   *   · 纯便签选区 → 写便签文本（CF_UNICODETEXT，可粘贴到记事本等）。
+   * 写系统剪贴板失败不阻断应用内复制：提示即可——用户仍能粘贴回空间，
+   * 但必须知道「外部粘贴不可用」（用户要求环境受限时给出明确提示）。
+   */
+  const handleCopyCards = useCallback(async (cards: Card[]) => {
     const copyable = cards.filter(isCopyableCard)
     if (copyable.length === 0) return
     setCopiedCards(copyable.map((card) => ({ ...card })))
     setActionError(null)
+
+    const space = useSpacesStore.getState().getCurrentSpace()
+    if (!space) return
+
+    const filePaths = copyable
+      .filter((card) => card.type !== 'note')
+      .map((card) => joinPath(space.folderPath, card.originalPath || card.filePath))
+    try {
+      if (filePaths.length > 0) {
+        await writeClipboardFiles(filePaths)
+      } else {
+        const text = copyable
+          .filter((card) => card.type === 'note')
+          .map((card) => card.note)
+          .join('\n\n')
+        if (text) await writeClipboardText(text)
+      }
+    } catch (error) {
+      setActionError(
+        `已在应用内复制，但写入系统剪贴板失败：${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
   }, [])
 
   /**
@@ -917,6 +967,28 @@ export function Board() {
     [copiedCards, buildIngestedCard, commitIngestedCards, resolvePasteDestination],
   )
 
+  /**
+   * 系统剪贴板文件互通 · 进方向（2026-09-13 用户要求）：读系统剪贴板里的文件
+   * 路径并粘贴进空间。落盘目标与 Ctrl+V 粘贴卡片同规则（resolvePasteDestination：
+   * 选中分区 → 该分区，否则空间主目录，不靠落点猜测）；落点为视口中心；
+   * 复用拖入的导入链路（copy 进空间，铁律②原件不动）。
+   * 剪贴板上没有文件（截图 / 纯文本）时静默返回——原生 paste 事件照常处理
+   * 截图（T3.8 链路不受影响）；非桌面环境 readClipboardFiles 直接返回空。
+   */
+  const pasteExternalFiles = useCallback(async () => {
+    const paths = await readClipboardFiles()
+    if (paths.length === 0) return
+
+    const space = useSpacesStore.getState().getCurrentSpace()
+    if (!space) return
+
+    const dest = resolvePasteDestination()
+    const point = viewportCenterCanvasPoint()
+    if (!dest || !point) return
+
+    await ingestExternalFiles(paths, space.folderPath, dest, point, '粘贴')
+  }, [ingestExternalFiles, resolvePasteDestination, viewportCenterCanvasPoint])
+
   /** Ctrl+C 复制选中的图片卡片 / Ctrl+V 粘贴（应用内剪贴板优先于截图粘贴） */
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -938,12 +1010,18 @@ export function Board() {
         )
         if (picked.length === 0) return
         event.preventDefault()
-        handleCopyCards(picked)
+        void handleCopyCards(picked)
         return
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
-        if (copiedCards.length === 0) return // 放行原生 paste（截图粘贴，T3.8）
+        if (copiedCards.length === 0) {
+          // 应用内剪贴板为空：尝试系统剪贴板文件（2026-09-13 跨应用互通）。
+          // 剪贴板上没有文件（截图 / 纯文本）时这里静默返回，
+          // 原生 paste 事件照常触发截图粘贴（T3.8），因此不 preventDefault
+          void pasteExternalFiles()
+          return
+        }
         event.preventDefault()
         const point = viewportCenterCanvasPoint()
         if (point) void pasteCards(point)
@@ -958,6 +1036,7 @@ export function Board() {
     copiedCards,
     handleCopyCards,
     pasteCards,
+    pasteExternalFiles,
     viewportCenterCanvasPoint,
   ])
 
@@ -1475,7 +1554,7 @@ export function Board() {
     })
     // 「复制」（2026-09-11 用户裁决：三种类型全支持）：菜单 / Ctrl+C 同一实现
     register(CARD_ACTION.copy, ({ card }) => {
-      if (card) handleCopyCards([card])
+      if (card) void handleCopyCards([card])
     })
     // 「粘贴」：粘贴进目标分区（落点 = 分区中心），拷贝原件或克隆便签
     register(PARTITION_ACTION.paste, ({ partition }) => {
