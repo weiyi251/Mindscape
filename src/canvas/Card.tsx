@@ -141,7 +141,7 @@ export function CardView({
             }
           }}
           spellCheck={false}
-          className="absolute inset-0 h-full w-full select-text resize-none rounded-sm border-0 bg-card p-2 text-[18px] leading-relaxed text-foreground outline-none"
+          className="absolute inset-0 h-full w-full select-text resize-none rounded-sm border-0 bg-transparent p-2 text-[18px] leading-relaxed text-foreground outline-none"
         />
       ) : null}
 

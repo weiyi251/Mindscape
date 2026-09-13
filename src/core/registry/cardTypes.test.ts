@@ -296,34 +296,50 @@ describe('标签条渲染（meta.tags）', () => {
 // ---------------------------------------------------------------------------
 
 describe('备注条与标签条的视觉区分', () => {
-  const bothHtml = renderToStaticMarkup(
+  // 2026-09-13 用户裁决：图片卡的备注 / 标签改走左上悬浮层（data-image-overlay），
+  // 不占卡片布局；文件 / 便签仍用底部通栏。两者共用 noteBar / tagBar 的图标与 chip。
+  const imageHtml = renderToStaticMarkup(
     renderCard({
       card: makeCard({ type: 'image', note: '总图', meta: { tags: ['总图'] } }),
       selected: false,
     }),
   )
+  const fileHtml = renderToStaticMarkup(
+    renderCard({
+      card: makeCard({ type: 'file', note: '总图', meta: { tags: ['总图'] } }),
+      selected: false,
+    }),
+  )
 
-  it('两者同时存在时各自渲染（备注在上、标签在下，共用左对齐分隔线）', () => {
-    expect(bothHtml).toContain('data-note-bar')
-    expect(bothHtml).toContain('data-tag-bar')
-    // 左右对齐：两条共用同一横向内边距
-    expect(bothHtml).toContain('px-1.5')
+  it('图片卡：备注 / 标签渲染在悬浮层内（不占布局，不改变图片比例）', () => {
+    expect(imageHtml).toContain('data-image-overlay')
+    expect(imageHtml).toContain('data-note-bar')
+    expect(imageHtml).toContain('data-tag-bar')
+    // 悬浮层 absolute 定位 + 半透明底：压在图片上可读
+    expect(imageHtml).toContain('absolute left-1.5 top-1.5')
+    expect(imageHtml).toContain('bg-background/95')
+    // 图片元素盒始终占满卡片（flex-1），未被信息条挤矮
+    expect(imageHtml).toContain('flex-1')
   })
 
-  it('配色区分：备注条灰底，标签 chip 苔绿底', () => {
-    expect(bothHtml).toContain('bg-muted/40')
-    expect(bothHtml).toContain('bg-primary/10')
+  it('文件卡：备注 / 标签保持底部通栏（灰底备注条 + 苔绿 chip 标签条）', () => {
+    expect(fileHtml).toContain('data-note-bar')
+    expect(fileHtml).toContain('data-tag-bar')
+    expect(fileHtml).not.toContain('data-image-overlay')
+    // 配色区分（2026-09-11 用户裁决）：备注条灰底，标签 chip 苔绿底
+    expect(fileHtml).toContain('bg-muted/40')
+    expect(fileHtml).toContain('bg-primary/10')
   })
 
-  it('形状区分：标签 chip 是胶囊（rounded-full），备注条无 chip 形状', () => {
-    expect(bothHtml).toContain('rounded-full')
+  it('形状区分：标签 chip 是胶囊（rounded-full）', () => {
+    expect(imageHtml).toContain('rounded-full')
   })
 
   it('图标区分：备注条与标签条各带一个 12×12 内联图标（文档 / 吊牌）', () => {
-    const icons = bothHtml.match(/viewBox="0 0 12 12"/g) ?? []
+    const icons = imageHtml.match(/viewBox="0 0 12 12"/g) ?? []
     expect(icons.length).toBe(2)
     // 文档图标是 rect 骨架，吊牌图标是 path 骨架
-    expect(bothHtml).toContain('<rect')
-    expect(bothHtml).toMatch(/<path d="M1\.5 5\.2/)
+    expect(imageHtml).toContain('<rect')
+    expect(imageHtml).toMatch(/<path d="M1\.5 5\.2/)
   })
 })

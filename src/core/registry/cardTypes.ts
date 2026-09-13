@@ -73,6 +73,12 @@ function extname(filePath: string): string {
 //   · 标签条 —— 「标签」图标 + 苔绿胶囊 chip（形状、配色均与备注不同）；
 //   · 两者同用 border-t 分隔、px-1.5 左右对齐，纵向依次排列，左边线对齐卡片内容。
 // 图标用内联 SVG（stroke = currentColor），不引入任何图标库（10.1 约束）。
+//
+// 【悬浮变体】（2026-09-13 用户裁决）：图片卡上备注 / 标签**不得占据卡片布局** ——
+// 底部通栏会挤矮图片区（object-contain 随之留白，卡片比例观感改变）。
+// 图片卡改用 floating 悬浮层：absolute 叠加在图片**左上方**，带半透明底 +
+// 边框 + 阴影保证压图可读，不占 flex 布局、不改卡片尺寸，随卡片一同移动。
+// 文件卡 / 便签仍用底部通栏（无图片比例问题）。
 // ---------------------------------------------------------------------------
 
 /** 12×12 线性小图标底座：尺寸 / 对齐统一，颜色随文字色（currentColor） */
@@ -138,19 +144,22 @@ function tagIcon(): ReactNode {
 }
 
 /**
- * 备注条（T3.3）：有备注时显示在卡片底部。
- * 任何核心类型都可以带备注（note 字段是 4.2 的通用字段）；
+ * 备注条（T3.3）：有备注时显示。任何核心类型都可以带备注（note 是 4.2 的通用字段）；
  * 便签（note 类型）整个卡片就是备注本体，不重复显示。
+ * floating=true 时为图片卡悬浮层变体：去掉底部通栏的 border-t / 灰底，
+ * 由外层悬浮容器统一提供底色与边框。
  */
-function noteBar(card: Card): ReactNode {
+function noteBar(card: Card, floating = false): ReactNode {
   if (card.type === 'note' || card.note.trim() === '') return null
   return createElement(
     'div',
     {
       key: 'note-bar',
       'data-note-bar': '',
-      className:
-        'flex shrink-0 items-start gap-1 border-t border-border/60 bg-muted/40 px-1.5 py-1 text-[18px] leading-snug text-muted-foreground',
+      className: [
+        'flex items-start gap-1 text-[18px] leading-snug text-muted-foreground',
+        floating ? 'max-w-full' : 'shrink-0 border-t border-border/60 bg-muted/40 px-1.5 py-1',
+      ].join(' '),
       title: card.note,
     },
     noteIcon(),
@@ -165,9 +174,10 @@ function noteBar(card: Card): ReactNode {
 /**
  * 标签条（T3.9 修复）：右键菜单「编辑标签」写入的 card.meta.tags 在这里显示。
  * ⚠️ 修复记录：此前标签只写进了 store / 落盘，任何类型都不渲染 ——
- * 「编辑标签」后在界面上无处可见。现三种核心类型底部统一显示标签条。
+ * 「编辑标签」后在界面上无处可见。现三种核心类型统一显示标签条。
+ * floating=true 时为图片卡悬浮层变体（见 noteBar 说明）。
  */
-function tagBar(card: Card): ReactNode {
+function tagBar(card: Card, floating = false): ReactNode {
   const tags = tagsOfMeta(card.meta)
   if (tags.length === 0) return null
   return createElement(
@@ -175,8 +185,10 @@ function tagBar(card: Card): ReactNode {
     {
       key: 'tag-bar',
       'data-tag-bar': '',
-      className:
-        'flex shrink-0 flex-wrap items-center gap-1 border-t border-border/40 bg-primary/5 px-1.5 py-1',
+      className: [
+        'flex flex-wrap items-center gap-1',
+        floating ? 'max-w-full' : 'shrink-0 border-t border-border/40 bg-primary/5 px-1.5 py-1',
+      ].join(' '),
     },
     tagIcon(),
     ...tags.map((tag) =>
@@ -194,7 +206,45 @@ function tagBar(card: Card): ReactNode {
   )
 }
 
-/** 卡片外壳：统一选中态、圆角、底色，各类型只负责填内容 */
+/**
+ * 图片卡左上悬浮层（2026-09-13 用户裁决）：承载备注条 + 标签条。
+ * absolute 定位不占 flex 布局 → 图片元素盒始终占满卡片，object-contain
+ * 不再因底部信息条让位而留白，卡片比例稳定；随卡片一同移动。
+ * 半透明底 + 模糊 + 边框 + 阴影：压在任意亮色图片上都能读。
+ * 内容过长时整体限高裁剪（title 仍可看全文）。
+ */
+function imageOverlay(card: Card): ReactNode {
+  const note = noteBar(card, true)
+  const tags = tagBar(card, true)
+  if (!note && !tags) return null
+  return createElement(
+    'div',
+    {
+      key: 'image-overlay',
+      'data-image-overlay': '',
+      className:
+        'absolute left-1.5 top-1.5 z-10 flex max-h-[calc(100%-12px)] max-w-[calc(100%-12px)] flex-col items-stretch gap-1 overflow-hidden rounded-md border border-border/70 bg-background/95 p-1.5 shadow-sm backdrop-blur-sm',
+    },
+    [note, tags].filter(Boolean),
+  )
+}
+
+// ---------------------------------------------------------------------------
+// 卡片视觉（底色 / 边框 / 阴影）由各类型显式传入 shell。
+// shell 的基础类不再写死这三项 —— core 层不得依赖 tailwind-merge（架构守卫
+// 规则 4：core 不 import lib），无法用 cn() 消解同组冲突类，干脆不制造冲突。
+// ---------------------------------------------------------------------------
+
+/** 默认卡片视觉：纯白底 + 常规边框 + 轻阴影（image / file 用） */
+const CARD_VISUAL_DEFAULT = 'border-border bg-card shadow-sm'
+
+/** 便签视觉（2026-09-13 用户裁决：浅色模式下 bg-card 与米白画布背景过于接近
+ *  看不清）——专属「便签纸」底色（globals.css --note，浅色淡黄 / 深色暗琥珀灰）
+ *  + 加深边框 + 阴影提级；深浅主题都经语义变量生效。 */
+const NOTE_VISUAL = 'border-foreground/25 bg-note shadow-md'
+
+/** 卡片外壳：统一选中态、圆角，各类型负责填内容与视觉色。
+ *  contentClass 必须自带底色 / 边框色 / 阴影（见上方常量），这里不提供默认值。 */
 function shell(
   card: Card,
   selected: boolean,
@@ -208,10 +258,12 @@ function shell(
       'data-card-type': card.type,
       'data-selected': selected,
       className: [
-        'relative flex h-full w-full overflow-hidden rounded-md border border-border bg-card text-foreground shadow-sm',
+        'relative flex h-full w-full overflow-hidden rounded-md border text-foreground',
         selected ? 'ring-2 ring-primary' : '',
         contentClass,
-      ].join(' '),
+      ]
+        .filter(Boolean)
+        .join(' '),
     },
     children,
   )
@@ -221,17 +273,18 @@ function shell(
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
   const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
-  const note = noteBar(card)
-  const tags = tagBar(card)
+  // 备注 / 标签走左上悬浮层（2026-09-13 用户裁决）：不占卡片布局、
+  // 不改变图片显示比例，随卡片一同移动 —— 不再用底部通栏（见 imageOverlay 说明）
+  const overlay = imageOverlay(card)
 
   // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：
   //   · 只给 w-full 时，img 元素盒的高度会按"宽度 × 原图比例"自己撑开；
   //     卡片比原图更宽更扁（例如 480×135 装 16:9 图）时元素盒会比卡片高，
   //     多出的部分被外壳的 overflow-hidden 裁掉 —— 表现就是"图片显示不完整"。
-  //   · 给成 flex-1（有备注条 / 标签条时自动让出它们的高度）后元素盒被容器约束，
+  //   · 给成 flex-1（悬浮层不参与布局，图片元素盒恒占满卡片）后元素盒被容器约束，
   //     object-contain 才真正做"等比缩放 + 居中留白"，任何卡片尺寸下都完整不变形。
   // ⚠️ 卡片缩放本身也已锁定原图比例（cardResizeController），这里是渲染层兜底：
-  //    旧布局里已经失真的卡片、以及带备注条的卡片都能正确显示。
+  //    旧布局里已经失真的卡片都能正确显示。
   // 坐标写进 dataset，供原图懒加载在**不触发 React 更新**的前提下直接判交（17.3）；
   // src 初始为空（方案 A：不生成缩略图）——可见时由 lazyOriginal 把原图写进 img.src，
   // 视口外的卡片完全不加载（17.11 反模式 9）。
@@ -254,7 +307,7 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     ].join(' '),
   })
 
-  return shell(card, selected, 'flex-col', [body, note, tags].filter(Boolean))
+  return shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body, overlay].filter(Boolean))
 }
 
 /** file：扩展名徽标 + 文件名（+ 备注条） */
@@ -279,14 +332,14 @@ function renderFile({ card, selected }: CardRenderProps): ReactNode {
     ),
   ])
 
-  return shell(card, selected, 'flex-col', [row, note, tags].filter(Boolean))
+  return shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [row, note, tags].filter(Boolean))
 }
 
 /** note：便签文字（保留换行） */
 function renderNote({ card, selected }: CardRenderProps): ReactNode {
   const text = card.note.trim()
   const tags = tagBar(card)
-  return shell(card, selected, 'flex-col p-2', [
+  return shell(card, selected, `flex-col p-2 ${NOTE_VISUAL}`, [
     createElement(
       'div',
       {

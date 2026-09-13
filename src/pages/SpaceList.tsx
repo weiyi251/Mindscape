@@ -382,8 +382,10 @@ export function SpaceList() {
                   {space.favorite ? <span className="mr-1 text-primary">★</span> : null}
                   {space.name}
                 </h2>
-                {/* 悬停才出现的卡片操作 */}
-                <div className="flex shrink-0 items-center gap-0.5">
+                {/* 悬停才出现的卡片操作（2026-09-13 用户反馈：按钮行占位会把长标题
+                    挤成「minds...」—— 改为 absolute 悬浮层不占布局，标题独占整行，
+                    超长时 truncate 省略 + title 提示全名；卡片根已是 relative） */}
+                <div className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-md border border-border bg-card/95 p-0.5 shadow-sm">
                   <button
                     type="button"
                     aria-label={`${space.favorite ? '取消收藏' : '收藏'} ${space.name}`}

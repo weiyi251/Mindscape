@@ -46,6 +46,8 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        // 便签纸（2026-09-13）：语义色，浅色淡黄 / 深色暗琥珀灰，见 globals.css --note
+        note: 'hsl(var(--note))',
         // 第十二章的原始色值，供画布直接引用
         canvas: {
           bg: '#F5F3EF', // 米白，像描图纸
