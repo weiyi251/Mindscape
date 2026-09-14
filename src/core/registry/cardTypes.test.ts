@@ -435,3 +435,53 @@ describe('图片卡悬浮标记（meta.hoverLabel）', () => {
     expect(html).not.toContain('data-hover-label')
   })
 })
+
+// ---------------------------------------------------------------------------
+// 实际分辨率徽章（2026-09-14 用户要求）：悬停在图片卡下方外侧显示「宽 × 高」。
+// 文本由 imageResolution 在 load / error 时直写 DOM（不走 state），所以
+// renderToStaticMarkup 断言的是「徽章元素在场且正确隐藏」这一渲染层契约。
+// ---------------------------------------------------------------------------
+
+describe('图片卡实际分辨率徽章', () => {
+  it('图片卡渲染徽章元素：初始 hidden，文本位置留给 load 事件直写', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+
+    expect(html).toContain('data-image-resolution')
+    // 文本没写进之前必须隐藏 —— 否则悬停会出现一个空胶囊
+    const badgeTag = html.match(/<span data-image-resolution[^>]*>/)?.[0] ?? ''
+    expect(badgeTag).toContain('hidden')
+    // 悬停淡入走纯 CSS（17.3：悬停态不进 state），且不可交互、半透明底
+    expect(badgeTag).toContain('group-hover:opacity-100')
+    expect(badgeTag).toContain('bg-background/80')
+    expect(badgeTag).toContain('pointer-events-none')
+  })
+
+  it('徽章挂在卡片盒下方外侧右对齐（top-full + right-0，不遮挡图片）', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+    expect(html).toContain('top-full')
+    expect(html).toContain('right-0')
+  })
+
+  it('img 携带 load / error 语义的兜底底色之外不再多渲染文本（SSR 不输出事件）', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+    // 徽章在图片加载前没有文本内容（等 load 直写），不会出现空标签文字
+    expect(html).not.toContain('尺寸不可读')
+  })
+
+  it('file / note 卡不渲染分辨率徽章（只有图片有分辨率）', () => {
+    const fileHtml = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'file' }), selected: false }),
+    )
+    const noteHtml = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'note', filePath: '' }), selected: false }),
+    )
+    expect(fileHtml).not.toContain('data-image-resolution')
+    expect(noteHtml).not.toContain('data-image-resolution')
+  })
+})

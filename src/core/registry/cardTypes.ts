@@ -28,6 +28,11 @@ import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { hoverLabelOfMeta, tagsOfMeta } from '@/core/board/cardMeta'
+import {
+  IMAGE_RESOLUTION_BADGE_ATTR,
+  handleImageError,
+  handleImageLoad,
+} from './imageResolution'
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'
 import { getRegisteredCardType, listRegisteredCardTypes } from './pluginCenter'
 import { CORE_CARD_MENU_ITEMS } from './menus'
@@ -358,6 +363,10 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     title: name,
     draggable: false,
     decoding: 'async',
+    // 实际分辨率徽章的数据源（2026-09-14 用户要求）：加载完成 / 失败时由
+    // imageResolution 直写下方徽章文本（不走 state，见 imageResolution.ts 文件头）
+    onLoad: handleImageLoad,
+    onError: handleImageError,
     className: [
       'pointer-events-none min-h-0 w-full flex-1 select-none object-contain',
       // 原图 URL 缺失（非 Tauri 环境 / 未登记）时给一块可辨识的底色，不留白
@@ -367,10 +376,25 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
 
   const shellEl = shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body])
 
-  // 外挂层必须渲染在 shell **之外**（shell 有 overflow-hidden 会裁掉上挂部分）；
-  // Fragment 内 overlay 的 absolute 定位祖先仍是卡片根元素（Card.tsx 的定位容器）
-  if (!overlay) return shellEl
-  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay)
+  // 实际分辨率徽章（2026-09-14 用户要求）：悬停在卡片盒**下方外侧**右对齐淡入
+  // 「宽 × 高」。⚠️ 三个刻意的设计（详见 imageResolution.ts 文件头）：
+  //   · 常驻渲染 + 初始 hidden —— load / error 事件触发时徽章必须在 DOM 里等着
+  //     被写入；文本写进之前一直隐藏，悬停不会出现空胶囊；
+  //   · 元素不带 children —— 文本由 imageResolution 直写 textContent，
+  //     后续任何 React 重渲染都不会把它清掉；
+  //   · 淡入淡出走纯 CSS group-hover（悬停是高频事件，绝不进 state，17.3）。
+  const resolutionBadge = createElement('span', {
+    key: 'image-resolution-badge',
+    [IMAGE_RESOLUTION_BADGE_ATTR]: '',
+    className:
+      'absolute right-0 top-full z-20 mt-1.5 hidden rounded-md border border-border/70 ' +
+      'bg-background/80 px-1.5 py-0.5 font-mono text-[11px] leading-snug text-foreground ' +
+      'shadow-sm backdrop-blur-sm pointer-events-none select-none opacity-0 transition-opacity group-hover:opacity-100',
+  })
+
+  // 外挂层与徽章都必须渲染在 shell **之外**（shell 有 overflow-hidden 会裁掉
+  // 悬挂部分）；Fragment 内 absolute 的定位祖先仍是卡片根元素（Card.tsx 的定位容器）
+  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay, resolutionBadge)
 }
 
 /** file：扩展名徽标 + 文件名（+ 备注条） */
