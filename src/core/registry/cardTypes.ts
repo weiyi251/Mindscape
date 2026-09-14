@@ -87,10 +87,11 @@ function extname(filePath: string): string {
 // 卡片盒（w / h 与锁定比例）完全不变，悬浮层随卡片一同移动。
 // 文件卡 / 便签仍用底部通栏（无图片比例问题）。
 //
-// 【悬浮标记 hoverLabel】（2026-09-14 用户裁决）：同一个外挂层还承载
-// `card.meta.hoverLabel`（通用字段，见 core/board/cardMeta.ts）。它**默认不显示**，
-// 鼠标悬停在卡片上时才淡入 —— 色卡插件把色号写在这里，于是色卡图片本身保持纯净的
-// 一整块颜色，色号只在需要时出现在图片区域外的左上角。
+// 【悬浮标记 hoverLabel】（2026-09-14 用户裁决；位置同日第二次裁决改左下角）：
+// 独立外挂元素承载 `card.meta.hoverLabel`（通用字段，见 core/board/cardMeta.ts），
+// 挂在卡片盒**下方外侧左对齐** —— 与右下角的分辨率徽章左右对称（色号在左、
+// 分辨率在右）。它**默认不显示**，鼠标悬停在卡片上时才淡入 —— 色卡插件把色号
+// 写在这里，于是色卡图片本身保持纯净的一整块颜色，色号只在需要时出现在图片区域外。
 // 显示与否走纯 CSS（group-hover），不经过 React state：悬停是高频事件，进 state
 // 会触发重渲染，违反 17.3「高频交互不进 state」的红线。
 // ---------------------------------------------------------------------------
@@ -221,18 +222,21 @@ function tagBar(card: Card, floating = false): ReactNode {
 }
 
 /**
- * 悬浮标记 chip（2026-09-14）：`card.meta.hoverLabel` 有值时出现。
+ * 悬浮标记 chip（2026-09-14；位置 2026-09-14 第二次裁决改为**下方左下角**）：
+ * `card.meta.hoverLabel` 有值时出现。
  * 这是**通用**能力 —— 核心只回答「这张卡有没有悬停标记」，至于标记是谁写的、
  * 什么含义，与核心无关（首个使用方是色卡插件，把色号写在这里）。
  *
+ * 位置：卡片盒**下方外侧左对齐**（top-full left-0），与右下角的分辨率徽章
+ * （top-full right-0）左右对称 —— 色号在左、分辨率在右，悬停时一起淡入，
+ * 上方外挂层只留给常驻的备注 / 标签，整体布局不再堆叠。
+ *
  * 默认不可见，鼠标悬停在卡片上才淡入：用纯 CSS（group-hover）而不是 React 悬停
  * state —— 悬停是高频事件，进 state 会触发重渲染，违反 17.3 的红线。
- * `group` 类挂在 Card.tsx 的卡片根元素上。
- *
- * @param fadeOnHover 与备注 / 标签同时出现时传 true（外层容器常驻，只让本 chip 淡入）；
- *                    单独出现时传 false（整条外挂层随悬停淡入，见 imageOverlay）
+ * `group` 类挂在 Card.tsx 的卡片根元素上。样式与分辨率徽章同一套（见 renderImage），
+ * 视觉上成对出现。max-w-full truncate 兜底：标记再长也不越过卡片右缘。
  */
-function hoverLabelChip(card: Card, fadeOnHover: boolean): ReactNode {
+function hoverLabelChip(card: Card): ReactNode {
   const label = hoverLabelOfMeta(card.meta)
   if (label === null) return null
   return createElement(
@@ -241,19 +245,17 @@ function hoverLabelChip(card: Card, fadeOnHover: boolean): ReactNode {
       key: 'hover-label',
       'data-hover-label': '',
       // 等宽字体：色号是一串定长编码，等宽更整齐，也与「不是正文」的语义相符
-      className: [
-        'shrink-0 rounded border border-border/70 bg-muted/70 px-1.5 py-px font-mono text-[11px] leading-snug text-foreground',
-        fadeOnHover ? 'opacity-0 transition-opacity group-hover:opacity-100' : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
+      className:
+        'absolute left-0 top-full z-20 mt-1.5 max-w-full truncate rounded-md border border-border/70 ' +
+        'bg-background/80 px-1.5 py-0.5 font-mono text-[11px] leading-snug text-foreground ' +
+        'shadow-sm backdrop-blur-sm select-none pointer-events-none opacity-0 transition-opacity group-hover:opacity-100',
     },
     label,
   )
 }
 
 /**
- * 图片卡顶部外挂层（2026-09-13 用户裁决，两轮迭代）：承载悬浮标记 + 备注条 + 标签条。
+ * 图片卡顶部外挂层（2026-09-13 用户裁决，两轮迭代）：承载备注条 + 标签条。
  * 「图片之外」：absolute bottom-full 挂在卡片盒**上方外侧**（与图片零重叠）；
  * 定位祖先 = 卡片根元素（Card.tsx 的 absolute 定位容器），因此渲染在 shell
  * （带 overflow-hidden）之外也不会被裁剪。卡片盒的 w / h 与锁定比例完全不变，
@@ -261,16 +263,14 @@ function hoverLabelChip(card: Card, fadeOnHover: boolean): ReactNode {
  * 左缘与卡片对齐（left-0），多张卡片挂出的「标签牌」整齐统一。
  * 备注条与标签条**横排同行**（2026-09-13 第三轮用户反馈），超宽时整条换行。
  *
- * 悬浮标记排在最前（左上角），它只在悬停时可见；备注 / 标签常驻。
+ * 【2026-09-14 第二次裁决】悬浮标记（hoverLabel，色号）已从本层移出 ——
+ * 改为独立的下方左下角外挂元素（见 hoverLabelChip），与右下角的分辨率徽章
+ * 左右对称；本层只剩**常驻**的备注 / 标签，两者都没有时直接不渲染。
  */
 function imageOverlay(card: Card): ReactNode {
   const note = noteBar(card, true)
   const tags = tagBar(card, true)
-  const hasBars = Boolean(note || tags)
-  // 只有悬浮标记时，整条外挂层随悬停淡入 —— 否则会在卡片上方留一个空胶囊。
-  // 加 pointer-events-none：它不可交互，别去抢画布的指针事件。
-  const label = hoverLabelChip(card, hasBars)
-  if (!note && !tags && !label) return null
+  if (!note && !tags) return null
   return createElement(
     'div',
     {
@@ -279,14 +279,10 @@ function imageOverlay(card: Card): ReactNode {
       // 横排同行（2026-09-13 第三轮用户反馈）：备注条与标签条**同一行**显示，
       // flex-wrap 兜底 —— 两者合计超宽时整条换行，不截断内容；items-center 让
       // 备注文字与标签胶囊在行内垂直居中，排版更紧凑美观
-      className: [
+      className:
         'absolute bottom-full left-0 z-20 mb-1.5 flex max-w-full flex-row flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-border/70 bg-background/95 px-2 py-1.5 shadow-sm backdrop-blur-sm',
-        hasBars ? '' : 'pointer-events-none opacity-0 transition-opacity group-hover:opacity-100',
-      ]
-        .filter(Boolean)
-        .join(' '),
     },
-    [label, note, tags].filter(Boolean),
+    [note, tags].filter(Boolean),
   )
 }
 
@@ -334,9 +330,9 @@ function shell(
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
   const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
-  // 悬浮标记 / 备注 / 标签走顶部外挂层（2026-09-13 用户裁决；悬浮标记 2026-09-14）：
-  // 渲染在卡片盒**上方外侧**，与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动
-  // （见 imageOverlay 说明）
+  // 备注 / 标签走顶部外挂层（2026-09-13 用户裁决）：渲染在卡片盒**上方外侧**，
+  // 与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动（见 imageOverlay 说明）。
+  // 悬浮标记（色号）与分辨率徽章走**下方**左右两角（2026-09-14 第二次裁决）
   const overlay = imageOverlay(card)
 
   // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：
@@ -376,6 +372,10 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
 
   const shellEl = shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body])
 
+  // 悬浮标记（色号等，2026-09-14 第二次裁决）：独立外挂元素，卡片盒**下方外侧
+  // 左对齐**淡入 —— 与右下角的分辨率徽章左右对称；上方外挂层只留常驻的备注/标签
+  const hoverChip = hoverLabelChip(card)
+
   // 实际分辨率徽章（2026-09-14 用户要求）：悬停在卡片盒**下方外侧**右对齐淡入
   // 「宽 × 高」。⚠️ 三个刻意的设计（详见 imageResolution.ts 文件头）：
   //   · 常驻渲染 + 初始 hidden —— load / error 事件触发时徽章必须在 DOM 里等着
@@ -392,9 +392,10 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
       'shadow-sm backdrop-blur-sm pointer-events-none select-none opacity-0 transition-opacity group-hover:opacity-100',
   })
 
-  // 外挂层与徽章都必须渲染在 shell **之外**（shell 有 overflow-hidden 会裁掉
-  // 悬挂部分）；Fragment 内 absolute 的定位祖先仍是卡片根元素（Card.tsx 的定位容器）
-  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay, resolutionBadge)
+  // 外挂层 / 悬浮标记 / 分辨率徽章都必须渲染在 shell **之外**（shell 有
+  // overflow-hidden 会裁掉悬挂部分）；Fragment 内 absolute 的定位祖先仍是
+  // 卡片根元素（Card.tsx 的定位容器）
+  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay, hoverChip, resolutionBadge)
 }
 
 /** file：扩展名徽标 + 文件名（+ 备注条） */

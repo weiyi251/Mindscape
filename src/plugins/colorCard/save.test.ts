@@ -102,8 +102,8 @@ describe('saveColorCard · 正常路径', () => {
     })
     expect(harness.cards[0].meta).toEqual({
       [COLOR_CARD_META_KEY]: { color: '#5A7D6A', width: 400, height: 400 },
-      // 色号同时写进通用悬浮标记字段：色卡 PNG 默认不把色值画进图（用户裁决），
-      // 色号改由画布在悬停这张卡时显示在图片区域外的左上角
+      // 色号同时写进通用悬浮标记字段：色卡 PNG 绝不把色值画进图（用户裁决），
+      // 色号改由画布在悬停这张卡时显示在图片区域外的左下角（与分辨率徽章左右对称）
       [HOVER_LABEL_META_KEY]: '#5A7D6A',
     })
 

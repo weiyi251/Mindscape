@@ -395,27 +395,31 @@ describe('图片卡悬浮标记（meta.hoverLabel）', () => {
     expect(html).toContain('#5A7D6A')
   })
 
-  it('默认不可见：只有标记时整条外挂层 opacity-0，靠 group-hover 才淡入', () => {
+  it('默认不可见：标记自己 opacity-0，靠 group-hover 才淡入（纯 CSS，17.3）', () => {
     const html = imageWith({ hoverLabel: '#5A7D6A' })
-    expect(html).toContain('opacity-0')
-    expect(html).toContain('group-hover:opacity-100')
+    const chipTag = html.match(/<span data-hover-label[^>]*>/)?.[0] ?? ''
+    expect(chipTag).toContain('opacity-0')
+    expect(chipTag).toContain('group-hover:opacity-100')
     // 不可交互，别抢画布的指针事件
-    expect(html).toContain('pointer-events-none')
+    expect(chipTag).toContain('pointer-events-none')
   })
 
-  it('与备注 / 标签同时出现时：容器常驻，只让标记自己淡入', () => {
+  it('与备注 / 标签同时出现时：标记是独立元素，不在上方外挂层里堆叠', () => {
     const html = imageWith({ hoverLabel: '#5A7D6A', tags: ['参考'] })
-    // 容器不带 opacity-0（否则备注 / 标签也会跟着闪），标记自己带
-    const overlayTag = html.match(/<div data-image-overlay[^>]*>/)?.[0] ?? ''
-    expect(overlayTag).not.toContain('opacity-0')
-    expect(html).toContain('group-hover:opacity-100')
-    // 标记排在左上角第一项（在备注条 / 标签条之前）
-    expect(html.indexOf('data-hover-label')).toBeLessThan(html.indexOf('data-tag-bar'))
+    // 上方外挂层只剩常驻的备注 / 标签（不带 opacity-0），里面没有标记
+    const overlayTag = html.match(/<div data-image-overlay[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(overlayTag).not.toContain('data-hover-label')
+    expect(overlayTag).toContain('data-tag-bar')
+    // 标记自己淡入
+    const chipTag = html.match(/<span data-hover-label[^>]*>/)?.[0] ?? ''
+    expect(chipTag).toContain('group-hover:opacity-100')
   })
 
-  it('标记仍挂在卡片盒上方外侧（图片区域外，与图片零重叠）', () => {
+  it('标记挂在卡片盒下方外侧左对齐（与右下角的分辨率徽章左右对称）', () => {
     const html = imageWith({ hoverLabel: '#5A7D6A' })
-    expect(html).toContain('absolute bottom-full left-0')
+    const chipTag = html.match(/<span data-hover-label[^>]*>/)?.[0] ?? ''
+    expect(chipTag).toContain('top-full')
+    expect(chipTag).toContain('left-0')
   })
 
   it('没有 hoverLabel 时不渲染标记（普通图片卡完全不受影响）', () => {
