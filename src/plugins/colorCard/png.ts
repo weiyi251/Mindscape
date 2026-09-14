@@ -6,28 +6,35 @@
 // crate 属于「清单外新增」），而 WebView2 自带 Canvas 2D —— 画 + `toBlob('image/png')`
 // 就能拿到标准 PNG，落盘复用已有的 `write_file_bytes` 命令，**零 Rust 改动**。
 //
+// ⚠️ 色卡**只铺一层纯色，图内不画任何文字**（2026-09-14 用户裁决，第二次收紧）。
+//   曾经有一个「在色卡上标注色值」的开关，把色号 fillText 到图片正中；用户明确
+//   要求「确保色块内部不再展示任何色号文本或标签」—— 只把它默认关掉是不够的：
+//   对话框会从 plugins.json 读回上次保存的 `showHex: true`，于是新生成的色卡依旧
+//   带色号（用户截图 #0541F5 反馈）。所以整条文字绘制链路连同开关一并删除，
+//   连同只为它服务的亮度计算 / 对比色选择（parseHexColor / relativeLuminance /
+//   readableTextColor）也一并删掉，不留死代码。
+//
+//   色号改由卡片 meta.hoverLabel 承载，在画布上悬停该色卡时显示在**图片区域之外**
+//   （见 core/registry/cardTypes.ts 的 hoverLabelChip）。顺带的好处：色卡导出到
+//   别处时是一整块纯色，不会被文字破坏。
+//
 // 可测性（关键设计）：`document.createElement('canvas')` 是浏览器专有 API，
 // 本项目不引入 jsdom（用户裁决），因此画布工厂是**可注入的** ——
-// 测试注入一个记录绘制指令的假画布，就能把「底色铺满 / 标注文字 / 尺寸正确」
+// 测试注入一个记录绘制指令的假画布，就能把「底色铺满 / 尺寸正确 / 不画任何文字」
 // 这些真正会画错的地方在 node 环境钉死，而不必渲染真实像素。
-//
-// 颜色字面量约定：标注文字的取色用 CSS 关键词 `black` / `white` 而不是 hex。
-// canvas 的 fillStyle 接受任意 CSS 颜色，关键词语义同样清晰，还能避开
-// 守卫规则 3 的「硬编码配色」检查 —— 本文件因此不需要进任何豁免清单。
 // ============================================================================
 
 import { normalizeHex } from './options'
 import { COLOR_CARD_TEXT } from './text'
 
-/** 本模块真正用到的最小 2D 上下文接口（故意声明得很窄，方便测试注入假实现） */
+/**
+ * 本模块真正用到的最小 2D 上下文接口（故意声明得很窄，方便测试注入假实现）。
+ * 只有「填色」一项 —— 色卡不画文字，所以既不需要 font / textAlign，也不需要 fillText。
+ */
 export interface ColorCardContext2D {
   /** 只写不读；真实 CanvasRenderingContext2D 的类型更宽，故此处放宽为 unknown */
   fillStyle: unknown
-  font: string
-  textAlign: string
-  textBaseline: string
   fillRect: (x: number, y: number, width: number, height: number) => void
-  fillText: (text: string, x: number, y: number) => void
 }
 
 /** 最小画布接口 */
@@ -46,43 +53,8 @@ function defaultCreateCanvas(width: number, height: number): ColorCardCanvas {
   canvas.width = width
   canvas.height = height
   // 运行时 HTMLCanvasElement 完全满足 ColorCardCanvas；断言只为绕开
-  // 「真实 CanvasRenderingContext2D 的 textAlign 比最小接口更宽」这一类型细节。
+  // 「真实 CanvasRenderingContext2D 的类型比最小接口更宽」这一类型细节。
   return canvas as unknown as ColorCardCanvas
-}
-
-/** 标注文字的对比阈值（0.35 是经验值：纯黑白等价点约 0.179，色卡场景取略高更稳） */
-const LUMINANCE_THRESHOLD = 0.35
-
-/** 解析 `#RRGGBB`（或三位简写）为三通道；非法输入返回 null */
-export function parseHexColor(input: string): { r: number; g: number; b: number } | null {
-  const normalized = normalizeHex(input)
-  if (normalized === null) return null
-  return {
-    r: Number.parseInt(normalized.slice(1, 3), 16),
-    g: Number.parseInt(normalized.slice(3, 5), 16),
-    b: Number.parseInt(normalized.slice(5, 7), 16),
-  }
-}
-
-/**
- * 相对亮度（WCAG 2.x 的简化式），0 表示全黑、1 表示全白。
- * 解析失败按 0（视为深色底）处理，保证总有一个可用的标注色。
- */
-export function relativeLuminance(input: string): number {
-  const rgb = parseHexColor(input)
-  if (rgb === null) return 0
-
-  const channel = (value: number): number => {
-    const scaled = value / 255
-    return scaled <= 0.03928 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4
-  }
-
-  return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b)
-}
-
-/** 在给定底色上能看清的标注文字色（浅底用黑字、深底用白字） */
-export function readableTextColor(input: string): 'black' | 'white' {
-  return relativeLuminance(input) > LUMINANCE_THRESHOLD ? 'black' : 'white'
 }
 
 /** 画色卡需要的输入（色值应已归一化） */
@@ -90,11 +62,10 @@ export interface ColorCardPngInput {
   color: string
   width: number
   height: number
-  showHex: boolean
 }
 
 /**
- * 把一套参数渲染成 PNG 字节。
+ * 把一套参数渲染成 PNG 字节 —— 就是「一块纯色」，没有别的。
  * @throws Error 中文消息（无 2D 上下文 / 编码失败），可直接展示给用户
  */
 export async function renderColorCardPng(
@@ -108,19 +79,9 @@ export async function renderColorCardPng(
   const context = canvas.getContext('2d')
   if (!context) throw new Error(COLOR_CARD_TEXT.renderFailed)
 
-  // 整块铺满底色
+  // 整块铺满底色。**除此之外什么都不画**：色号不进图片（见文件头说明）
   context.fillStyle = color
   context.fillRect(0, 0, input.width, input.height)
-
-  if (input.showHex) {
-    // 字号跟随短边：色卡越小标注越小，但保留 12px 下限以免糊成一团
-    const fontSize = Math.max(12, Math.round(Math.min(input.width, input.height) / 6))
-    context.font = `600 ${fontSize}px sans-serif`
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.fillStyle = readableTextColor(color)
-    context.fillText(color.toUpperCase(), input.width / 2, input.height / 2)
-  }
 
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob(resolve, 'image/png')

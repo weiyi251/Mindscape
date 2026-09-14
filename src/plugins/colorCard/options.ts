@@ -100,15 +100,11 @@ export interface ColorCardOptions {
   width: number
   /** 像素高 */
   height: number
-  /**
-   * 是否把色值画进 PNG 图片本身。
-   *
-   * 默认 **false**（2026-09-14 用户裁决）：色卡的正事是一整块颜色，色号写在图上
-   * 会污染它。色号改为写进 card.meta.hoverLabel，在画布上悬停该色卡时显示在
-   * 图片区域外的左上角（见 core/registry/cardTypes.ts 的 hoverLabelChip）。
-   * 需要「图片自带色号」（例如发给别人、脱离画布也能读到色值）时再手动勾选。
-   */
-  showHex: boolean
+  // ⚠️ 这里曾经有一个 `showHex: boolean`（是否把色值画进 PNG）。
+  //    2026-09-14 用户第二次收紧：要求「确保色块内部不再展示任何色号文本或标签」。
+  //    只改默认值是无效的 —— 对话框会从 plugins.json 读回上次保存的 `true`
+  //    （用户截图 #0541F5 反馈）。故整个字段与其渲染链路一并删除，
+  //    色号只走 card.meta.hoverLabel（见 core/board/cardMeta.ts）。
   /** 文件名前缀（已净化，去掉了 Windows 非法字符） */
   namePrefix: string
   /** 输出文件夹绝对路径；空串表示未选择 */
@@ -119,7 +115,6 @@ export const DEFAULT_COLOR_CARD_OPTIONS: ColorCardOptions = {
   color: '#5A7D6A',
   width: 400,
   height: 400,
-  showHex: false,
   namePrefix: '色卡',
   outputDir: '',
 }
@@ -129,7 +124,6 @@ export const CONFIG_KEY = {
   color: 'color',
   width: 'width',
   height: 'height',
-  showHex: 'showHex',
   namePrefix: 'namePrefix',
   outputDir: 'outputDir',
 } as const
@@ -290,7 +284,6 @@ export function normalizeOptions(input: Partial<ColorCardOptions>): ColorCardOpt
     color,
     width: clampSize(input.width ?? base.width),
     height: clampSize(input.height ?? base.height, base.height),
-    showHex: input.showHex ?? base.showHex,
     namePrefix: sanitizeNamePrefix(input.namePrefix ?? base.namePrefix) || base.namePrefix,
     outputDir: (input.outputDir ?? '').trim(),
   }
@@ -323,11 +316,6 @@ function readNumber(config: Record<string, unknown>, key: string): number | unde
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function readBoolean(config: Record<string, unknown>, key: string): boolean | undefined {
-  const value = config[key]
-  return typeof value === 'boolean' ? value : undefined
-}
-
 /**
  * 从插件配置恢复上次使用的参数（用户下次打开对话框时不必重填）。
  *
@@ -347,19 +335,21 @@ export function optionsFromConfig(
     color: readString(config, CONFIG_KEY.color),
     width: readNumber(config, CONFIG_KEY.width),
     height: readNumber(config, CONFIG_KEY.height),
-    showHex: readBoolean(config, CONFIG_KEY.showHex),
     namePrefix: readString(config, CONFIG_KEY.namePrefix),
     outputDir: storedOutputDir || fallbackOutputDir,
   })
 }
 
-/** 参数 → 写入插件配置的补丁（`api.config.set` 是浅合并，键名与 CONFIG_KEY 一致） */
+/**
+ * 参数 → 写入插件配置的补丁（`api.config.set` 是浅合并，键名与 CONFIG_KEY 一致）。
+ * ⚠️ 浅合并意味着**删不掉旧键**：老版本存过的 `showHex` 会一直留在该插件的 config 里。
+ * 它已经没有任何读取方，是无害的僵尸数据（重装插件也不会消失，因为卸载保留 config）。
+ */
 export function optionsToConfig(options: ColorCardOptions): Record<string, unknown> {
   return {
     [CONFIG_KEY.color]: options.color,
     [CONFIG_KEY.width]: options.width,
     [CONFIG_KEY.height]: options.height,
-    [CONFIG_KEY.showHex]: options.showHex,
     [CONFIG_KEY.namePrefix]: options.namePrefix,
     [CONFIG_KEY.outputDir]: options.outputDir,
   }

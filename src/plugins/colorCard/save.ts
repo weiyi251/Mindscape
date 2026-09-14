@@ -102,12 +102,13 @@ export async function saveColorCard(
   const problem = validateColorCardOptions(options)
   if (problem !== null) throw new Error(problem)
 
+  // 渲染出的就是「一块纯色」—— 色号不进图片（2026-09-14 用户裁决），
+  // 它只走下面建卡时的 meta.hoverLabel。见 png.ts 文件头说明。
   const render = deps.render ?? renderColorCardPng
   const bytes = await render({
     color: options.color,
     width: options.width,
     height: options.height,
-    showHex: options.showHex,
   })
 
   const now = deps.now ?? (() => new Date())

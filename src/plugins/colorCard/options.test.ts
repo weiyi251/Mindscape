@@ -36,6 +36,7 @@ import {
   sizePresetLabel,
   validateColorCardOptions,
 } from './options'
+import type { ColorCardOptions } from './options'
 import { COLOR_PRESET_LABELS, RATIO_PRESET_LABELS, SIZE_PRESET_LABELS } from './text'
 
 describe('normalizeHex', () => {
@@ -81,8 +82,17 @@ describe('尺寸约束', () => {
     expect(describeSize(600, 400)).toBe('600 × 400')
   })
 
-  it('默认不把色值画进图片（色号改由画布悬停显示，2026-09-14 用户裁决）', () => {
-    expect(DEFAULT_COLOR_CARD_OPTIONS.showHex).toBe(false)
+  it('参数模型里没有「把色值画进图片」这一项（用户要求色块内部绝不出文字，故整项删除）', () => {
+    // 只把默认值改成 false 是不够的：对话框会从 plugins.json 读回上次保存的 true。
+    // 所以整条链路被移除，这里断言字段本身不存在（谁要加回来，这条立刻变红）。
+    expect('showHex' in DEFAULT_COLOR_CARD_OPTIONS).toBe(false)
+    expect(Object.keys(DEFAULT_COLOR_CARD_OPTIONS).sort()).toEqual([
+      'color',
+      'height',
+      'namePrefix',
+      'outputDir',
+      'width',
+    ])
   })
 })
 
@@ -195,8 +205,17 @@ describe('normalizeOptions', () => {
   })
 
   it('保留合法的自定义值', () => {
-    const options = normalizeOptions({ color: '#abc', width: 600, height: 400, showHex: false })
-    expect(options).toMatchObject({ color: '#AABBCC', width: 600, height: 400, showHex: false })
+    const options = normalizeOptions({ color: '#abc', width: 600, height: 400 })
+    expect(options).toMatchObject({ color: '#AABBCC', width: 600, height: 400 })
+  })
+
+  it('入参里混进已删除的旧字段（如老配置的 showHex）也不会被带进结果', () => {
+    const options = normalizeOptions({
+      color: '#abc',
+      // 模拟从旧版 plugins.json 读出来的残留键
+      ...({ showHex: true } as Partial<ColorCardOptions>),
+    })
+    expect('showHex' in options).toBe(false)
   })
 })
 
@@ -226,7 +245,6 @@ describe('插件配置 ↔ 参数', () => {
       color: '#4C5B8A',
       width: 800,
       height: 300,
-      showHex: false,
       namePrefix: '参考',
       outputDir: 'E:\\色卡',
     })
@@ -234,12 +252,30 @@ describe('插件配置 ↔ 参数', () => {
     expect(optionsFromConfig(optionsToConfig(options))).toEqual(options)
   })
 
+  it('写进配置的键就是当前参数模型（不含已删的 showHex）', () => {
+    expect(Object.keys(optionsToConfig(DEFAULT_COLOR_CARD_OPTIONS)).sort()).toEqual([
+      'color',
+      'height',
+      'namePrefix',
+      'outputDir',
+      'width',
+    ])
+  })
+
+  it('老配置里的残留键（showHex: true）被忽略，不影响读出来的参数', () => {
+    // 这正是用户截图那张带色号色卡的成因：plugins.json 里存着旧版的 showHex: true。
+    // 参数模型里已经没有这一项，所以它读出来也无处生效。
+    const options = optionsFromConfig({ color: '#0541F5', showHex: true }, 'E:\\空间')
+
+    expect(options.color).toBe('#0541F5')
+    expect('showHex' in options).toBe(false)
+  })
+
   it('配置里的坏值一律回落到默认，不抛错（配置文件用户能手改）', () => {
     const options = optionsFromConfig({
       color: 42,
       width: 'big',
       height: null,
-      showHex: 'yes',
       namePrefix: 7,
       outputDir: 0,
     })

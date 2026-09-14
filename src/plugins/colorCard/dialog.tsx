@@ -217,17 +217,11 @@ export function ColorCardDialog({ api, spacePath }: ColorCardDialogProps) {
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-xs text-foreground">
-          <input
-            type="checkbox"
-            className="accent-primary"
-            checked={options.showHex}
-            onChange={(event) => patch({ showHex: event.target.checked })}
-          />
-          {COLOR_CARD_TEXT.showHexLabel}
-        </label>
+        {/* 这里曾有一个「在色卡图片上标注色值」开关。2026-09-14 用户要求
+            「确保色块内部不再展示任何色号文本或标签」，故开关与绘制链路一并删除
+            （色卡现在严格等于一块纯色），只留一句说明告诉用户色号去哪看 */}
         <p className="text-[11px] leading-snug text-muted-foreground">
-          {COLOR_CARD_TEXT.showHexHint}
+          {COLOR_CARD_TEXT.hoverHexHint}
         </p>
       </div>
 

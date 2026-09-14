@@ -19,11 +19,12 @@ import { COLOR_CARD_TEXT } from './text'
 const SPACE = 'E:\\Mindscape\\空间A'
 const FIXED_DATE = new Date(2026, 8, 14, 0, 12)
 
+// 参数模型里已经没有 showHex（"把色值画进图片"整项被删，用户要求色块内部绝不出文字）。
+// 即便老 plugins.json 里存着 showHex: true，normalizeOptions 也会把它丢掉 —— 见 options.test.ts。
 const OPTIONS = normalizeOptions({
   color: '#5A7D6A',
   width: 400,
   height: 400,
-  showHex: true,
   namePrefix: '色卡',
   outputDir: SPACE,
 })
@@ -135,7 +136,7 @@ describe('saveColorCard · 正常路径', () => {
     expect(harness.cards[0].meta?.[HOVER_LABEL_META_KEY]).toBe('#AABBCC')
   })
 
-  it('渲染入参带上 showHex：是否把色值画进图片由用户勾选决定', async () => {
+  it('渲染入参只有 色值/宽/高 —— 没有任何"是否画色号"的开关（色块内部绝不出文字）', async () => {
     const render = vi.fn(async () => new Uint8Array([1]))
     const harness = makeHarness({ render })
 
@@ -144,12 +145,7 @@ describe('saveColorCard · 正常路径', () => {
       harness.deps,
     )
 
-    expect(render).toHaveBeenCalledWith({
-      color: '#5A7D6A',
-      width: 400,
-      height: 400,
-      showHex: true,
-    })
+    expect(render).toHaveBeenCalledWith({ color: '#5A7D6A', width: 400, height: 400 })
   })
 
   it('不勾「同时在画布上添加卡片」时只写文件', async () => {

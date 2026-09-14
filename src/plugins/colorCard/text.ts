@@ -40,8 +40,10 @@ export const COLOR_CARD_TEXT = {
   heightLabel: '高',
   sizeUnit: '像素',
   sizeHint: (min: number, max: number) => `可填 ${min} ~ ${max}，填入超范围的值会自动收敛。`,
-  showHexLabel: '在色卡图片上标注色值',
-  showHexHint: '默认关闭：色号只在画布上悬停这张色卡时显示。开启后色值会直接画进 PNG。',
+  // ⚠️ 这里曾有 showHexLabel / showHexHint 两条（「在色卡图片上标注色值」开关）。
+  //    2026-09-14 用户要求「确保色块内部不再展示任何色号文本或标签」→ 开关与整条
+  //    绘制链路已删除，改为下面这条说明，让用户知道色号去哪看了（而不是静默消失）。
+  hoverHexHint: '色号不画在图片里；在画布上把鼠标移到这张色卡上即可看到。',
 
   /* 输出区 */
   outputSection: '输出',
