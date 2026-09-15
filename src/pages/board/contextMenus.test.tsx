@@ -258,16 +258,22 @@ describe('buildCanvasMenuItems', () => {
     canvasPoint: { x: 300, y: 200 },
     spacePath: 'E:\\Mindscape\\空间A',
     onCreateNote: vi.fn(),
+    onCreatePartition: vi.fn(),
     onPaste: vi.fn(),
     onUndo: vi.fn(),
     onRedo: vi.fn(),
   }
 
-  it('剪贴板为空：无「粘贴」；含新建便签 / 撤销 / 重做', () => {
+  it('剪贴板为空：无「粘贴」；含新建便签 / 新建分区 / 撤销 / 重做', () => {
     const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false })
     const ids = items.map((item) => item.id)
-    expect(ids).toEqual(['canvas.createNote', 'canvas.undo', 'canvas.redo'])
-    expect(items[1].separatorBefore).toBe(true)
+    expect(ids).toEqual([
+      'canvas.createNote',
+      'canvas.createPartition',
+      'canvas.undo',
+      'canvas.redo',
+    ])
+    expect(items.find((item) => item.id === 'canvas.undo')?.separatorBefore).toBe(true)
   })
 
   it('剪贴板非空：插入「粘贴」并带上画布坐标', () => {
@@ -283,6 +289,16 @@ describe('buildCanvasMenuItems', () => {
     const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false, onCreateNote })
     items[0].run()
     expect(onCreateNote).toHaveBeenCalledWith(200, 180)
+  })
+
+  // ---- 新建分区（2026-09-14 用户要求：空间内直接创建分区）----
+
+  it('「新建分区」把右键点原样交给回调（作为新框中心）', () => {
+    const onCreatePartition = vi.fn()
+    const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false, onCreatePartition })
+    items.find((item) => item.id === 'canvas.createPartition')?.run()
+    expect(onCreatePartition).toHaveBeenCalledWith({ x: 300, y: 200 })
+    expect(items.find((item) => item.id === 'canvas.createPartition')?.label).toBe('新建分区')
   })
 
   it('撤销 / 重做的标签带当前键位', () => {
@@ -306,13 +322,14 @@ describe('buildCanvasMenuItems', () => {
     const items = buildCanvasMenuItems({ ...base, hasCopiedCards: true })
     expect(items.map((item) => item.id)).toEqual([
       'canvas.createNote',
+      'canvas.createPartition',
       'canvas.paste',
       'plugin:mindscape.color-card.create',
       'canvas.undo',
       'canvas.redo',
     ])
-    expect(items[2].label).toBe('新建色卡…')
-    expect(items[2].separatorBefore).toBe(true)
+    expect(items[3].label).toBe('新建色卡…')
+    expect(items[3].separatorBefore).toBe(true)
 
     resetPluginCenter()
   })
@@ -333,6 +350,6 @@ describe('buildCanvasMenuItems', () => {
   it('没有插件贡献时菜单与插件功能上线前完全一致（不多出分隔线 / 空项）', () => {
     resetPluginCenter()
     const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false })
-    expect(items).toHaveLength(3)
+    expect(items).toHaveLength(4)
   })
 })

@@ -173,6 +173,16 @@ export interface BoardState {
   setCardsZIndex: (updates: { id: string; zIndex: number }[]) => void
   /** 指定分区框颜色（T3.9）。'auto' 表示回到 8 色轮换 */
   setPartitionColor: (id: string, color: string) => void
+  /**
+   * 追加分区框（2026-09-14「空间内直接创建分区」）。
+   * 只写内存态 —— 同名文件夹的落地由 core/commands/impl/createPartition.ts 负责。
+   */
+  addPartition: (partition: Partition) => void
+  /**
+   * 移除分区框（新建分区的 undo 走它）。只动 partitions，**不碰硬盘**；
+   * 目录回收由命令的 undo 负责。被移除的分区若正选中则一并清掉选中态。
+   */
+  removePartitions: (ids: string[]) => void
   /** 一次性写入分区框矩形（拖入框内后扩框包住新卡，T3.7）。x/y/w/h 一起更新 */
   setPartitionRects: (updates: { id: string; x: number; y: number; w: number; h: number }[]) => void
   /** 追加连线（T3.1 命令 do 与 undo 都走它） */
@@ -493,6 +503,23 @@ export function createBoardStore(
             ? { ...partition, x: next.x, y: next.y, w: next.w, h: next.h }
             : partition
         }),
+      }))
+    },
+
+    addPartition(partition) {
+      set((state) => ({ partitions: [...state.partitions, partition] }))
+    },
+
+    removePartitions(ids) {
+      if (ids.length === 0) return
+      const idSet = new Set(ids)
+      set((state) => ({
+        partitions: state.partitions.filter((partition) => !idSet.has(partition.id)),
+        // 被删分区若正选中（Ctrl+V 粘贴目标）→ 清掉，避免指向不存在的框
+        selectedPartitionId:
+          state.selectedPartitionId !== null && idSet.has(state.selectedPartitionId)
+            ? null
+            : state.selectedPartitionId,
       }))
     },
 

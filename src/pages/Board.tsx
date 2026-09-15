@@ -108,6 +108,7 @@ import {
   buildPartitionColorItems,
   buildPartitionMenuItems,
 } from '@/pages/board/contextMenus'
+import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -1624,6 +1625,17 @@ export function Board() {
     [],
   )
 
+  /**
+   * 新建分区（2026-09-14 用户要求：空间内直接创建分区，创建后在对应空间文件夹下
+   * 自动生成同名文件夹）。命名浮层、校验、查重、命令编排全在
+   * pages/board/createPartitionFlow.ts —— Board 只留这一行接线（行数棘轮）。
+   */
+  const handleCreatePartitionAt = useCallback(
+    (point: { x: number; y: number }) =>
+      openCreatePartitionPrompt(point, { history, writer, setPrompt, setActionError }),
+    [history, writer],
+  )
+
   const handleCanvasContextMenu = useCallback(
     (canvasPoint: { x: number; y: number }, screen: { x: number; y: number }) => {
       const items = buildCanvasMenuItems({
@@ -1632,6 +1644,7 @@ export function Board() {
         spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
         hasCopiedCards: copiedCards.length > 0,
         onCreateNote: createNoteAt,
+        onCreatePartition: handleCreatePartitionAt,
         // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个
         // 分区的文件夹，点在空白归空间主目录（2026-09-13 起「未分类」不再是文件夹）
         onPaste: (point) => {
@@ -1647,7 +1660,7 @@ export function Board() {
       })
       setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [createNoteAt, copiedCards.length, pasteCards, handleUndo, handleRedo],
+    [createNoteAt, handleCreatePartitionAt, copiedCards.length, pasteCards, handleUndo, handleRedo],
   )
 
   // Delete 删除选中的连线 / Esc 取消挂起连线：同样收进下方「快捷键派发」一处处理

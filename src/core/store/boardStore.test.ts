@@ -375,6 +375,72 @@ describe('boardStore · 分区选中与文件归属（2026-09-12）', () => {
   })
 })
 
+describe('boardStore · 手动新建分区（2026-09-14）', () => {
+  const created = {
+    id: 'p_009',
+    name: '旅行',
+    folderPath: '旅行',
+    x: 320,
+    y: 170,
+    w: 360,
+    h: 260,
+    color: '#5A7D6A',
+    collapsed: false,
+    meta: {},
+  }
+  const other = { ...created, id: 'p_010', name: '素材', folderPath: '素材' }
+
+  async function emptyStore() {
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
+    await store.getState().loadSpace(SPACE)
+    return store
+  }
+
+  it('addPartition 追加分区框（空间里还没有任何子文件夹也能建）', async () => {
+    const store = await emptyStore()
+    expect(store.getState().partitions).toEqual([])
+
+    store.getState().addPartition(created)
+
+    expect(store.getState().partitions).toEqual([created])
+  })
+
+  it('removePartitions 只移除指定 id，其余分区原样保留', async () => {
+    const store = await emptyStore()
+    store.getState().addPartition(created)
+    store.getState().addPartition(other)
+
+    store.getState().removePartitions([created.id])
+
+    expect(store.getState().partitions).toEqual([other])
+  })
+
+  it('被移除的分区若正选中则清掉选中态（避免指向不存在的框）', async () => {
+    const store = await emptyStore()
+    store.getState().addPartition(created)
+    store.getState().selectPartition(created.id)
+
+    store.getState().removePartitions([created.id])
+    expect(store.getState().selectedPartitionId).toBeNull()
+
+    // 未选中该分区时不动选中态
+    store.getState().addPartition(other)
+    store.getState().selectPartition(other.id)
+    store.getState().removePartitions([created.id])
+    expect(store.getState().selectedPartitionId).toBe(other.id)
+  })
+
+  it('removePartitions 空数组是 no-op（不产生新数组引用）', async () => {
+    const store = await emptyStore()
+    store.getState().addPartition(created)
+    const before = store.getState().partitions
+
+    store.getState().removePartitions([])
+
+    expect(store.getState().partitions).toBe(before)
+  })
+})
+
 describe('boardStore.reset', () => {
   it('清空画布状态', async () => {
     const store = createStore(createFakeProvider([entry('a.jpg')]))

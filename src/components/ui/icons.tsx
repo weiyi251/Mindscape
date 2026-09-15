@@ -97,6 +97,17 @@ export function RestoreIcon({ className }: IconProps) {
   )
 }
 
+/** 新建分区（画布右键菜单，2026-09-14）：文件夹 + 加号 */
+export function FolderAddIcon({ className }: IconProps) {
+  return (
+    <StrokeIcon className={className}>
+      <path d="M3 7a2 2 0 0 1 2-2h3.6a2 2 0 0 1 1.6.8l1.1 1.4H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M12 10.5v6" />
+      <path d="M9 13.5h6" />
+    </StrokeIcon>
+  )
+}
+
 /** 导入（主界面「导入空间」入口）：向下的箭头落进托盘 */
 export function ImportIcon({ className }: IconProps) {
   return (

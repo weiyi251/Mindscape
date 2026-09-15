@@ -161,9 +161,11 @@ export function CardView({
         />
       ) : null}
 
-      {/* 便签四向缩放手柄（2026-09-13）：上/下/左/右边中点，自由缩放（不锁比例）。
+      {/* 便签三向缩放手柄（2026-09-13）：上 / 下 / 左边中点，自由缩放（不锁比例）。
           n / w 拖动时对边固定，位置联动由 cardResizeController 的 edgeResizeOutcome 处理。
-          只有便签渲染边手柄 —— 图片必须锁原图比例，四向边缩放与等比约束冲突 */}
+          只有便签渲染边手柄 —— 图片必须锁原图比例，四向边缩放与等比约束冲突。
+          2026-09-14：**移除右缘中点（e）手柄** —— 该位置让给连接手柄（见下），
+          让便签与图片卡片的连线起点表现一致。宽度仍可用左缘中点、右下角手柄调整 */}
       {selected && card.type === 'note' ? (
         <>
           <div
@@ -175,10 +177,6 @@ export function CardView({
             className="absolute -bottom-1.5 left-1/2 h-2 w-6 -translate-x-1/2 cursor-ns-resize rounded-full border border-background bg-primary shadow-sm"
           />
           <div
-            data-resize-edge="e"
-            className="absolute -right-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
-          />
-          <div
             data-resize-edge="w"
             className="absolute -left-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
           />
@@ -187,16 +185,14 @@ export function CardView({
 
       {/* 右缘中点连接手柄（T3.1：从边缘拖出箭头连到目标卡）。
           仅选中时出现；pointerdown 由 Canvas 分流到连线拖拽，不触发卡片拖动。
-          2026-09-13：便签的连接手柄移到右上角 —— 右缘中点让位给 e 向缩放手柄；
-          图片 / 文件卡保持右缘中点不变 */}
+          2026-09-14：所有卡片类型统一在**右缘中点** —— 与连线锚点
+          （connectionAnchor.rightAnchor：右缘中点）重合，拖出方向即连线走向。
+          便签原先为避让 e 向缩放手柄放在右上角，现移除该手柄后回归一致 */}
       {selected ? (
         <div
           data-connect-handle={card.id}
           title="拖到目标卡片创建连线"
-          className={cn(
-            'absolute h-3 w-3 cursor-crosshair rounded-full border border-background bg-primary/80 shadow-sm hover:bg-primary',
-            card.type === 'note' ? '-right-1.5 -top-1.5' : '-right-1.5 top-1/2 -translate-y-1/2',
-          )}
+          className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border border-background bg-primary/80 shadow-sm hover:bg-primary"
         />
       ) : null}
     </div>

@@ -15,7 +15,7 @@
 // ============================================================================
 
 import type { ContextMenuItemData } from '@/components/ui/context-menu'
-import { NoteAddIcon, RedoIcon, RestoreIcon, UndoIcon } from '@/components/ui/icons'
+import { FolderAddIcon, NoteAddIcon, RedoIcon, RestoreIcon, UndoIcon } from '@/components/ui/icons'
 import { PARTITION_PALETTE } from '@/core/board/partitions'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
 import {
@@ -213,6 +213,11 @@ export interface CanvasMenuParams {
   spacePath: string
   hasCopiedCards: boolean
   onCreateNote: (x: number, y: number) => void
+  /**
+   * 「新建分区」（2026-09-14 用户要求：空间内直接创建分区）。
+   * 传画布坐标（作为新框中心与落点依据），命名浮层与建目录在 Board 侧完成。
+   */
+  onCreatePartition: (point: ScreenPoint) => void
   /** 点在画布上的粘贴（落点由调用方按规则解析） */
   onPaste: (point: ScreenPoint) => void
   onUndo: () => void
@@ -220,7 +225,7 @@ export interface CanvasMenuParams {
 }
 
 /**
- * 组装画布空白右键菜单：新建便签 / 粘贴 / 插件项 / 撤销 / 重做。
+ * 组装画布空白右键菜单：新建便签 / 新建分区 / 粘贴 / 插件项 / 撤销 / 重做。
  * 撤销、重做是 2026-09-13 取消顶栏可折叠工具栏后并入的；它们与 CARD_ACTION 一样
  * 属于核心画布动作，键位标签取快捷键注册中心的当前绑定。
  *
@@ -230,7 +235,16 @@ export interface CanvasMenuParams {
  * id 加 `plugin:` 前缀，避免与核心项（canvas.createNote 等）撞键。
  */
 export function buildCanvasMenuItems(params: CanvasMenuParams): ContextMenuItemData[] {
-  const { canvasPoint, spacePath, hasCopiedCards, onCreateNote, onPaste, onUndo, onRedo } = params
+  const {
+    canvasPoint,
+    spacePath,
+    hasCopiedCards,
+    onCreateNote,
+    onCreatePartition,
+    onPaste,
+    onUndo,
+    onRedo,
+  } = params
 
   const pluginItems: ContextMenuItemData[] = listRegisteredCanvasMenuItems().map(
     (item, index) => ({
@@ -247,6 +261,14 @@ export function buildCanvasMenuItems(params: CanvasMenuParams): ContextMenuItemD
       label: '新建便签',
       icon: <NoteAddIcon />,
       run: () => onCreateNote(canvasPoint.x - 100, canvasPoint.y - 20),
+    },
+    // 2026-09-14 用户要求：在空间内直接创建分区（右键点即新框中心），
+    // 并在对应空间文件夹下自动生成同名文件夹（命令与撤销见 createPartitionFlow.ts）
+    {
+      id: 'canvas.createPartition',
+      label: '新建分区',
+      icon: <FolderAddIcon />,
+      run: () => onCreatePartition(canvasPoint),
     },
     // 应用内剪贴板非空时：空白处也可直接粘贴。
     // 2026-09-12：右键位置就是用户显式指定的落点 —— 点在哪个分区内就归哪个

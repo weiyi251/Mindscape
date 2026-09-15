@@ -180,6 +180,75 @@ export function boundingBoxOfCards(
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
 
+/** 手动新建分区框的默认尺寸（画布坐标，高度含标题条） */
+export const NEW_PARTITION_WIDTH = 360
+export const NEW_PARTITION_HEIGHT = 260
+
+/**
+ * 是否为「不生成分区框」的保留目录名（`.mindscape` / `_已移除`）。
+ *
+ * 手动新建分区时**必须**用它拦一道：保留目录不会生成框，
+ * 若允许用户建出同名分区，刷新后 `createPartitions` 扫不到它 →
+ * 硬盘上有文件夹、画布上却没有框（用户会以为数据丢了）。
+ */
+export function isReservedPartitionName(name: string): boolean {
+  return (PARTITION_RESERVED_NAMES as readonly string[]).includes(name.trim())
+}
+
+/** 新建分区名的不合格原因（文案由 UI 层映射，core 不持用户可见文案） */
+export type NewPartitionNameIssue = 'empty' | 'invalid' | 'reserved' | 'duplicate'
+
+/**
+ * 校验「手动新建分区」的名称。返回 null 表示可用。
+ *
+ * 与第六章重命名保护①②一致，另加保留名一档；**硬盘同名冲突**需要 IO，
+ * 由调用方（pages/board/createPartitionFlow.ts）在拿到本函数结果之后再查。
+ */
+export function checkNewPartitionName(
+  name: string,
+  existing: readonly Partition[],
+): NewPartitionNameIssue | null {
+  const trimmed = name.trim()
+  if (trimmed === '') return 'empty'
+  // 保留名先判：`.mindscape` 也「以 . 开头」，若不先判会落到 invalid 上，
+  // 用户看到的是「含非法字符」而不是「这是系统保留名」的更有用提示
+  if (isReservedPartitionName(trimmed)) return 'reserved'
+  if (!isValidFolderName(trimmed)) return 'invalid'
+  if (existing.some((item) => item.name === trimmed || item.folderPath === trimmed)) {
+    return 'duplicate'
+  }
+  return null
+}
+
+/**
+ * 在画布上「以 center 为中心」手动建一个空分区框（2026-09-14 用户要求：
+ * 空间内直接创建分区，并在对应空间文件夹下生成同名文件夹）。
+ *
+ * · id 取现有分区最大值 +1（`nextPartitionId`）；
+ * · 颜色按现有分区数量从 8 色板轮换（与自动建框同一套配色，避免撞色）；
+ * · 尺寸用默认值（空框没有卡片包围盒可用），落点取整避免半个像素的模糊边框。
+ *
+ * 纯函数：不碰硬盘、不碰 store —— 落盘与状态写入由 createPartition 命令负责。
+ */
+export function createPartitionAt(
+  name: string,
+  center: { x: number; y: number },
+  existing: readonly Partition[],
+): Partition {
+  return {
+    id: nextPartitionId(existing.map((item) => item.id)),
+    name,
+    folderPath: name, // 一层扫描：folderPath 就是子文件夹名
+    x: Math.round(center.x - NEW_PARTITION_WIDTH / 2),
+    y: Math.round(center.y - NEW_PARTITION_HEIGHT / 2),
+    w: NEW_PARTITION_WIDTH,
+    h: NEW_PARTITION_HEIGHT,
+    color: resolvePartitionColor('auto', existing.length),
+    collapsed: false,
+    meta: {},
+  }
+}
+
 /**
  * 由「扫描到的子文件夹名 + 合并后的卡片」生成分区框清单。
  *
