@@ -4,11 +4,17 @@
 //   · 半透明色块 + 顶部标题条（名字 + 折叠按钮）
 //   · 折叠后框内卡片隐藏，只留标题条（高度 = PARTITION_TITLE_HEIGHT）
 //   · 颜色由 resolvePartitionColor 解析（8 色轮换 / 手动指定）
-//   · 双击标题改名（T2.6）：本地编辑态，提交交给上层走五步保护
+//   · 双击标题改名（T2.6）：进入行内编辑态，提交交给上层走五步保护
 //
 // 【17.3 手感约束】拖框过程中的 x/y 不进 React state —— 组件只按 props
 //   渲染静态位置，拖动中由 partitionDragController 直写 DOM transform，
 //   松手才经命令系统更新 store。编辑态（是否在改名）是低频 UI 状态，可用 state。
+//
+// 【改名触发多入口（2026-09-14 修复）】双击标题与右键菜单「重命名分区」都必须进入
+//   同一行内编辑态。为避免两个入口各自维护状态导致错位，编辑态改由**父层（Canvas）
+//   单一数据源**驱动：`editing` 由 `partition.id === editingPartitionId` 推导，
+//   双击标题经 `onBeginEdit` 通知父层置位、提交/取消经 `onRename`/`onCancelEdit`
+//   通知父层清位 —— 完全镜像便签的 `beginNoteEdit` 机制。
 //
 // 实现任务：T2.5 / T2.6。
 // ============================================================================
@@ -34,6 +40,12 @@ export interface PartitionViewProps {
   onToggleCollapsed?: (id: string) => void
   /** 提交新名字（第六章保护措施由上层完成；非法输入上层会拒绝并提示） */
   onRename?: (id: string, newName: string) => void
+  /** 是否进入改名编辑态（父层 Canvas 单一数据源驱动；菜单与双击共用） */
+  editing?: boolean
+  /** 双击标题 → 通知父层把本分区置为编辑态（单一数据源） */
+  onBeginEdit?: (id: string) => void
+  /** 改名取消（Esc / 与原名相同）→ 通知父层清位 */
+  onCancelEdit?: (id: string) => void
 }
 
 export function PartitionView({
@@ -43,28 +55,35 @@ export function PartitionView({
   registerEl,
   onToggleCollapsed,
   onRename,
+  editing = false,
+  onBeginEdit,
+  onCancelEdit,
 }: PartitionViewProps) {
   const collapsed = partition.collapsed
   const height = collapsed ? PARTITION_TITLE_HEIGHT : partition.h
 
-  // 编辑态是本地 UI 状态：不进 store（17.3：低频但纯展示性的状态不必全局化）
-  const [editing, setEditing] = useState(false)
+  // 草稿是本地输入缓冲（仅改名输入框用）；编辑态本身由父层 `editing` 驱动。
   const [draft, setDraft] = useState(partition.name)
   const inputRef = useRef<HTMLInputElement>(null)
+  // 每次进入编辑态只初始化一次草稿并聚焦全选（用 ref 防止重渲染反复触发）
+  const didInit = useRef(false)
 
   useEffect(() => {
-    if (editing) inputRef.current?.select()
-  }, [editing])
-
-  const startEditing = () => {
-    setDraft(partition.name)
-    setEditing(true)
-  }
+    if (editing && !didInit.current) {
+      didInit.current = true
+      setDraft(partition.name)
+      // 下一帧再聚焦全选：确保 input 已挂载到 DOM
+      requestAnimationFrame(() => inputRef.current?.select())
+    }
+    if (!editing) didInit.current = false
+  }, [editing, partition.name])
 
   const submit = () => {
-    setEditing(false)
     const trimmed = draft.trim()
+    // 交付给父层：父层会清 editing 状态并走五步保护。
+    // 空输入或与原名相同 → 视为取消，交给 onCancelEdit 清位（不再像旧版直接静默返回）
     if (trimmed && trimmed !== partition.name) onRename?.(partition.id, trimmed)
+    else onCancelEdit?.(partition.id)
   }
 
   return (
@@ -102,11 +121,13 @@ export function PartitionView({
       ))}
 
       {/* 标题条：折叠时就是整个框。双击改名绑定在整条标题条上（双击文字 /
-          双击标题条空白都生效），折叠按钮单独拦掉 dblclick */}
+          双击标题条空白都生效），折叠按钮单独拦掉 dblclick。
+          双击经 onBeginEdit 通知父层置位 editingPartitionId —— 与右键菜单「重命名分区」
+          共用同一编辑态（2026-09-14 修复，单一数据源） */}
       <div
         className="flex h-8 items-center gap-1 rounded-t-lg px-2"
         style={{ backgroundColor: `${color}40` }}
-        onDoubleClick={startEditing}
+        onDoubleClick={() => onBeginEdit?.(partition.id)}
       >
         <button
           type="button"
@@ -134,7 +155,7 @@ export function PartitionView({
             onDoubleClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === 'Enter') submit()
-              if (event.key === 'Escape') setEditing(false)
+              if (event.key === 'Escape') onCancelEdit?.(partition.id)
             }}
             onBlur={submit}
             // 字号与显示态一致（text-[17px]），改名时不会跳动

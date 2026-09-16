@@ -162,6 +162,8 @@ export interface CanvasApi {
   centerOn: (canvasPoint: Point) => void
   /** 让指定便签进入行内编辑（右键菜单「备注」对便签复用同一编辑态） */
   beginNoteEdit: (cardId: string) => void
+  /** 让指定分区框进入改名编辑态（右键菜单「重命名分区」与双击标题共用，2026-09-14 修复） */
+  beginPartitionRename: (partitionId: string) => void
 }
 
 export function Canvas({
@@ -258,6 +260,26 @@ export function Canvas({
   const handleNoteEditFinish = useCallback((cardId: string, value: string) => {
     setEditingNoteId((current) => (current === cardId ? null : current))
     onCommitNoteRef.current?.(cardId, value)
+  }, [])
+
+  /** 分区框改名编辑态（2026-09-14 修复）：正在改名的分区 id；null = 没有编辑中的分区。
+   *  单一数据源：双击标题与右键菜单「重命名分区」都经此处置位，PartitionView 只据 `editing`
+   *  推导是否显示输入框，杜绝两个入口各维护一份状态导致错位 */
+  const [editingPartitionId, setEditingPartitionId] = useState<string | null>(null)
+  /** 双击标题 / 菜单「重命名分区」→ 置位本分区为编辑态 */
+  const handlePartitionBeginEdit = useCallback((id: string) => {
+    setEditingPartitionId(id)
+  }, [])
+  /** 改名取消（Esc / 原名不变）→ 清位 */
+  const handlePartitionCancelEdit = useCallback((id: string) => {
+    setEditingPartitionId((current) => (current === id ? null : current))
+  }, [])
+  /** 提交新名：先清位（输入框即卸载），再交给上层走五步保护。
+   *  注意：即便上层校验失败（同名冲突等），编辑态也已退出 —— 与双击提交行为一致，
+   *  不会卡在「输入被吞、错误提示已弹出」的半开状态 */
+  const handlePartitionRename = useCallback((id: string, newName: string) => {
+    setEditingPartitionId((current) => (current === id ? null : current))
+    onRenamePartitionRef.current?.(id, newName)
   }, [])
 
   /** 分区框 DOM 注册表（拖框时直写样式，17.3） */
@@ -839,11 +861,6 @@ export function Canvas({
     onTogglePartitionCollapsedRef.current?.(id)
   }, [])
 
-  /** 双击标题提交新名（T2.6）：校验 / 冲突 / 占用 / 确认都在上层 */
-  const handleRenamePartition = useCallback((id: string, newName: string) => {
-    onRenamePartitionRef.current?.(id, newName)
-  }, [])
-
   /** 折叠分区的框内卡片不渲染（第六章：折叠后框内卡片隐藏，只留标题条） */
   const collapsedGroupNames = useMemo(
     () => new Set(partitions.filter((partition) => partition.collapsed).map((item) => item.name)),
@@ -928,6 +945,12 @@ export function Canvas({
           const card = cardsRef.current.find((item) => item.id === cardId)
           if (card?.type !== 'note') return
           setEditingNoteId(cardId)
+        },
+        // 右键菜单「重命名分区」进入分区框改名编辑态（与双击标题同一编辑态，2026-09-14 修复）
+        beginPartitionRename: (partitionId: string): void => {
+          const partition = partitionsRef.current.find((item) => item.id === partitionId)
+          if (!partition) return
+          setEditingPartitionId(partitionId)
         },
       })
     },
@@ -1053,7 +1076,10 @@ export function Canvas({
             selected={selectedPartitionId === partition.id}
             registerEl={registerPartitionEl}
             onToggleCollapsed={handleTogglePartitionCollapsed}
-            onRename={handleRenamePartition}
+            editing={partition.id === editingPartitionId}
+            onBeginEdit={handlePartitionBeginEdit}
+            onCancelEdit={handlePartitionCancelEdit}
+            onRename={handlePartitionRename}
           />
         ))}
 

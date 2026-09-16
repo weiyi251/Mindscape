@@ -1538,7 +1538,11 @@ export function Board() {
       })
     })
     register(PARTITION_ACTION.rename, ({ partition }) => {
-      if (partition) void handleRenamePartition(partition.id, partition.name)
+      // 2026-09-14 修复：右键「重命名分区」须进入**改名编辑态**（与双击标题一致），
+      // 而不是直接以「当前名」调 handleRenamePartition —— 后者有 `新名 === 现名` 早退守卫，
+      // 传入当前名会直接 return，导致菜单点击毫无反应。进入编辑态后由用户输入新名，
+      // 提交时 PartitionView 经 onRename 回调走五步保护。
+      if (partition) canvasApiRef.current?.beginPartitionRename(partition.id)
     })
     register(PARTITION_ACTION.toggleCollapse, ({ partition }) => {
       if (partition) handleTogglePartitionCollapsed(partition.id)
@@ -1556,7 +1560,6 @@ export function Board() {
     handleCardNote,
     handleCardTags,
     openCardWithSystem,
-    handleRenamePartition,
     handleTogglePartitionCollapsed,
     handleEditConnectionLabel,
     handleRemoveConnections,

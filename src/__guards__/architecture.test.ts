@@ -92,7 +92,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 「新建分区」落地（2026-09-14，用户要求）：按上述思路再拆一块 ——
   // 命名浮层 / 校验 / 查重 / 命令编排整块搬进 pages/board/createPartitionFlow.ts，
   // Board 侧只留一行接线，实际 **2062** 行（净 +13，非 +40）。
-  // ⇒ 剩余余量 18 行，给 7 个钩子埋点仍然够用（每处 1~2 行），
+  // 分区「重命名分区」菜单 bug 修复（2026-09-14）：菜单动作改为进入改名编辑态
+  // （canvasApi.beginPartitionRename），不再以当前名调 handleRenamePartition；
+  // 因依赖数组同步移除无用项，净 +3 → 实际 **2065** 行。
+  // ⇒ 剩余余量 15 行，给 7 个钩子埋点仍然够用（每处 1~2 行），
   //   但已接近见底：下一步若还要动 Board，请优先继续外抽而不是调阈值。
   'src/pages/Board.tsx': 2080,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
@@ -108,7 +111,9 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // （核心逻辑已在 cardResizeController.edgeResizeOutcome，此处只是接线）
   // 插件期拆分（2026-09-14，对应 docs/插件功能实施方案.md §7）：快捷键监听整块搬到
   // canvas/useCanvasShortcuts.ts（派发逻辑仍单测覆盖），实际 **1154** 行。
-  // 阈值下调并留 31 行余量给插件接线（cardSelected / cardMoved 钩子埋点）。
+  // 分区「重命名分区」菜单 bug 修复（2026-09-14）：新增 editingPartitionId 状态 +
+  // beginPartitionRename API + 三个包装回调 + PartitionView 透传 4 个 props，
+  // 净 +26 → 实际 **1180** 行。阈值 1185，余量仅 5 行 —— 下一步动 Canvas 须先外抽。
   'src/canvas/Canvas.tsx': 1185,
 }
 
@@ -421,7 +426,6 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/canvas/Connection.tsx': '渲染层',
   'src/canvas/FpsMeter.tsx': '渲染层',
   'src/canvas/MiniMap.tsx': '渲染层',
-  'src/canvas/Partition.tsx': '渲染层',
   'src/canvas/Selection.tsx': '渲染层',
   'src/canvas/SnapGuide.tsx': '渲染层',
   'src/canvas/Viewport.tsx': '渲染层',

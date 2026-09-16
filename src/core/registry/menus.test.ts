@@ -243,4 +243,21 @@ describe('buildPartitionMenuFor', () => {
     const collapsed = makePartition({ collapsed: true })
     expect(idsOf(buildPartitionMenuFor(collapsed))).toContain(PARTITION_ACTION.toggleCollapse)
   })
+
+  it('「重命名分区」动作把分区上下文带给实现（2026-09-14 修复的契约前提）', () => {
+    // 修复前：右键「重命名分区」直接以「当前名」调 handleRenamePartition，因命中
+    // `新名 === 现名` 早退守卫而毫无反应。修复后：动作仅把分区交给上层，
+    // 由上层 canvasApi.beginPartitionRename(partition.id) 进入编辑态。
+    // 本测试锁定「动作必须把 partition 上下文交给实现」这一契约——若有人把菜单项
+    // 改成不带 partition，beginPartitionRename 就拿不到 id，修复即失效。
+    const ctx = { spacePath: 'D:\\Mindscape\\空间A', partition: makePartition() }
+    const handler = vi.fn()
+    registerAction(PARTITION_ACTION.rename, handler)
+
+    CORE_PARTITION_MENU_ITEMS.find((item) => item.id === PARTITION_ACTION.rename)?.action(ctx)
+
+    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledWith(ctx)
+    expect(handler.mock.calls[0][0].partition?.id).toBe('p-1')
+  })
 })
