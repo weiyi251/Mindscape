@@ -67,11 +67,13 @@ export interface CardMenuParams {
   onSetColor: (card: Card, screen: ScreenPoint) => void
   /** 「重命名文件」：弹输入浮层（2026-09-15 用户需求） */
   onRenameFile: (card: Card) => void
+  /** 「彻底删除」：真删硬盘文件（仅已移除视图，2026-09-15 用户需求） */
+  onDeleteForever: (ids: string[]) => void
 }
 
-/** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复」项） */
+/** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复 / 彻底删除」项） */
 export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[] {
-  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor, onRenameFile } = params
+  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor, onRenameFile, onDeleteForever } = params
   const ctx = { spacePath, card }
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
@@ -92,17 +94,26 @@ export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[
     (item) => !(removedView && item.id === CARD_ACTION.renameFile),
   )
 
-  // 「恢复」（2026-09-13 用户裁决）：原来挂在顶栏的可折叠工具栏上，
-  // 取消工具栏后并入右键菜单；右键的卡片若在选中集合里就整批恢复
+  // 「恢复」（2026-09-13 用户裁决）与「彻底删除」（2026-09-15 用户需求）：
+  // 都只在已移除视图显示；右键的卡片若在选中集合里就整批操作。
+  // 彻底删除排在「恢复」之后（次选动作，danger 标红，走原生确认框）
   if (removedView) {
     const targets = selectedIds.includes(card.id) ? selectedIds : [card.id]
-    items.unshift({
-      id: 'card.restore',
-      label: targets.length > 1 ? `恢复选中的 ${targets.length} 张卡片` : '恢复此卡片',
-      icon: <RestoreIcon />,
-      separatorBefore: true,
-      run: () => onRestore(targets),
-    })
+    items.unshift(
+      {
+        id: 'card.restore',
+        label: targets.length > 1 ? `恢复选中的 ${targets.length} 张卡片` : '恢复此卡片',
+        icon: <RestoreIcon />,
+        separatorBefore: true,
+        run: () => onRestore(targets),
+      },
+      {
+        id: 'card.deleteForever',
+        label: targets.length > 1 ? `彻底删除选中的 ${targets.length} 个文件` : '彻底删除此文件',
+        danger: true,
+        run: () => onDeleteForever(targets),
+      },
+    )
   }
 
   return items

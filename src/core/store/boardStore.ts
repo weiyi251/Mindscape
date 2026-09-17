@@ -152,6 +152,12 @@ export interface BoardState {
   applyRemoveCards: (payload: { cards: Card[]; entries: RemovedEntry[] }) => void
   /** 撤销移除 / 恢复（T2.7 / T2.8）：卡片放回 + removed 记录移除 */
   applyRestoreCards: (payload: { cards: Card[]; entryIds: string[] }) => void
+  /**
+   * 彻底删除（2026-09-15 用户需求）：灰卡 + removed 记录一起清掉。
+   * ⚠️ 仅供「已移除视图的永久删除」使用 —— 文件真删由流程层先行完成，
+   * 本方法只清内存态；**不可撤销**（不走命令栈），调用方负责确认。
+   */
+  applyDeleteRemovedCards: (payload: { cardIds: string[]; entryIds: string[] }) => void
 
   // ---- 阶段三（T3）：连线 / 备注 / 便签 / 拖入 / 右键菜单动作的状态落点 ----
 
@@ -430,6 +436,18 @@ export function createBoardStore(
         // 且选中态残留（selectedIds 未清）→ 「没选中却带选中边框」
         removedCards: state.removedCards.filter((card) => !entryIdSet.has(card.id)),
         selectedIds: state.selectedIds.filter((id) => !entryIdSet.has(id)),
+      }))
+    },
+
+    applyDeleteRemovedCards({ cardIds, entryIds }) {
+      if (cardIds.length === 0 && entryIds.length === 0) return
+      const cardIdSet = new Set(cardIds)
+      const entryIdSet = new Set(entryIds)
+      set((state) => ({
+        removed: state.removed.filter((entry) => !entryIdSet.has(entry.id)),
+        // 灰卡与选中态同步清理（同 applyRestoreCards 的教训：残留 → 幽灵选中）
+        removedCards: state.removedCards.filter((card) => !cardIdSet.has(card.id)),
+        selectedIds: state.selectedIds.filter((id) => !cardIdSet.has(id) && !entryIdSet.has(id)),
       }))
     },
 

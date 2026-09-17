@@ -82,6 +82,7 @@ describe('buildCardMenuItems', () => {
     onRestore: vi.fn(),
     onSetColor: vi.fn(),
     onRenameFile: vi.fn(),
+    onDeleteForever: vi.fn(),
   }
 
   it('普通卡片：菜单项来自配置中心，「移除」标红', () => {
@@ -166,6 +167,37 @@ describe('buildCardMenuItems', () => {
     expect(items[0].label).toBe('恢复选中的 3 张卡片')
     items[0].run()
     expect(onRestore).toHaveBeenCalledWith(['c1', 'c2', 'c3'])
+  })
+
+  it('已移除视图：「彻底删除」紧跟「恢复」之后且标红，整批/单卡文案正确', () => {
+    const onDeleteForever = vi.fn()
+    const single = buildCardMenuItems({
+      ...base,
+      removedView: true,
+      card: fileCard(),
+      onDeleteForever,
+    })
+    expect(single[1].id).toBe('card.deleteForever')
+    expect(single[1].label).toBe('彻底删除此文件')
+    expect(single[1].danger).toBe(true)
+    single[1].run()
+    expect(onDeleteForever).toHaveBeenCalledWith(['c1'])
+
+    const batch = buildCardMenuItems({
+      ...base,
+      removedView: true,
+      selectedIds: ['c1', 'c2', 'c3'],
+      card: fileCard(),
+      onDeleteForever,
+    })
+    expect(batch[1].label).toBe('彻底删除选中的 3 个文件')
+    batch[1].run()
+    expect(onDeleteForever).toHaveBeenCalledWith(['c1', 'c2', 'c3'])
+  })
+
+  it('非移除视图：不显示「彻底删除」', () => {
+    const items = buildCardMenuItems({ ...base, card: fileCard() })
+    expect(items.map((item) => item.id)).not.toContain('card.deleteForever')
   })
 })
 

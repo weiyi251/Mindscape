@@ -1232,3 +1232,72 @@ describe('boardStore.loadSpace · 布局存软件目录（P1-2）', () => {
     expect(writeCount).toBe(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// 彻底删除（2026-09-15 用户需求）：已移除视图的「永久删除」清内存态。
+//   · removed 记录 + 灰卡（removedCards）+ 选中态三者一起清，无关项保留；
+//   · 文件真删由流程层先行完成，这里只验证内存清理语义。
+// ---------------------------------------------------------------------------
+
+describe('boardStore.applyDeleteRemovedCards · 彻底删除内存清理', () => {
+  function removedEntryOf(id: string, originalPath: string): RemovedEntry {
+    return { id, originalPath, movedTo: `_已移除/${originalPath}` }
+  }
+
+  function removedCard(id: string, filePath: string) {
+    return zCardSchema.parse({
+      id,
+      type: 'image',
+      filePath,
+      originalPath: filePath,
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 80,
+    })
+  }
+
+  function seedRemovedState(store: ReturnType<typeof createBoardStore>) {
+    store.setState({
+      removed: [removedEntryOf('c_001', 'gone.jpg'), removedEntryOf('c_002', 'keep.jpg')],
+      removedCards: [removedCard('c_001', '_已移除/gone.jpg'), removedCard('c_002', '_已移除/keep.jpg')],
+      selectedIds: ['c_001', 'c_002'],
+    })
+  }
+
+  it('删除目标：removed 记录、灰卡、选中态三者一起清掉', () => {
+    const store = createStore(createFakeProvider([]))
+    seedRemovedState(store)
+
+    store.getState().applyDeleteRemovedCards({ cardIds: ['c_001'], entryIds: ['c_001'] })
+
+    expect(store.getState().removed.map((item) => item.id)).toEqual(['c_002'])
+    expect(store.getState().removedCards.map((card) => card.id)).toEqual(['c_002'])
+    expect(store.getState().selectedIds).toEqual(['c_002'])
+  })
+
+  it('无关的记录与卡片保留（只清传入的 id）', () => {
+    const store = createStore(createFakeProvider([]))
+    seedRemovedState(store)
+    // 追加一个不在删除清单里的选中项（例如同视图另一张卡片）
+    store.setState({ selectedIds: ['c_001', 'c_002', 'c_009'] })
+
+    store.getState().applyDeleteRemovedCards({ cardIds: ['c_001'], entryIds: ['c_001'] })
+
+    expect(store.getState().removed.map((item) => item.id)).toEqual(['c_002'])
+    expect(store.getState().removedCards.map((card) => card.id)).toEqual(['c_002'])
+    expect(store.getState().selectedIds).toEqual(['c_002', 'c_009'])
+  })
+
+  it('空清单是 no-op（早退，不触发任何变更）', () => {
+    const store = createStore(createFakeProvider([]))
+    seedRemovedState(store)
+    const before = store.getState()
+
+    store.getState().applyDeleteRemovedCards({ cardIds: [], entryIds: [] })
+
+    expect(store.getState().removed).toBe(before.removed)
+    expect(store.getState().removedCards).toBe(before.removedCards)
+    expect(store.getState().selectedIds).toBe(before.selectedIds)
+  })
+})

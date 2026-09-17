@@ -110,6 +110,7 @@ import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
+import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -431,6 +432,25 @@ export function Board() {
         .finally(() => setProgress(null))
     },
     [history, writer],
+  )
+
+  /** 彻底删除「已移除」中的文件（2026-09-15）：确认 → 真删 → 清内存；不可撤销，编排见 permanentDeleteFlow.ts */
+  const handlePermanentDelete = useCallback(
+    (ids: string[]) => {
+      const space = useSpacesStore.getState().getCurrentSpace()
+      if (!space) return
+      void runPermanentDelete(ids, {
+        spacePath: space.folderPath,
+        provider: localStorageProvider,
+        removedCards: useBoardStore.getState().removedCards,
+        removedEntries: useBoardStore.getState().removed,
+        confirm: confirmDialog,
+        onError: setActionError,
+        applyDelete: (payload) => useBoardStore.getState().applyDeleteRemovedCards(payload),
+        schedule: () => writer.schedule(),
+      })
+    },
+    [writer],
   )
 
   /**
@@ -1577,6 +1597,7 @@ export function Board() {
         onMove: handleCardMove,
         onRestore: handleRestoreCards,
         onSetColor: handleNoteColor,
+        onDeleteForever: handlePermanentDelete,
         // 「重命名文件」（2026-09-15 用户需求）：依赖组就地组装，编排见 renameFileFlow.ts
         onRenameFile: (target) =>
           openRenameFilePrompt(target, {
@@ -1592,7 +1613,7 @@ export function Board() {
       })
       setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor, history, writer, applyFileRefUpdates],
+    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor, handlePermanentDelete, history, writer, applyFileRefUpdates],
   )
 
   const handlePartitionContextMenu = useCallback(
