@@ -97,7 +97,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 因依赖数组同步移除无用项，净 +3 → 实际 **2065** 行。
   // ⇒ 剩余余量 15 行，给 7 个钩子埋点仍然够用（每处 1~2 行），
   //   但已接近见底：下一步若还要动 Board，请优先继续外抽而不是调阈值。
-  'src/pages/Board.tsx': 2080,
+  // 待办卡片插件（2026-09-17）：画布桥实现整块外抽到 pages/board/pluginBridgeImpl.ts
+  // （usedCardIds + createPluginBoardBridge），Board 侧只留一行装配，实际 **2037** 行。
+  // 阈值下调到 2045：锁定外抽收益，余量 8 行给钩子埋点；再不够请继续外抽。
+  'src/pages/Board.tsx': 2045,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行
@@ -114,7 +117,10 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 分区「重命名分区」菜单 bug 修复（2026-09-14）：新增 editingPartitionId 状态 +
   // beginPartitionRename API + 三个包装回调 + PartitionView 透传 4 个 props，
   // 净 +26 → 实际 **1180** 行。阈值 1185，余量仅 5 行 —— 下一步动 Canvas 须先外抽。
-  'src/canvas/Canvas.tsx': 1185,
+  // 待办卡片插件（2026-09-17）：连线拖拽整块外抽到 interaction/connectionDrag.ts
+  // （控制器类 + 依赖注入），Canvas 侧只留装配与 data-connect-item 分流，实际 **1168** 行。
+  // 阈值下调到 1172，余量 4 行；再不够请继续外抽而不是调阈值。
+  'src/canvas/Canvas.tsx': 1172,
 }
 
 describe('规则 1：大文件行数只减不增', () => {
@@ -447,6 +453,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
   'src/plugins/colorCard/dialog.tsx':
     '插件界面（渲染层）：取值 / 校验 / 文件名 / 写盘编排全在 options.ts、png.ts、save.ts 里，均已单测',
+  'src/plugins/todoCard/view.tsx':
+    '插件界面（渲染层）：布局几何与条目增删改全在 todos.ts（已测），注册行为在 index.test.tsx 覆盖',
   'src/pages/Board.tsx': '渲染层',
   'src/pages/DesktopRequired.tsx': '渲染层',
   'src/pages/SpaceList.tsx': '渲染层',
