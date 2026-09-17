@@ -414,7 +414,12 @@ describe('buildCanvasMenuItems', () => {
     const items = buildCanvasMenuItems({ ...base, hasCopiedCards: false })
     items.find((item) => item.id === 'plugin:demo.create')?.run()
 
-    expect(action).toHaveBeenCalledWith({ spacePath: 'E:\\Mindscape\\空间A' })
+    // 待办卡片插件起见，画布菜单动作同时携带 canvasPoint（右键点），
+    // 插件可据此决定新建卡片的落点
+    expect(action).toHaveBeenCalledWith({
+      spacePath: 'E:\\Mindscape\\空间A',
+      canvasPoint: { x: 300, y: 200 },
+    })
 
     resetPluginCenter()
   })

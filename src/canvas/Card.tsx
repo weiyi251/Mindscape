@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import type { Card } from '@/core/types'
-import { renderCard } from '@/core/registry/cardTypes'
+import { renderCard, resizeHandleModeFor } from '@/core/registry/cardTypes'
 import { cn } from '@/lib/utils'
 import { CANVAS_ITEM_ATTR } from './Viewport'
 
@@ -91,6 +91,9 @@ export function CardView({
     onNoteEditFinish?.(card.id, noteDraft)
   }
 
+  /** 缩放手柄模式（2026-09-17）：default = 右下角（便签另有三边）；widthOnly = 仅左缘（插件高度自适应） */
+  const resizeMode = resizeHandleModeFor(card.type)
+
   return (
     <div
       ref={(element) => {
@@ -152,8 +155,10 @@ export function CardView({
 
       {/* 右下角缩放手柄（5.2：选中后拖右下角手柄）。11.6：仅在选中时出现。
           pointerdown 靠冒泡进入 Viewport 的原生监听，由 Canvas 分流到缩放控制器。
-          2026-09-13：补 data-resize-edge="se"，Canvas 统一按 edge 分流 */}
-      {selected ? (
+          2026-09-13：补 data-resize-edge="se"，Canvas 统一按 edge 分流。
+          2026-09-17：widthOnly 模式（插件高度自适应卡片）不渲染本手柄 ——
+          拖高会破坏插件按内容算好的高度 */}
+      {selected && resizeMode === 'default' ? (
         <div
           data-resize-handle={card.id}
           data-resize-edge="se"
@@ -193,6 +198,16 @@ export function CardView({
           data-connect-handle={card.id}
           title="拖到目标卡片创建连线"
           className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 cursor-crosshair rounded-full border border-background bg-primary/80 shadow-sm hover:bg-primary"
+        />
+      ) : null}
+
+      {/* 左缘中点宽度手柄（2026-09-17，widthOnly 模式）：只调宽 —— 高度由插件
+          按内容自适应并经桥提交（updateCardContent），不允许拖高。
+          w 边缩放复用便签同款控制器路径（edgeResizeOutcome('w')），Canvas 零改动 */}
+      {selected && resizeMode === 'widthOnly' ? (
+        <div
+          data-resize-edge="w"
+          className="absolute -left-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
         />
       ) : null}
     </div>

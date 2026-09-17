@@ -20,7 +20,8 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react'
 
 import type { Card, Connection } from '@/core/types'
-import { connectionAnchors, connectionPathD, rectCenter } from './interaction/connectionAnchor'
+import { itemAnchorsOfMeta } from '@/core/board/cardMeta'
+import { connectionAnchorsWithItems, connectionPathD, rectCenter } from './interaction/connectionAnchor'
 import type { Point, Rect } from './interaction/connectionAnchor'
 
 /** 标记「连线 path」的属性：命中与双击编辑靠它反查连线 id */
@@ -96,6 +97,17 @@ function readTranslate3d(element: HTMLElement | null | undefined): Point | null 
   return { x: Number(match[1]), y: Number(match[2]) }
 }
 
+/**
+ * 条目偏移查询（2026-09-17 条目级连线）：连线端声明了条目 id 时，
+ * 从对应卡片的 meta.itemAnchors 协议表查条目行 y 偏移；未声明 / 查不到
+ * 都返回 undefined —— 锚点计算退回整卡中点（旧数据兼容）。
+ */
+function itemOffsetFor(cards: Card[], cardId: string, itemId: string | undefined): number | undefined {
+  if (!itemId) return undefined
+  const card = cards.find((item) => item.id === cardId)
+  return card ? itemAnchorsOfMeta(card.meta)[itemId] : undefined
+}
+
 /** 读内联样式的像素值（缩放控制器直写的 width / height）；没有则返回 null */
 function readPx(value: string | undefined): number | null {
   if (!value) return null
@@ -138,7 +150,12 @@ export const ConnectionLayer = forwardRef<ConnectionLayerHandle, ConnectionLayer
           const to = cardRect(cards, domPos, domSize, connection.to)
           if (!from || !to) continue
 
-          const { start, end } = connectionAnchors(from, to)
+          const { start, end } = connectionAnchorsWithItems(
+            from,
+            to,
+            itemOffsetFor(cards, connection.from, connection.fromItem),
+            itemOffsetFor(cards, connection.to, connection.toItem),
+          )
           nodes.path.setAttribute('d', connectionPathD(start, end))
 
           if (nodes.label && connection.label) {
@@ -183,7 +200,12 @@ export const ConnectionLayer = forwardRef<ConnectionLayerHandle, ConnectionLayer
           const to = cardRect(cards, new Map(), new Map(), connection.to)
           if (!from || !to) return null // 端点卡片不存在（数据残留）：不渲染
 
-          const { start, end } = connectionAnchors(from, to)
+          const { start, end } = connectionAnchorsWithItems(
+            from,
+            to,
+            itemOffsetFor(cards, connection.from, connection.fromItem),
+            itemOffsetFor(cards, connection.to, connection.toItem),
+          )
           const selected = selectedIds.includes(connection.id)
           const middle = rectCenter({
             x: Math.min(start.x, end.x),

@@ -49,8 +49,10 @@ import { cardIdsInRect, normalizeRect } from './interaction/marquee'
 import { computeSnap, snapThresholdInCanvas } from './interaction/snap'
 import { screenToCanvas } from './interaction/coordinates'
 import { contentRects } from './interaction/fitToContent'
-import { connectionPathD, rightAnchor } from './interaction/connectionAnchor'
 import type { Point } from './interaction/connectionAnchor'
+import { ConnectionDragController } from './interaction/connectionDrag'
+import type { ConnectionEndpoint } from './interaction/connectionDrag'
+import { itemAnchorsOfMeta } from '@/core/board/cardMeta'
 import { visibleCanvasRect } from './lazyOriginal'
 import { SnapGuide } from './SnapGuide'
 import type { SnapGuideHandle } from './SnapGuide'
@@ -119,8 +121,11 @@ export interface CanvasProps {
   onSelectConnections?: (ids: string[]) => void
   /** 双击连线（编辑标签，T3.2） */
   onEditConnectionLabel?: (id: string) => void
-  /** 创建连线（T3.1）：拖拽松手 / 挂起模式点中目标卡后回调 */
-  onCreateConnection?: (fromCardId: string, toCardId: string) => void
+  /**
+   * 创建连线（T3.1；2026-09-17 条目级扩展）：拖拽松手 / 挂起模式点中目标卡后回调。
+   * 端点带 itemId 时连线落在该条目上（fromItem / toItem）；缺省 = 整卡连线。
+   */
+  onCreateConnection?: (from: ConnectionEndpoint, to: ConnectionEndpoint) => void
   /** 卡片右键菜单（T3.9）：菜单项由上层从菜单配置中心生成 */
   onCardContextMenu?: (card: Card, screen: { x: number; y: number }) => void
   /** 连线右键菜单（断开连接 / 编辑标签）：菜单项由菜单配置中心生成 */
@@ -446,8 +451,6 @@ export function Canvas({
   const connectionLayerRef = useRef<ConnectionLayerHandle>(null)
   /** 临时连线（拖出箭头过程）的 path：DOM 直写，不进 React 状态 */
   const tempConnectionRef = useRef<SVGPathElement | null>(null)
-  /** 连线拖拽进行中的源卡 id；null 表示未在连线 */
-  const connectingFromRef = useRef<string | null>(null)
   /** 挂起连线模式的源卡 id（菜单「连线」触发）；进 ref 供原生监听读取 */
   const pendingConnectRef = useRef<string | null>(pendingConnectFrom)
   pendingConnectRef.current = pendingConnectFrom
@@ -478,48 +481,26 @@ export function Canvas({
   /** getCanvasPoint 声明在下方；连线回调运行时已初始化 */
   const getCanvasPointRef = useRef<((event: PointerEvent) => Point) | null>(null)
 
-  /** 开始从某张卡拖出连线：显示临时线（getCanvasPoint 声明在其后，函数体运行时才解引用） */
-  const beginConnectionDrag = useCallback(
-    (event: PointerEvent, fromCardId: string) => {
-      connectingFromRef.current = fromCardId
-      const from = getCardRectById(fromCardId)
-      if (!from || !tempConnectionRef.current) return
-      // 起点固定为源卡右缘中点（与正式连线一致，用户裁决 2026-09-11）
-      const start = rightAnchor(from)
-      tempConnectionRef.current.setAttribute('d', connectionPathD(start, start))
-      tempConnectionRef.current.style.display = ''
-      // 拖出箭头期间锁卡片拖动（记录的 pointerId 与卡片拖动互斥）
-      event.preventDefault()
-    },
-    [getCardRectById],
-  )
-
-  /** 更新临时线终点（画布坐标）。getCanvasPoint 在下方声明，运行时已就绪 */
-  const updateConnectionDrag = useCallback((event: PointerEvent) => {
-    const fromId = connectingFromRef.current
-    if (!fromId || !tempConnectionRef.current) return
-    const from = getCardRectByIdRef.current(fromId)
-    if (!from) return
-    const to = getCanvasPointRef.current?.(event) ?? { x: 0, y: 0 }
-    const start = rightAnchor(from)
-    tempConnectionRef.current.setAttribute('d', connectionPathD(start, to))
+  /**
+   * 条目 y 偏移查询（meta.itemAnchors 协议，2026-09-17）：插件卡片自报条目行位置，
+   * 连线拖出起点 / 命中落点都按它落条目行；查不到退回整卡中点。
+   */
+  const getItemOffsetById = useCallback((cardId: string, itemId: string): number | undefined => {
+    const card = cardsRef.current.find((item) => item.id === cardId)
+    return card ? itemAnchorsOfMeta(card.meta)[itemId] : undefined
   }, [])
 
-  /** 结束连线拖拽：命中目标卡则创建连线，否则取消 */
-  const endConnectionDrag = useCallback(
-    (event: PointerEvent) => {
-      const fromId = connectingFromRef.current
-      connectingFromRef.current = null
-      if (!tempConnectionRef.current) return
-      tempConnectionRef.current.style.display = 'none'
-
-      if (!fromId) return
-      const target = document.elementFromPoint(event.clientX, event.clientY)
-      const cardElement = target?.closest(`[${CARD_ID_ATTR}]`) as HTMLElement | null
-      const toId = cardElement?.getAttribute(CARD_ID_ATTR)
-      if (toId && toId !== fromId) onCreateConnectionRef.current?.(fromId, toId)
-    },
-    [],
+  /** 连线拖拽控制器（实现见 interaction/connectionDrag.ts；getCanvasPoint 声明在下方，运行时才解引用） */
+  const connectionDragController = useMemo(
+    () =>
+      new ConnectionDragController({
+        getCardRect: (cardId) => getCardRectByIdRef.current(cardId),
+        getItemOffset: getItemOffsetById,
+        getCanvasPoint: (event) => getCanvasPointRef.current?.(event) ?? { x: 0, y: 0 },
+        getTempPath: () => tempConnectionRef.current,
+        onCreateConnection: (from, to) => onCreateConnectionRef.current?.(from, to),
+      }),
+    [getItemOffsetById],
   )
 
   // ---- T2.3 缩放手柄 ----
@@ -698,13 +679,18 @@ export function Canvas({
       // stopPropagation 拦不住它，只有这里早退才能不让拖拽控制器接管
       if (target?.closest('[data-note-editing]')) return
 
+      // 插件卡片内的交互元素（复选框 / 输入行等，2026-09-17）：不触发选中或拖拽，
+      // 交给元素自己的 React 合成事件（onClick / onChange）处理 —— 同 textarea 的
+      // 早退理由：原生根监听先于合成事件，不在这里让路就会被拖拽控制器接管
+      if (target?.closest('[data-card-interactive]')) return
+
       // 挂起连线模式（T3.9 菜单「连线」）：下一张被点中的卡片成为目标
       const pendingFrom = pendingConnectRef.current
       if (pendingFrom) {
         pendingConnectRef.current = null
         const pendingTarget = cardElement.getAttribute(CARD_ID_ATTR)
         if (pendingTarget && pendingTarget !== pendingFrom) {
-          onCreateConnectionRef.current?.(pendingFrom, pendingTarget)
+          onCreateConnectionRef.current?.({ cardId: pendingFrom }, { cardId: pendingTarget })
         }
         return
       }
@@ -765,9 +751,12 @@ export function Canvas({
       const cardId = cardElement.getAttribute(CARD_ID_ATTR)
       if (!cardId) return
 
-      // 连接手柄（T3.1）：从卡片边缘拖出箭头
-      if (target?.closest('[data-connect-handle]')) {
-        beginConnectionDrag(event, cardId)
+      // 连接手柄（T3.1）：从卡片边缘拖出箭头；手柄带 data-connect-item 时
+      // 连线精确到该条目（待办卡等插件，2026-09-17）
+      const connectHandle = target?.closest('[data-connect-handle]') as HTMLElement | null
+      if (connectHandle) {
+        const itemId = connectHandle.getAttribute('data-connect-item') ?? undefined
+        connectionDragController.begin(event, { cardId, itemId })
         return
       }
 
@@ -789,7 +778,7 @@ export function Canvas({
       resizeController,
       partitionDragController,
       partitionResizeController,
-      beginConnectionDrag,
+      connectionDragController,
     ],
   )
 
@@ -803,7 +792,7 @@ export function Canvas({
       partitionResizeController.move(event)
       handleMarqueeMove(event)
       // T3.1：连线拖出中每帧更新临时线
-      if (connectingFromRef.current) updateConnectionDrag(event)
+      if (connectionDragController.isConnecting) connectionDragController.update(event)
       // T3.1：有卡片在拖动时，连线端点直读 DOM 跟随（零 setState）。
       // 卡片缩放（T2.3）与分区块整组拖动（T2.5）同样改变卡片几何，连线同步跟随。
       if (dragController.isDragging) connectionLayerRef.current?.refresh()
@@ -816,7 +805,7 @@ export function Canvas({
       partitionDragController.end(event)
       partitionResizeController.end(event)
       handleMarqueeEnd(event)
-      if (connectingFromRef.current) endConnectionDrag(event)
+      if (connectionDragController.isConnecting) connectionDragController.end(event)
     }
     const handleCancel = () => {
       dragController.cancel()
@@ -826,8 +815,7 @@ export function Canvas({
       snapGuideRef.current?.hide()
       handleMarqueeCancel()
       // 连线拖出被取消：隐藏临时线
-      connectingFromRef.current = null
-      if (tempConnectionRef.current) tempConnectionRef.current.style.display = 'none'
+      connectionDragController.cancel()
     }
 
     window.addEventListener('pointermove', handleMove)
@@ -846,8 +834,7 @@ export function Canvas({
     handleMarqueeMove,
     handleMarqueeEnd,
     handleMarqueeCancel,
-    updateConnectionDrag,
-    endConnectionDrag,
+    connectionDragController,
   ])
 
   /** 单击空白 → 取消选中（5.1）；分区选中一并取消（2026-09-12） */

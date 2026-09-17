@@ -61,6 +61,13 @@ export interface CardTypeDef {
   menu: MenuItem[]
   /** 新建卡片时的默认尺寸 */
   defaultSize: { w: number; h: number }
+  /**
+   * 缩放手柄模式（2026-09-17 待办卡片插件引入）：
+   *   · 'default'（缺省）—— 右下角手柄（便签另有上 / 下 / 左三边手柄）；
+   *   · 'widthOnly' —— 仅左缘中点手柄：宽度用户可调，**高度由插件按内容自适应**
+   *     （拖高手柄会破坏自适应），适合内容决定高度的插件卡片。
+   */
+  resizeHandles?: 'default' | 'widthOnly'
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +82,12 @@ export interface MenuContext {
   card?: Card
   /** 触发菜单的分区框 */
   partition?: Partition
+  /**
+   * 触发菜单时的画布坐标（画布空白菜单提供，2026-09-17 待办卡片引入）。
+   * 插件用它把新建内容放在**右键点**上（与「右键新建分区」同体验）；
+   * 缺省时插件可交给宿主放视口中心。
+   */
+  canvasPoint?: { x: number; y: number }
   /** 触发菜单的连线（断开连接 / 编辑标签用） */
   connection?: Connection
 }

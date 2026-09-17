@@ -299,7 +299,7 @@ export function buildCanvasMenuItems(params: CanvasMenuParams): ContextMenuItemD
       id: `plugin:${item.id}`,
       label: item.label,
       separatorBefore: index === 0,
-      run: () => item.action({ spacePath }),
+      run: () => item.action({ spacePath, canvasPoint }),
     }),
   )
 

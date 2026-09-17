@@ -571,6 +571,15 @@ export function getCardTypeDef(type: string): CardTypeDef | undefined {
 }
 
 /**
+ * 该类型的缩放手柄模式（2026-09-17）：default = 右下角（便签另有三边手柄）；
+ * widthOnly = 仅左缘中点（插件卡片的高度按内容自适应，不允许拖高）。
+ * 未注册 / 未声明的类型一律 default，行为与旧版完全一致。
+ */
+export function resizeHandleModeFor(type: string): 'default' | 'widthOnly' {
+  return getCardTypeDef(type)?.resizeHandles === 'widthOnly' ? 'widthOnly' : 'default'
+}
+
+/**
  * 已提示过"与核心同名"的插件类型 id。
  * 去重的原因：listCardTypes 可能被频繁调用（每次渲染列表），不能反复刷日志。
  */
