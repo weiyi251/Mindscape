@@ -176,6 +176,7 @@ const RAW_COLOR = /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\(/
  */
 const RAW_COLOR_ALLOWLIST: Record<string, string> = {
   'src/core/board/partitions.ts': '分区调色板：8 个 hex 是给用户挑的数据，不是组件样式',
+  'src/core/board/noteColors.ts': '便签调色板：7 个 hex 是给用户挑的数据（与 partitions.ts 同理），不是组件样式',
   'src/canvas/MiniMap.tsx': 'canvas 2D 的 fillStyle 只能收具体颜色；hex 是读不到 CSS 变量时的兜底',
   'src/plugins/demo/demoPlugin.ts': '示例插件的默认分区色，属数据默认值',
   'src/plugins/colorCard/options.ts': '色板预设：hex 是给用户挑的数据（与 partitions.ts 同理），不是组件样式',

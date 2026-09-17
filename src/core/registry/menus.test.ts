@@ -70,7 +70,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('核心菜单配置', () => {
-  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制 + 移动到）', () => {
+  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制 + 移动到 + 便签颜色）', () => {
     expect(idsOf(CORE_CARD_MENU_ITEMS)).toEqual([
       CARD_ACTION.openOriginal,
       CARD_ACTION.remove,
@@ -81,6 +81,7 @@ describe('核心菜单配置', () => {
       CARD_ACTION.connect,
       CARD_ACTION.copy,
       CARD_ACTION.move,
+      CARD_ACTION.setColor,
     ])
   })
 
@@ -111,7 +112,8 @@ describe('buildCardMenuFor', () => {
   })
 
   it('便签 / 文件卡片：仅按 appliesTo 隐藏「打开原图」，「复制」对所有类型可见', () => {
-    // 便签没有硬盘文件（filePath 为空）→ 不显示「移动到…」
+    // 便签没有硬盘文件（filePath 为空）→ 不显示「移动到…」；
+    // 显示「便签颜色…」（2026-09-15 用户需求，仅便签适用）
     const noteIds = idsOf(buildCardMenuFor(makeCard({ type: 'note', filePath: '', originalPath: '' })))
     expect(noteIds).not.toContain(CARD_ACTION.openOriginal)
     expect(noteIds).not.toContain(CARD_ACTION.move)
@@ -124,12 +126,15 @@ describe('buildCardMenuFor', () => {
       CARD_ACTION.editLabel,
       CARD_ACTION.connect,
       CARD_ACTION.copy,
+      CARD_ACTION.setColor,
     ])
 
-    // 文件卡片有硬盘文件 → 显示「移动到…」（2026-09-12 用户裁决）
+    // 文件卡片有硬盘文件 → 显示「移动到…」（2026-09-12 用户裁决）；
+    // 非便签类型不显示「便签颜色…」
     const fileIds = idsOf(buildCardMenuFor(makeCard({ type: 'file' })))
     expect(fileIds).not.toContain(CARD_ACTION.openOriginal)
     expect(fileIds).toContain(CARD_ACTION.move)
+    expect(fileIds).not.toContain(CARD_ACTION.setColor)
     expect(fileIds).toEqual([
       CARD_ACTION.remove,
       CARD_ACTION.bringToFront,
@@ -151,9 +156,13 @@ describe('buildCardMenuFor', () => {
   it('插件注册的菜单项自动追加在核心项之后', () => {
     registerMenuItem({ id: 'plugin.extractColor', label: '提取色彩', action: () => {} })
 
-    const ids = idsOf(buildCardMenuFor(makeCard({ type: 'image' })))
+    const card = makeCard({ type: 'image' })
+    const ids = idsOf(buildCardMenuFor(card))
     expect(ids.at(-1)).toBe('plugin.extractColor')
-    expect(ids).toHaveLength(CORE_CARD_MENU_ITEMS.length + 1)
+    // 长度 = 该卡片适用的核心项数 + 1 个插件项（核心项按 appliesTo 过滤后计数）
+    expect(ids).toHaveLength(
+      CORE_CARD_MENU_ITEMS.filter((item) => !item.appliesTo || item.appliesTo(card)).length + 1,
+    )
   })
 
   it('插件菜单项与卡片类型不匹配时不出现', () => {

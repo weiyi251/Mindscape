@@ -260,6 +260,55 @@ describe('三种核心类型的渲染可区分', () => {
 })
 
 // ---------------------------------------------------------------------------
+// 便签自定义颜色（2026-09-15 用户需求）：meta.noteColor 有值时底色 / 边框
+// 走「色值 + 透明度后缀」内联样式（与分区框同款，主题安全）；无值 / 脏数据
+// 一律回到默认便签纸（bg-note 语义变量）。见 core/board/noteColors.ts。
+// ---------------------------------------------------------------------------
+
+describe('便签自定义颜色（meta.noteColor）', () => {
+  function noteHtml(meta: Card['meta']): string {
+    return renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'note', filePath: '', meta }), selected: false }),
+    )
+  }
+
+  function shellTag(html: string): string {
+    return html.match(/<div data-card-id="card-1"[^>]*>/)?.[0] ?? ''
+  }
+
+  it('默认（无 noteColor）：便签纸底色类名，无内联颜色样式', () => {
+    const html = noteHtml({})
+    const shell = shellTag(html)
+    expect(shell).toContain('bg-note')
+    expect(shell).not.toContain('border-transparent')
+    expect(shell).not.toContain('style=')
+  })
+
+  it('自定义色：去掉便签纸类名，底色 / 边框按「色值 + 透明度后缀」内联输出', () => {
+    const html = noteHtml({ noteColor: '#E7C873' })
+    const shell = shellTag(html)
+    expect(shell).not.toContain('bg-note')
+    expect(shell).toContain('border-transparent') // 占位类，内联色覆盖它
+    expect(shell).toContain('background-color:#E7C87333')
+    expect(shell).toContain('border-color:#E7C87399')
+  })
+
+  it('脏数据（缺 # / 非 6 位 / 非字符串）一律回到默认便签纸', () => {
+    for (const dirty of ['E7C873', '#E7C87', '#E7C8733', '#GGGGGG', 42, '']) {
+      const html = noteHtml({ noteColor: dirty as unknown as string })
+      const shell = shellTag(html)
+      expect(shell).toContain('bg-note')
+      expect(shell).not.toContain('style=')
+    }
+  })
+
+  it('色板之外的合法 #RRGGBB 也照常渲染（色板将来调整时旧数据不受影响）', () => {
+    const html = noteHtml({ noteColor: '#123456' })
+    expect(shellTag(html)).toContain('background-color:#12345633')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 标签条（T3.9 修复）：「编辑标签」写入的 meta.tags 必须显示在卡片上
 // ---------------------------------------------------------------------------
 

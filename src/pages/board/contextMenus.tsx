@@ -17,6 +17,7 @@
 import type { ContextMenuItemData } from '@/components/ui/context-menu'
 import { FolderAddIcon, NoteAddIcon, RedoIcon, RestoreIcon, UndoIcon } from '@/components/ui/icons'
 import { PARTITION_PALETTE } from '@/core/board/partitions'
+import { NOTE_PALETTE } from '@/core/board/noteColors'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
 import {
   buildCardMenuFor,
@@ -62,18 +63,25 @@ export interface CardMenuParams {
   onMove: (card: Card, screen: ScreenPoint) => void
   /** 「恢复」：把选中的卡片从「已移除」视图恢复 */
   onRestore: (ids: string[]) => void
+  /** 「便签颜色…」：展开二级色板菜单（2026-09-15 用户需求） */
+  onSetColor: (card: Card, screen: ScreenPoint) => void
 }
 
 /** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复」项） */
 export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[] {
-  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore } = params
+  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor } = params
   const ctx = { spacePath, card }
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
     label: item.label,
     danger: item.id === CARD_ACTION.remove,
-    // 「移动到…」不走配置中心的 action，改为展开二级菜单
-    run: item.id === CARD_ACTION.move ? () => onMove(card, screen) : () => item.action(ctx),
+    // 「移动到…」与「便签颜色…」不走配置中心的 action，改为展开二级菜单
+    run:
+      item.id === CARD_ACTION.move
+        ? () => onMove(card, screen)
+        : item.id === CARD_ACTION.setColor
+          ? () => onSetColor(card, screen)
+          : () => item.action(ctx),
   }))
 
   // 「恢复」（2026-09-13 用户裁决）：原来挂在顶栏的可折叠工具栏上，
@@ -139,6 +147,27 @@ export function buildPartitionColorItems(onPick: (color: string) => void): Conte
       label: `颜色 ${index + 1}`,
       swatch: colorKey,
       run: () => onPick(colorKey),
+    })),
+  ]
+}
+
+/**
+ * 组装「便签颜色…」二级色板菜单（2026-09-15 用户需求；首项为「默认便签纸」）。
+ * 色板来自 core/board/noteColors 的 NOTE_PALETTE；首项传 null 表示回到
+ * 默认便签纸（meta.noteColor 删键，见 metaWithNoteColor）。
+ */
+export function buildNoteColorItems(onPick: (color: string | null) => void): ContextMenuItemData[] {
+  return [
+    {
+      id: `${CARD_ACTION.setColor}:default`,
+      label: '默认便签纸',
+      run: () => onPick(null),
+    },
+    ...NOTE_PALETTE.map((color, index) => ({
+      id: `${CARD_ACTION.setColor}:${color}`,
+      label: `颜色 ${index + 1}`,
+      swatch: color,
+      run: () => onPick(color),
     })),
   ]
 }

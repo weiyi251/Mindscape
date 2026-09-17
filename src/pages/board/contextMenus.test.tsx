@@ -8,6 +8,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { PARTITION_PALETTE } from '@/core/board/partitions'
+import { NOTE_PALETTE } from '@/core/board/noteColors'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
 import { CARD_ACTION, CONNECTION_ACTION, PARTITION_ACTION } from '@/core/registry/menus'
 import { registerCanvasMenuItem, resetPluginCenter } from '@/core/registry/pluginCenter'
@@ -18,6 +19,7 @@ import {
   buildCardMoveItems,
   buildCanvasMenuItems,
   buildConnectionMenuItems,
+  buildNoteColorItems,
   buildPartitionColorItems,
   buildPartitionMenuItems,
   withShortcutLabel,
@@ -76,18 +78,20 @@ describe('buildCardMenuItems', () => {
     spacePath: 'E:/space',
     removedView: false,
     selectedIds: [] as string[],
+    onMove: vi.fn(),
+    onRestore: vi.fn(),
+    onSetColor: vi.fn(),
   }
 
   it('普通卡片：菜单项来自配置中心，「移除」标红', () => {
     const items = buildCardMenuItems({
       ...base,
       card: fileCard(),
-      onMove: vi.fn(),
-      onRestore: vi.fn(),
     })
     const ids = items.map((item) => item.id)
     expect(ids).toContain(CARD_ACTION.remove)
     expect(ids).toContain(CARD_ACTION.move)
+    expect(ids).not.toContain(CARD_ACTION.setColor)
     expect(items.find((item) => item.id === CARD_ACTION.remove)?.danger).toBe(true)
     // 非移除视图不插入「恢复」项
     expect(ids).not.toContain('card.restore')
@@ -100,20 +104,24 @@ describe('buildCardMenuItems', () => {
       ...base,
       card,
       onMove,
-      onRestore: vi.fn(),
     })
     items.find((item) => item.id === CARD_ACTION.move)?.run()
     expect(onMove).toHaveBeenCalledWith(card, { x: 10, y: 20 })
   })
 
-  it('便签没有文件：不出现「移动到…」', () => {
+  it('便签没有文件：不出现「移动到…」；出现「便签颜色…」且改写为二级菜单回调', () => {
+    const onSetColor = vi.fn()
+    const card = fileCard({ type: 'note', filePath: '' })
     const items = buildCardMenuItems({
       ...base,
-      card: fileCard({ type: 'note', filePath: '' }),
-      onMove: vi.fn(),
-      onRestore: vi.fn(),
+      card,
+      onSetColor,
     })
-    expect(items.map((item) => item.id)).not.toContain(CARD_ACTION.move)
+    const ids = items.map((item) => item.id)
+    expect(ids).not.toContain(CARD_ACTION.move)
+    expect(ids).toContain(CARD_ACTION.setColor)
+    items.find((item) => item.id === CARD_ACTION.setColor)?.run()
+    expect(onSetColor).toHaveBeenCalledWith(card, { x: 10, y: 20 })
   })
 
   it('已移除视图：首项为「恢复此卡片」并带分隔线', () => {
@@ -122,7 +130,6 @@ describe('buildCardMenuItems', () => {
       ...base,
       removedView: true,
       card: fileCard(),
-      onMove: vi.fn(),
       onRestore,
     })
     expect(items[0].id).toBe('card.restore')
@@ -139,7 +146,6 @@ describe('buildCardMenuItems', () => {
       removedView: true,
       selectedIds: ['c1', 'c2', 'c3'],
       card: fileCard(),
-      onMove: vi.fn(),
       onRestore,
     })
     expect(items[0].label).toBe('恢复选中的 3 张卡片')
@@ -201,6 +207,25 @@ describe('buildPartitionColorItems', () => {
     expect(onPick).toHaveBeenLastCalledWith('auto')
     items[2].run()
     expect(onPick).toHaveBeenLastCalledWith(PARTITION_PALETTE[1])
+  })
+})
+
+describe('buildNoteColorItems', () => {
+  it('首项为「默认便签纸」，其后是便签调色板每一项（带 swatch）', () => {
+    const items = buildNoteColorItems(vi.fn())
+    expect(items).toHaveLength(NOTE_PALETTE.length + 1)
+    expect(items[0].id).toBe(`${CARD_ACTION.setColor}:default`)
+    expect(items[1].swatch).toBe(NOTE_PALETTE[0])
+    expect(items[1].id).toBe(`${CARD_ACTION.setColor}:${NOTE_PALETTE[0]}`)
+  })
+
+  it('点击「默认便签纸」回调收到 null，点击色板项收到色值', () => {
+    const onPick = vi.fn()
+    const items = buildNoteColorItems(onPick)
+    items[0].run()
+    expect(onPick).toHaveBeenLastCalledWith(null)
+    items[3].run()
+    expect(onPick).toHaveBeenLastCalledWith(NOTE_PALETTE[2])
   })
 })
 

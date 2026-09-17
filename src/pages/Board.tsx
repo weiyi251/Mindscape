@@ -61,7 +61,6 @@ import { createRestoreCardsCommand } from '@/core/commands/impl/restoreCards'
 import { createSetCardsZIndexCommand, zIndexDeltasFor } from '@/core/commands/impl/setCardsZIndex'
 import { createSetCardNoteCommand } from '@/core/commands/impl/setCardNote'
 import { createSetCardMetaCommand } from '@/core/commands/impl/setCardMeta'
-import { createSetPartitionColorCommand } from '@/core/commands/impl/setPartitionColor'
 import {
   createConnectionCommand,
   createRemoveConnectionsCommand,
@@ -105,10 +104,11 @@ import {
   buildCardMoveItems,
   buildCanvasMenuItems,
   buildConnectionMenuItems,
-  buildPartitionColorItems,
   buildPartitionMenuItems,
 } from '@/pages/board/contextMenus'
 import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
+import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
+import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -1366,29 +1366,36 @@ export function Board() {
     [history, writer],
   )
 
-  /** 指定分区颜色（T3.9）：弹出色板二级菜单（项由 pages/board/contextMenus 组装） */
+  /**
+   * 指定分区颜色（T3.9）：弹出色板二级菜单。
+   * 编排（找分区 → 记旧色 → 弹菜单 → 可撤销命令 → 落盘）已外抽至
+   * partitionColorFlow.ts（2026-09-15，为便签颜色腾 Board 行数预算）。
+   */
   const handlePartitionColor = useCallback(
     (partitionId: string, screen: { x: number; y: number }) => {
-      const current = useBoardStore
-        .getState()
-        .partitions.find((partition) => partition.id === partitionId)
-      if (!current) return
-
-      // 记下改色前的值，命令的 undo 用它还原
-      const previousColor = current.color
-      const items = buildPartitionColorItems((color) => {
-        void history
-          .execute(
-            createSetPartitionColorCommand(
-              partitionId,
-              previousColor,
-              color,
-              (id, next) => useBoardStore.getState().setPartitionColor(id, next),
-            ),
-          )
-          .then(() => writer.schedule())
+      openPartitionColorMenu(partitionId, screen, {
+        partitions: useBoardStore.getState().partitions,
+        execute: (command) => history.execute(command),
+        schedule: () => writer.schedule(),
+        showMenu: setContextMenu,
+        applyColor: (id, next) => useBoardStore.getState().setPartitionColor(id, next),
       })
-      setContextMenu({ x: screen.x, y: screen.y, items })
+    },
+    [history, writer],
+  )
+
+  /**
+   * 便签颜色（2026-09-15 用户需求）：弹出便签色板二级菜单（编排见 noteColorFlow.ts）。
+   * 选中后写 card.meta.noteColor（可撤销，与标签同一套 meta 命令）。
+   */
+  const handleNoteColor = useCallback(
+    (card: Card, screen: { x: number; y: number }) => {
+      openNoteColorMenu(card, screen, {
+        execute: (command) => history.execute(command),
+        schedule: () => writer.schedule(),
+        showMenu: setContextMenu,
+        applyMeta: (id, meta) => useBoardStore.getState().setCardMeta(id, meta),
+      })
     },
     [history, writer],
   )
@@ -1595,10 +1602,11 @@ export function Board() {
         selectedIds,
         onMove: handleCardMove,
         onRestore: handleRestoreCards,
+        onSetColor: handleNoteColor,
       })
       setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [handleCardMove, removedView, selectedIds, handleRestoreCards],
+    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor],
   )
 
   const handlePartitionContextMenu = useCallback(

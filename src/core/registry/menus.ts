@@ -41,6 +41,8 @@ export const CARD_ACTION = {
   copy: 'card.copy',
   /** 移动到…（2026-09-12 用户裁决：画布内切换卡片文件所属的文件夹） */
   move: 'card.move',
+  /** 便签颜色…（2026-09-15 用户需求：自定义便签底色，二级色板菜单） */
+  setColor: 'card.setColor',
 } as const
 
 /**
@@ -102,6 +104,15 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
     label: '移动到…',
     appliesTo: (card) => card.filePath !== '',
     action: (ctx) => runAction(CARD_ACTION.move, '移动到…', ctx),
+  },
+  {
+    // 2026-09-15 用户需求「添加自定义便签颜色功能」：
+    // 仅便签显示；点击后弹出二级色板菜单（首项「默认便签纸」），
+    // 选择结果写入 card.meta.noteColor（可撤销，见 setCardMeta 命令）。
+    id: CARD_ACTION.setColor,
+    label: '便签颜色…',
+    appliesTo: (card) => card.type === 'note',
+    action: (ctx) => runAction(CARD_ACTION.setColor, '便签颜色…', ctx),
   },
 ]
 

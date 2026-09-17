@@ -21,13 +21,18 @@
 // ============================================================================
 
 import { Fragment, createElement } from 'react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 import type { Card, CoreCardType } from '@/core/types'
 import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { hoverLabelOfMeta, tagsOfMeta } from '@/core/board/cardMeta'
+import {
+  NOTE_BG_ALPHA,
+  NOTE_BORDER_ALPHA,
+  noteColorOfMeta,
+} from '@/core/board/noteColors'
 import {
   IMAGE_RESOLUTION_BADGE_ATTR,
   handleImageError,
@@ -300,13 +305,20 @@ const CARD_VISUAL_DEFAULT = 'border-border bg-card shadow-sm'
  *  + 加深边框 + 阴影提级；深浅主题都经语义变量生效。 */
 const NOTE_VISUAL = 'border-foreground/25 bg-note shadow-md'
 
+/** 便签自定义色视觉（2026-09-15 用户需求）：底色 / 边框改由内联样式按
+ *  「色值 + 透明度后缀」提供（与分区框同款，主题安全），类里只留阴影。 */
+const NOTE_VISUAL_CUSTOM = 'border-transparent shadow-md'
+
 /** 卡片外壳：统一选中态、圆角，各类型负责填内容与视觉色。
- *  contentClass 必须自带底色 / 边框色 / 阴影（见上方常量），这里不提供默认值。 */
+ *  contentClass 必须自带底色 / 边框色 / 阴影（见上方常量），这里不提供默认值。
+ *  style 为可选内联样式（2026-09-15 便签自定义色引入：语义类表达不了的
+ *  「用户挑选的动态色值」走内联样式，内联优先级天然覆盖类里的占位色）。 */
 function shell(
   card: Card,
   selected: boolean,
   contentClass: string,
   children: ReactNode,
+  style?: CSSProperties,
 ): ReactNode {
   return createElement(
     'div',
@@ -321,6 +333,7 @@ function shell(
       ]
         .filter(Boolean)
         .join(' '),
+      style,
     },
     children,
   )
@@ -427,11 +440,25 @@ function renderFile({ card, selected }: CardRenderProps): ReactNode {
  * 编辑态（noteEditing）不渲染正文与占位文字：行内编辑的 textarea 是
  * bg-transparent（透出便签纸底色），底下的占位文字「（空便签）」若照常渲染，
  * 会与用户正在输入的草稿重叠、显示不清（2026-09-13 用户截图反馈）——
- * 编辑中正文完全交给 textarea，这里只留卡片盒与标签条。 */
+ * 编辑中正文完全交给 textarea，这里只留卡片盒与标签条。
+ *
+ * 【自定义颜色】（2026-09-15 用户需求）：meta.noteColor 有值时底色 / 边框
+ * 走「色值 + 透明度后缀」内联样式（见 noteColors.ts 文件头），类改用
+ * NOTE_VISUAL_CUSTOM（透明边框占位 + 阴影）；无值维持默认便签纸。 */
 function renderNote({ card, selected, noteEditing }: CardRenderProps): ReactNode {
   const text = card.note.trim()
   const tags = tagBar(card)
-  return shell(card, selected, `flex-col p-2 ${NOTE_VISUAL}`, [
+  const noteColor = noteColorOfMeta(card.meta)
+  const contentClass = noteColor
+    ? `flex-col p-2 ${NOTE_VISUAL_CUSTOM}`
+    : `flex-col p-2 ${NOTE_VISUAL}`
+  const style: CSSProperties | undefined = noteColor
+    ? {
+        backgroundColor: noteColor + NOTE_BG_ALPHA,
+        borderColor: noteColor + NOTE_BORDER_ALPHA,
+      }
+    : undefined
+  return shell(card, selected, contentClass, [
     createElement(
       'div',
       {
@@ -446,7 +473,7 @@ function renderNote({ card, selected, noteEditing }: CardRenderProps): ReactNode
       noteEditing ? '' : text || '（空便签）',
     ),
     tags,
-  ].filter(Boolean))
+  ].filter(Boolean), style)
 }
 
 // ---------------------------------------------------------------------------
