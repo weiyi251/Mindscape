@@ -453,8 +453,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
   'src/plugins/colorCard/dialog.tsx':
     '插件界面（渲染层）：取值 / 校验 / 文件名 / 写盘编排全在 options.ts、png.ts、save.ts 里，均已单测',
-  'src/plugins/todoCard/view.tsx':
-    '插件界面（渲染层）：布局几何与条目增删改全在 todos.ts（已测），注册行为在 index.test.tsx 覆盖',
+  // 注：待办卡片界面 view.tsx 曾有本条豁免，2026-09-18 补了 view.test.tsx
+  // （静态渲染断言：多行控件 / 无 truncate / 行与连线点标记齐备），条目随之删除。
   'src/pages/Board.tsx': '渲染层',
   'src/pages/DesktopRequired.tsx': '渲染层',
   'src/pages/SpaceList.tsx': '渲染层',
