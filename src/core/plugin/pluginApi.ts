@@ -66,6 +66,10 @@ export function buildPluginApi(context: PluginApiContext): PluginHostApi {
       // 插件只需判断布尔值，不必区分「没有画布」和「画布拒绝了」
       createCardFromFile: (input) =>
         getPluginBoardBridge()?.createCardFromFile(input) ?? Promise.resolve(false),
+      createCard: (input) =>
+        getPluginBoardBridge()?.createCard(input) ?? Promise.resolve(null),
+      updateCardContent: (input) =>
+        getPluginBoardBridge()?.updateCardContent(input) ?? Promise.resolve(false),
     },
 
     config: {

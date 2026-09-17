@@ -8,9 +8,13 @@
 //
 // 生命周期：Board 挂载 → setPluginBoardBridge(...)；卸载 → setPluginBoardBridge(null)。
 // 未注册时（比如还没打开空间）插件的建卡请求返回 false，插件自己给用户提示。
+//
+// 2026-09-17 扩展（待办卡片插件）：新增 createCard（无文件建卡，插件自绘类型）
+// 与 updateCardContent（meta 整体替换 + 高度自适应，一条命令入撤销栈）。
+// 实现住在 pages/board/pluginBridgeImpl.ts，由 Board 注入依赖后组装。
 // ============================================================================
 
-import type { CreateCardInput } from './types'
+import type { CreateCardInput, CreatePlainCardInput, UpdateCardContentInput } from './types'
 
 /** 画布提供给插件的能力 */
 export interface PluginBoardBridge {
@@ -21,6 +25,17 @@ export interface PluginBoardBridge {
    * 异步的原因：需要读图片原始尺寸 + 登记资源表 + 走 addCards 命令（见 types.ts）。
    */
   createCardFromFile: (input: CreateCardInput) => Promise<boolean>
+  /**
+   * 在画布上加一张「不对应任何硬盘文件」的卡片（插件自绘类型，如待办卡）；
+   * 成功返回新卡片 id（插件后续更新内容要用），失败（未打开空间 / 只读 / 无画布）返回 null。
+   */
+  createCard: (input: CreatePlainCardInput) => Promise<string | null>
+  /**
+   * 更新插件卡片的内容：meta **整体替换** + 可选高度（自适应内容），
+   * 两个变化合为一条命令入撤销栈 —— 撤销一次就完整回到原样。
+   * 成功返回 true；卡片不存在 / 只读 / 未打开空间返回 false。
+   */
+  updateCardContent: (input: UpdateCardContentInput) => Promise<boolean>
 }
 
 let bridge: PluginBoardBridge | null = null

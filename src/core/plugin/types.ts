@@ -87,6 +87,38 @@ export interface CreateCardInput {
   undoable?: boolean
 }
 
+/**
+ * 无文件建卡请求（插件自绘类型，如待办卡 —— 卡片内容存 meta，不对应任何硬盘文件）。
+ * 与 CreateCardInput 的区别：没有 relativePath / absolutePath（无文件）、没有 undoable
+ * （新建本身就是一条 addCards 命令，undo 只删卡不删文件，天然可撤销）。
+ */
+export interface CreatePlainCardInput {
+  /** 卡片类型（插件注册的类型 id，见 registerCardType） */
+  type: string
+  /** 画布坐标；省略时由宿主放在视口中心（与 createCardFromFile 同规则） */
+  x?: number
+  y?: number
+  /** 卡片尺寸；省略时用宿主默认值（与便签一致） */
+  w?: number
+  h?: number
+  /** 插件私有数据，写入 card.meta（浅复制；插件按自己的键名组织） */
+  meta?: Record<string, unknown>
+}
+
+/** 卡片内容更新请求（插件卡片，如待办卡） */
+export interface UpdateCardContentInput {
+  /** 目标卡片 id（createCard 返回的那个） */
+  cardId: string
+  /**
+   * 新 meta 的**完整快照**（整体替换，不是浅合并 —— 浅合并删不掉键）。
+   * 插件基于自己拿到的旧 card.meta 算出新快照后整体提交；
+   * 约定只在内容真的变化时调用（每次提交都是一条撤销记录）。
+   */
+  meta: Record<string, unknown>
+  /** 新高度（画布 px，高度自适应内容）；缺省 = 高度不变 */
+  h?: number
+}
+
 /** 宿主提供给插件的能力（activate(api) 的入参） */
 export interface PluginHostApi extends PluginApi {
   /** 对话框：插件自己渲染内容，宿主负责挂载与关闭 */
@@ -112,6 +144,16 @@ export interface PluginHostApi extends PluginApi {
      * 未打开画布、或桥接被拒绝时返回 false（插件据此给用户一句中文说明）。
      */
     createCardFromFile: (input: CreateCardInput) => Promise<boolean>
+    /**
+     * 在画布上加一张「不对应任何硬盘文件」的卡片（插件自绘类型，如待办卡）；
+     * 成功返回新卡片 id（后续 updateCardContent 要用），失败返回 null。
+     */
+    createCard: (input: CreatePlainCardInput) => Promise<string | null>
+    /**
+     * 更新插件卡片内容：meta 整体替换 + 可选高度，合为一条命令入撤销栈。
+     * 成功返回 true；卡片不存在 / 只读 / 未打开空间返回 false。
+     */
+    updateCardContent: (input: UpdateCardContentInput) => Promise<boolean>
   }
   /** 插件私有配置（存在 plugins.json，卸载不清除） */
   config: {

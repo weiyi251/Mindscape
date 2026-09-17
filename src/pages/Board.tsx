@@ -35,6 +35,7 @@ import { CardSearchPanel } from '@/components/ui/card-search'
 import { ArchiveIcon, ArrowLeftIcon, MoonIcon, SettingsIcon, SunIcon } from '@/components/ui/icons'
 import { Canvas } from '@/canvas/Canvas'
 import type { CanvasApi } from '@/canvas/Canvas'
+import type { ConnectionEndpoint } from '@/canvas/interaction/connectionDrag'
 import { MiniMap, MINIMAP_PREF_KEY } from '@/canvas/MiniMap'
 import { isDesktopRuntime } from '@/core/utils/runtime'
 import { getViewportSnapshot, resetViewportSnapshot, setViewportSnapshot } from '@/canvas/viewportSnapshot'
@@ -81,7 +82,7 @@ import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
 import { zCardSchema } from '@/core/types'
 import type { Card, Connection, Partition } from '@/core/types'
-import { basenameOf, dirnameOf, joinPath, relativePathOf } from '@/core/utils/paths'
+import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
 import { cardSizeForImage } from '@/core/board/cardSize'
 import { cardTypeFor } from '@/core/board/imageTypes'
 import { setCardAsset } from '@/core/board/cardAssets'
@@ -111,22 +112,10 @@ import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
+import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
-
-/**
- * 新建卡片时「已用 id 全集」：**画布卡片 + 已移除记录**。
- *
- * ⚠️ 两者共用同一 id 空间 —— removed 记录按 id 与灰卡关联（恢复时要用），
- * 只把画布卡片的 id 当种子会让新卡拿到已被移除记录占用的 id；
- * 该新卡再被移除时，removed 里就出现两条同 id 记录，
- * 恢复时「按 id 匹配」会命中错误的旧记录 → 「恢复失败：不是文件」。
- */
-function usedCardIds(): string[] {
-  const state = useBoardStore.getState()
-  return [...state.cards.map((card) => card.id), ...state.removed.map((entry) => entry.id)]
-}
 
 export function Board() {
   const spaces = useSpacesStore((state) => state.spaces)
@@ -765,70 +754,27 @@ export function Board() {
   }, [])
 
   /**
-   * 插件画布桥（2026-09-14，插件期新增；设计见 core/plugin/boardBridge.ts）。
+   * 插件画布桥（2026-09-14，插件期新增；2026-09-17 实现外抽到 board/pluginBridgeImpl.ts，
+   * 新增 createCard / updateCardContent 服务于待办卡片插件）。
    *
    * 为什么由本组件注册：建卡要用到「画布坐标换算 + 读图片尺寸 + 资源表 + addCards
    * 命令 + 落盘调度器」，这些能力只活在这里；而 core 层不能反向 import 上层
    * （架构守卫规则 4）—— 所以反过来由画布把能力交给插件运行时。
-   * 卸载时注销，未打开空间时插件拿到 false 并自己提示，不会静默失败。
+   * 卸载时注销，未打开空间时插件拿到空值并自己提示，不会静默失败。
    */
   useEffect(() => {
-    setPluginBoardBridge({
-      currentSpacePath: () => useSpacesStore.getState().getCurrentSpace()?.folderPath ?? null,
-
-      createCardFromFile: async (input) => {
-        const space = useSpacesStore.getState().getCurrentSpace()
-        if (!space || useBoardStore.getState().readOnly) return false
-        const point = viewportCenterCanvasPoint()
-        if (!point) return false
-
-        // 与拖入 / 粘贴走同一条建卡路径：图片卡会读原始尺寸并登记资源表
-        const card = await buildIngestedCard({
-          id: nextCardId(usedCardIds()),
-          actualAbs: input.absolutePath,
-          spacePath: space.folderPath,
-          point,
-          offset: 0,
-        })
-
-        // 插件给的字段优先于推导值 —— 它比我们更知道这张卡该是什么样
-        card.filePath = input.relativePath || card.filePath
-        card.originalPath = card.filePath
-        if (input.type) card.type = input.type
-        if (input.w !== undefined && input.h !== undefined) {
-          card.w = input.w
-          card.h = input.h
-        }
-        if (input.meta) card.meta = { ...card.meta, ...input.meta }
-
-        // 文件落在某个分区文件夹内就归该分区（与拖入 / 粘贴同规则）
-        const fileDir = dirnameOf(input.absolutePath)
-        const partition = useBoardStore
-          .getState()
-          .partitions.find((item) => item.folderPath === relativePathOf(fileDir, space.folderPath))
-
-        const dest: DropDestination = {
-          destDir: fileDir,
-          partitionId: partition?.id ?? null,
-          groupName: partition?.name ?? null,
-        }
-        if (partition) card.group = partition.name
-
-        // undoable === false（插件现画的二进制文件）→ 只加卡不入撤销栈：
-        // 撤销会删掉命令记录的文件，而 redo 没有源文件可重新复制（见 types.ts）
-        if (input.undoable === false) {
-          useBoardStore.getState().addCards([card])
-          writer.schedule()
-        } else {
-          // createdFiles 传空：文件是插件写的，不属于本次命令，undo 不该删它
-          await commitIngestedCards([card], [], [{ src: '', destDir: fileDir }], dest)
-        }
-        return true
-      },
-    })
+    setPluginBoardBridge(
+      createPluginBoardBridge({
+        viewportCenterCanvasPoint,
+        buildIngestedCard,
+        commitIngestedCards,
+        history,
+        writer,
+      }),
+    )
 
     return () => setPluginBoardBridge(null)
-  }, [buildIngestedCard, commitIngestedCards, viewportCenterCanvasPoint, writer])
+  }, [buildIngestedCard, commitIngestedCards, viewportCenterCanvasPoint, history, writer])
 
   /**
    * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」；
@@ -1183,17 +1129,26 @@ export function Board() {
     selectPartition(id)
   }, [selectPartition])
 
-  /** 创建连线（T3.1）：一条命令入撤销栈，undo 删除连线 */  const handleCreateConnection = useCallback(
-    (fromCardId: string, toCardId: string) => {
+  /**
+   * 创建连线（T3.1；2026-09-17 条目级）：一条命令入撤销栈，undo 删除连线。
+   * 端点带 itemId 时写入 fromItem / toItem（连线精确到卡片内条目，
+   * y 偏移由插件写在 meta.itemAnchors，Connection 层按协议查表）。
+   */
+  const handleCreateConnection = useCallback(
+    (from: ConnectionEndpoint, to: ConnectionEndpoint) => {
       const snapshot = useBoardStore.getState()
       if (snapshot.readOnly) {
         setActionError('布局由更新版本创建，处于只读模式，无法连线')
         return
       }
-      // 同一条连线（同 from 同 to）不重复建
+      // 同一条连线（同 from 同 to 同条目）不重复建
       if (
         snapshot.connections.some(
-          (connection) => connection.from === fromCardId && connection.to === toCardId,
+          (connection) =>
+            connection.from === from.cardId &&
+            connection.to === to.cardId &&
+            connection.fromItem === from.itemId &&
+            connection.toItem === to.itemId,
         )
       ) {
         setActionError('这两张卡片之间已经有连线了')
@@ -1204,8 +1159,10 @@ export function Board() {
       const existingIds = snapshot.connections.map((connection) => connection.id)
       const connection: Connection = {
         id: nextConnectionId(existingIds),
-        from: fromCardId,
-        to: toCardId,
+        from: from.cardId,
+        to: to.cardId,
+        ...(from.itemId ? { fromItem: from.itemId } : {}),
+        ...(to.itemId ? { toItem: to.itemId } : {}),
         label: '',
         color: 'gray',
         meta: {},

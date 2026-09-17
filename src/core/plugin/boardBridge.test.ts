@@ -15,16 +15,24 @@ afterEach(() => {
   setPluginBoardBridge(null)
 })
 
+/** 假桥工厂：只覆盖关心的方法，其余给空实现（桥新增能力时这里自动齐全） */
+function makeBridge(overrides: Partial<PluginBoardBridge> = {}): PluginBoardBridge {
+  return {
+    currentSpacePath: () => null,
+    createCardFromFile: async () => true,
+    createCard: async () => null,
+    updateCardContent: async () => false,
+    ...overrides,
+  }
+}
+
 describe('pluginBoardBridge', () => {
   it('未注册时返回 null（未打开空间的正常情形）', () => {
     expect(getPluginBoardBridge()).toBeNull()
   })
 
   it('注册后取回同一个实现，注销后回到 null', async () => {
-    const bridge: PluginBoardBridge = {
-      currentSpacePath: () => 'E:/空间',
-      createCardFromFile: async () => true,
-    }
+    const bridge = makeBridge({ currentSpacePath: () => 'E:/空间' })
 
     setPluginBoardBridge(bridge)
     expect(getPluginBoardBridge()).toBe(bridge)
@@ -35,14 +43,11 @@ describe('pluginBoardBridge', () => {
   })
 
   it('后注册的实现覆盖先前的（Board 重新挂载）', async () => {
-    const first: PluginBoardBridge = {
-      currentSpacePath: () => 'A',
-      createCardFromFile: async () => false,
-    }
-    const second: PluginBoardBridge = {
+    const first = makeBridge({ currentSpacePath: () => 'A' })
+    const second = makeBridge({
       currentSpacePath: () => 'B',
       createCardFromFile: vi.fn(async () => true),
-    }
+    })
 
     setPluginBoardBridge(first)
     setPluginBoardBridge(second)

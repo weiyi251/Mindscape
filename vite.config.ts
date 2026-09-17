@@ -1,10 +1,32 @@
 import { fileURLToPath, URL } from 'node:url'
+import { realpathSync } from 'node:fs'
 // 从 vitest/config 引入 defineConfig：与 Vite 的 defineConfig 兼容，且额外提供 test 字段类型
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import process from 'node:process'
 
 const host = process.env.TAURI_DEV_HOST
+
+/**
+ * `@` 别名指向 src。
+ *
+ * ⚠️ 为什么必须 realpathSync.native（磁盘真实大小写）：
+ * Windows 下「vite 对部分模块做 realpath（得磁盘真实大小写 E:/…）」与
+ * 「另一部分模块直接使用 alias 字符串（可能是 e:/…）」会产生**两种模块 id**；
+ * vite-node 的模块缓存按 id 字符串区分 —— 同一文件被执行两次，模块级单例
+ * （boardStore 等）直接变双例（2026-09-17 实测：B1 !== refA，执行日志两次）。
+ * 把 alias 本身归一化到磁盘真实大小写后，做不做 realpath 结果都一致，单例恢复。
+ * （本机磁盘目录真实为大写 E:\Mindscape，而 shell cwd 可能是小写 e:\Mindscape。）
+ */
+function srcAliasPath(): string {
+  const raw = fileURLToPath(new URL('./src', import.meta.url))
+  try {
+    return realpathSync.native(raw)
+  } catch {
+    // 目录不存在（极端情况）就原样返回，保持旧行为
+    return raw
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(() => ({
@@ -13,7 +35,7 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       // 与 tsconfig.json 的 paths 保持一致，供 shadcn/ui 组件引用
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@': srcAliasPath(),
     },
   },
 
