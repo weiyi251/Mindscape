@@ -10,8 +10,12 @@
 //   itemAnchorsOfMeta）：插件自算偏移写入，连线端点计算只查表不认识本插件 ——
 //   这是「core 不认识具体插件」铁律下的分工。
 //
-// 行高恒定（条目文本单行显示，超出省略号）保证锚点是纯几何可算的；
-// 高度 = f(条目数)，增删条目后由视图层经 api.board.updateCardContent 提交。
+// 2026-09-18（长文本换行修复）：条目文本改为**多行自动换行**，行高不再恒定 ——
+//   第 0 行可能 24px、第 1 行可能 48px，任何「行数 × 步进」的算术都必然与真实
+//   渲染错位（连线点偏离条目、卡片撑不下内容）。因此几何改由 view 挂载后实测
+//   DOM（measure.ts）并经画布桥 syncCardGeometry 写回；
+//   这里的高度与锚点只剩「还没渲染过时的估算初值」这一处职责。
+// 内容本身的提交（输入 / 勾选 / 增删）仍走 updateCardContent，一条命令可撤销。
 // ============================================================================
 
 import { ITEM_ANCHORS_META_KEY } from '@/core/board/cardMeta'
@@ -39,16 +43,24 @@ export const TODO_DEFAULT_W = 220
 /** 上下内边距 */
 export const TODO_PAD_TOP = 10
 export const TODO_PAD_BOTTOM = 10
-/** 单行高度（条目行与添加行同高） */
+/** 单行高度估算（条目行与添加行同高）—— **只是估算**：用于新建卡片的初始尺寸 */
 export const TODO_ROW_HEIGHT = 28
-/** 行间视觉间隔（仅观感；几何计算统一走步进，避免误差累积） */
+/** 行间视觉间隔（仅观感；真正的行间隔由 view 的 flex gap 决定） */
 export const TODO_ROW_GAP = 2
-/** 行步进 = 行高 + 间隔（view 的行定位必须用同一常量，锚点才与连线点重合） */
+/** 行步进 = 行高 + 间隔（仅供上面的估算使用） */
 export const TODO_ROW_STEP = TODO_ROW_HEIGHT + TODO_ROW_GAP
+/**
+ * 卡片最小高度：上内边距 + 一行 + 下内边距。
+ * 空卡片也要能容纳底部添加行的完整高度，否则新建出来就被裁掉半行。
+ */
+export const TODO_MIN_HEIGHT = TODO_PAD_TOP + TODO_ROW_HEIGHT + TODO_PAD_BOTTOM
 
 /**
- * 卡片自适应高度：上内边距 + 条目行（按步进）+ 底部添加行 + 下内边距。
+ * **估算**卡片高度：上内边距 + 条目行（按步进）+ 底部添加行 + 下内边距。
  * 空卡片也保留添加行（一建出来就能开始输入）。
+ *
+ * ⚠️ 2026-09-18 起这只是**初始尺寸**：条目文本支持换行后行高不再恒定，
+ * 卡片挂载后由 `measure.ts` 实测 DOM 并把真实高度同步回画布（api.board.syncCardGeometry）。
  */
 export function todoCardHeight(itemCount: number): number {
   const rows = Math.max(itemCount, 0)
@@ -56,9 +68,11 @@ export function todoCardHeight(itemCount: number): number {
 }
 
 /**
- * 条目锚点表：第 i 行的中心相对卡片顶边的 y 偏移。
- * 连线点画在行右缘垂直中心，端点必须与它重合 —— 偏移按「行中心」算，
- * 行定位也用同一套常量（padTop + index × 行步进），两边天然一致。
+ * **估算**条目锚点表：第 i 行的中心相对卡片顶边的 y 偏移。
+ *
+ * ⚠️ 同样是初值（理由见 todoCardHeight）：真正生效的是实测值。
+ * 之所以还留着它，是为了让 meta 在卡片还没渲染过（比如刚撤销到旧状态、
+ * 视图尚未挂载）时也有一份大致正确的锚点，连线不至于飞到卡片外。
  */
 export function todoItemAnchors(items: TodoItem[]): Record<string, number> {
   const anchors: Record<string, number> = {}
