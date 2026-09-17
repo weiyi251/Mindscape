@@ -12,5 +12,6 @@
 
 import type { BuiltinPluginDescriptor } from '@/core/plugin/types'
 import { colorCardPlugin } from './colorCard'
+import { todoCardPlugin } from './todoCard'
 
-export const BUILTIN_PLUGINS: BuiltinPluginDescriptor[] = [colorCardPlugin]
+export const BUILTIN_PLUGINS: BuiltinPluginDescriptor[] = [colorCardPlugin, todoCardPlugin]

@@ -48,6 +48,8 @@ export default {
         },
         // 便签纸（2026-09-13）：语义色，浅色淡黄 / 深色暗琥珀灰，见 globals.css --note
         note: 'hsl(var(--note))',
+        // 待办强调琥珀（2026-09-17）：待办卡插件的虚线框 / 复选框 / 连线点，见 globals.css --todo
+        todo: 'hsl(var(--todo))',
         // 第十二章的原始色值，供画布直接引用
         canvas: {
           bg: '#F5F3EF', // 米白，像描图纸

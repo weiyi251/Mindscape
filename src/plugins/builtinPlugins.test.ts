@@ -41,4 +41,10 @@ describe('BUILTIN_PLUGINS', () => {
       expect(typeof plugin.activate).toBe('function')
     }
   })
+
+  it('内置插件包含色卡与待办卡（登记被误删时报警）', () => {
+    const ids = BUILTIN_PLUGINS.map((plugin) => plugin.manifest.id)
+    expect(ids).toContain('mindscape.color-card')
+    expect(ids).toContain('mindscape.todo-card')
+  })
 })
