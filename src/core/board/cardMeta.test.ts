@@ -11,8 +11,11 @@ import { describe, expect, it } from 'vitest'
 
 import {
   HOVER_LABEL_META_KEY,
+  ITEM_ANCHORS_META_KEY,
   hoverLabelOfMeta,
+  itemAnchorsOfMeta,
   metaWithHoverLabel,
+  metaWithItemAnchors,
   metaWithTags,
   tagsOfMeta,
 } from './cardMeta'
@@ -76,5 +79,42 @@ describe('cardMeta：悬浮标记', () => {
 
   it('返回 trim 之后的文本（它要作为单行标记渲染）', () => {
     expect(hoverLabelOfMeta({ hoverLabel: '  #5A7D6A  ' })).toBe('#5A7D6A')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 条目锚点表（2026-09-17）：条目级连线的通用协议（插件自算偏移写入）
+// ---------------------------------------------------------------------------
+
+describe('cardMeta：条目锚点表', () => {
+  it('metaWithItemAnchors → itemAnchorsOfMeta 往返一致，且其余 meta 字段保留', () => {
+    const meta = metaWithItemAnchors({ hoverLabel: 'x' }, { item1: 24, item2: 48 })
+    expect(itemAnchorsOfMeta(meta)).toEqual({ item1: 24, item2: 48 })
+    expect(hoverLabelOfMeta(meta)).toBe('x')
+  })
+
+  it('metaWithItemAnchors 不改动入参（返回新对象）', () => {
+    const original = { a: 1 }
+    const next = metaWithItemAnchors(original, { item1: 10 })
+    expect(original).toEqual({ a: 1 })
+    expect(next).not.toBe(original)
+  })
+
+  it('键名就是 itemAnchors（落盘后的 JSON 结构，改动即破坏已有连线锚点）', () => {
+    expect(ITEM_ANCHORS_META_KEY).toBe('itemAnchors')
+    expect(metaWithItemAnchors({}, { i: 5 })).toEqual({ itemAnchors: { i: 5 } })
+  })
+
+  it('脏数据兜底：非对象 / 数组 / null / 缺字段都返回空表', () => {
+    expect(itemAnchorsOfMeta({})).toEqual({})
+    expect(itemAnchorsOfMeta({ itemAnchors: 'not-object' })).toEqual({})
+    expect(itemAnchorsOfMeta({ itemAnchors: [1, 2] })).toEqual({})
+    expect(itemAnchorsOfMeta({ itemAnchors: null })).toEqual({})
+  })
+
+  it('表内非有限数的值被剔除，其余条目保留（绝不抛错——渲染循环里调用）', () => {
+    expect(itemAnchorsOfMeta({ itemAnchors: { good: 24, bad: 'x', nan: Number.NaN, inf: Infinity } })).toEqual({
+      good: 24,
+    })
   })
 })

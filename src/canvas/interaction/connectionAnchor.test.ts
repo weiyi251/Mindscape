@@ -9,10 +9,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   connectionAnchors,
+  connectionAnchorsWithItems,
   distanceToSegment,
   leftAnchor,
+  leftAnchorAtOffset,
   rectCenter,
   rightAnchor,
+  rightAnchorAtOffset,
 } from './connectionAnchor'
 
 const CARD_A = { x: 0, y: 0, w: 100, h: 100 }
@@ -73,5 +76,46 @@ describe('distanceToSegment', () => {
 
   it('零长度线段退化为点到点距离', () => {
     expect(distanceToSegment({ x: 3, y: 4 }, { x: 0, y: 0 }, { x: 0, y: 0 })).toBe(5)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 条目级锚点（2026-09-17）：连线精确到卡片内某一行（如待办条目）
+// 固化的规则：仍保持「右缘出 / 左缘进」，只是纵向从整卡中点改为条目行 y。
+// ---------------------------------------------------------------------------
+
+describe('条目级锚点（offset 相对卡片顶边）', () => {
+  it('rightAnchorAtOffset = 右缘 + 条目偏移', () => {
+    expect(rightAnchorAtOffset(CARD_A, 24)).toEqual({ x: 100, y: 24 })
+  })
+
+  it('leftAnchorAtOffset = 左缘 + 条目偏移（左进右出不变）', () => {
+    expect(leftAnchorAtOffset(CARD_B, 48)).toEqual({ x: 300, y: 48 })
+  })
+
+  it('卡片不在原点时偏移相对卡片顶边', () => {
+    const card = { x: 500, y: 200, w: 80, h: 120 }
+    expect(rightAnchorAtOffset(card, 30)).toEqual({ x: 580, y: 230 })
+  })
+
+  it('偏移 clamp 到卡片高度内（表与高度短暂不一致时端点不飞出卡片）', () => {
+    expect(rightAnchorAtOffset(CARD_A, -10)).toEqual({ x: 100, y: 0 })
+    expect(leftAnchorAtOffset(CARD_B, 999)).toEqual({ x: 300, y: 100 })
+  })
+
+  it('undefined / 非有限数退回整卡中点（旧连线与脏数据兜底）', () => {
+    expect(rightAnchorAtOffset(CARD_A, undefined)).toEqual({ x: 100, y: 50 })
+    expect(leftAnchorAtOffset(CARD_B, Number.NaN)).toEqual({ x: 300, y: 50 })
+    expect(leftAnchorAtOffset(CARD_B, Number.POSITIVE_INFINITY)).toEqual({ x: 300, y: 50 })
+  })
+
+  it('connectionAnchorsWithItems：两端各带条目偏移', () => {
+    const { start, end } = connectionAnchorsWithItems(CARD_A, CARD_B, 24, 48)
+    expect(start).toEqual({ x: 100, y: 24 })
+    expect(end).toEqual({ x: 300, y: 48 })
+  })
+
+  it('connectionAnchorsWithItems：不传偏移时等价于 connectionAnchors', () => {
+    expect(connectionAnchorsWithItems(CARD_A, CARD_B)).toEqual(connectionAnchors(CARD_A, CARD_B))
   })
 })

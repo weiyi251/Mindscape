@@ -58,3 +58,33 @@ export function hoverLabelOfMeta(meta: Meta): string | null {
 export function metaWithHoverLabel(meta: Meta, label: string): Meta {
   return { ...meta, [HOVER_LABEL_META_KEY]: label }
 }
+
+// ---------------------------------------------------------------------------
+// 条目锚点表（2026-09-17）：条目级连线的通用协议
+// ---------------------------------------------------------------------------
+
+/** 条目锚点表在 meta 里的键名（`card.meta.itemAnchors`） */
+export const ITEM_ANCHORS_META_KEY = 'itemAnchors'
+
+/**
+ * 读条目锚点表：条目 id → 该条目相对卡片**顶边**的 y 偏移（画布像素）。
+ *
+ * 【通用协议，core 不认识具体插件】插件（如待办卡）自算每个条目行的 y 偏移
+ * 写进 meta，连线端点计算只查这张表：命中的条目连到条目行上，没命中退回
+ * 整卡中点。表里的值非有限数、表本身不是普通对象时按缺项兜底——
+ * 连线端点计算在渲染循环里，这里绝不抛错。
+ */
+export function itemAnchorsOfMeta(meta: Meta): Record<string, number> {
+  const raw = meta[ITEM_ANCHORS_META_KEY]
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const anchors: Record<string, number> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === 'number' && Number.isFinite(value)) anchors[key] = value
+  }
+  return anchors
+}
+
+/** 生成带条目锚点表的 meta 快照（不改动原对象） */
+export function metaWithItemAnchors(meta: Meta, anchors: Record<string, number>): Meta {
+  return { ...meta, [ITEM_ANCHORS_META_KEY]: anchors }
+}

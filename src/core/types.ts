@@ -96,6 +96,13 @@ export const zConnectionSchema = z.object({
   from: z.string(),
   /** target card id */
   to: z.string(),
+  /**
+   * 条目级连线（可选）：连线起点落在源卡内的某个条目上（如待办卡的某一行）。
+   * 缺省 = 整卡连线（右缘中点）。旧版本读到本字段会忽略并降级为整卡连线。
+   */
+  fromItem: z.string().optional(),
+  /** 条目级连线（可选）：连线终点落在目标卡内的某个条目上；缺省 = 整卡连线 */
+  toItem: z.string().optional(),
   label: z.string().default(''),
   color: z.string().default('gray'),
   meta: zMetaSchema,

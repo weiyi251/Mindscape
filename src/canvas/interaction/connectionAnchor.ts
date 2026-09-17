@@ -60,6 +60,46 @@ export function connectionAnchors(
   }
 }
 
+// ---------------------------------------------------------------------------
+// 条目级锚点（2026-09-17）：待办卡等插件的连线精确到卡片内某一行
+// ---------------------------------------------------------------------------
+
+/**
+ * 带条目偏移的**出发**锚点：源卡右缘、纵向落在条目行上。
+ * `offset` = 条目相对卡片顶边的 y 偏移（meta.itemAnchors 协议，core 不认识
+ * 具体插件，只查表）；undefined / 非有限数（脏数据）退回整卡右缘中点；
+ * 偏移 clamp 到卡片高度内，表与卡片高度短暂不一致时端点不飞出卡片。
+ */
+export function rightAnchorAtOffset(rect: Rect, offset: number | undefined): Point {
+  if (offset === undefined || !Number.isFinite(offset)) return rightAnchor(rect)
+  const y = Math.max(rect.y, Math.min(rect.y + rect.h, rect.y + offset))
+  return { x: rect.x + rect.w, y }
+}
+
+/** 带条目偏移的**到达**锚点：目标卡左缘、纵向落在条目行上（左进右出不变） */
+export function leftAnchorAtOffset(rect: Rect, offset: number | undefined): Point {
+  if (offset === undefined || !Number.isFinite(offset)) return leftAnchor(rect)
+  const y = Math.max(rect.y, Math.min(rect.y + rect.h, rect.y + offset))
+  return { x: rect.x, y }
+}
+
+/**
+ * 一条连线的两端锚点（条目级增强版）：
+ * 两端各传条目 y 偏移（相对各自卡片顶边），不传 / 脏值的那一端退回整卡中点
+ * —— 旧版连线（无 fromItem/toItem）与条目连线共用同一条计算路径。
+ */
+export function connectionAnchorsWithItems(
+  from: Rect,
+  to: Rect,
+  fromItemOffset?: number,
+  toItemOffset?: number,
+): { start: Point; end: Point } {
+  return {
+    start: rightAnchorAtOffset(from, fromItemOffset),
+    end: leftAnchorAtOffset(to, toItemOffset),
+  }
+}
+
 /**
  * 连线的 SVG path（三次贝塞尔）。
  * 控制点沿水平方向外伸，弯曲程度与两端横向距离成正比 ——
