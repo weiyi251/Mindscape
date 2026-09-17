@@ -969,7 +969,6 @@ export function Canvas({
 
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
-      if (removedModeRef.current) return
 
       const target = event.target as HTMLElement | null
       const screen = { x: event.clientX, y: event.clientY }
@@ -1007,7 +1006,9 @@ export function Canvas({
         }
       }
 
-      // 空白：给上层画布坐标（新建便签落点用）+ 屏幕坐标（浮层定位用）
+      // 空白：给上层画布坐标（新建便签落点用）+ 屏幕坐标（浮层定位用）。
+      // 已移除视图到此为止：灰卡右键上面已分发（恢复 / 彻底删除），空白不弹画布菜单
+      if (removedModeRef.current) return
       onCanvasContextMenuRef.current?.(getCanvasPoint(event as unknown as PointerEvent), screen)
     }
 
