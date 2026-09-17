@@ -70,6 +70,8 @@ export function buildPluginApi(context: PluginApiContext): PluginHostApi {
         getPluginBoardBridge()?.createCard(input) ?? Promise.resolve(null),
       updateCardContent: (input) =>
         getPluginBoardBridge()?.updateCardContent(input) ?? Promise.resolve(false),
+      syncCardGeometry: (input) =>
+        getPluginBoardBridge()?.syncCardGeometry(input) ?? Promise.resolve(false),
     },
 
     config: {

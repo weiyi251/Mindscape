@@ -267,3 +267,92 @@ describe('createPluginBoardBridge · createCardFromFile（迁移回归）', () =
     ).resolves.toBe(false)
   })
 })
+
+// ---------------------------------------------------------------------------
+// syncCardGeometry：几何同步（2026-09-18 长文本换行修复）
+//   —— 直写入库 + 落盘，**不入撤销栈**；幂等（值没变不写）
+// ---------------------------------------------------------------------------
+
+describe('createPluginBoardBridge · syncCardGeometry（几何同步，不入撤销栈）', () => {
+  it('写入高度与锚点表，且不进撤销栈（撤销回去应该没有这条记录）', async () => {
+    useBoardStore.setState({ cards: [makeCard('c_1', { h: 100 })] })
+    const deps = makeDeps()
+    const bridge = createPluginBoardBridge(deps)
+
+    await expect(
+      bridge.syncCardGeometry({ cardId: 'c_1', h: 168, itemAnchors: { t1: 22, t2: 60 } }),
+    ).resolves.toBe(true)
+
+    const card = useBoardStore.getState().cards[0]
+    expect(card?.h).toBe(168)
+    expect(card?.meta.itemAnchors).toEqual({ t1: 22, t2: 60 })
+    // 关键差异：updateCardContent 会记一条撤销命令，这里不能 —— 拖一次宽度会重排几十次
+    expect(deps.history.canUndo()).toBe(false)
+    expect(deps.writer.schedule).toHaveBeenCalled()
+  })
+
+  it('只传锚点时高度保持不变（宽度重排后仅纠正连线点）', async () => {
+    useBoardStore.setState({ cards: [makeCard('c_1', { h: 100 })] })
+    const bridge = createPluginBoardBridge(makeDeps())
+
+    await expect(bridge.syncCardGeometry({ cardId: 'c_1', h: 100, itemAnchors: { t1: 30 } })).resolves.toBe(
+      true,
+    )
+
+    const card = useBoardStore.getState().cards[0]
+    expect(card?.h).toBe(100)
+    expect(card?.meta.itemAnchors).toEqual({ t1: 30 })
+  })
+
+  it('幂等：高度与锚点都没变时不写库、不落盘（防 ResizeObserver 自激循环）', async () => {
+    useBoardStore.setState({
+      cards: [makeCard('c_1', { h: 168, meta: { itemAnchors: { t1: 22 } } })],
+    })
+    const deps = makeDeps()
+    const bridge = createPluginBoardBridge(deps)
+
+    await expect(
+      bridge.syncCardGeometry({ cardId: 'c_1', h: 168, itemAnchors: { t1: 22 } }),
+    ).resolves.toBe(true)
+
+    expect(deps.writer.schedule).not.toHaveBeenCalled()
+  })
+
+  it('亚像素抖动忽略（差 0.4px 不写库）', async () => {
+    useBoardStore.setState({
+      cards: [makeCard('c_1', { h: 168, meta: { itemAnchors: { t1: 22 } } })],
+    })
+    const deps = makeDeps()
+    const bridge = createPluginBoardBridge(deps)
+
+    await expect(
+      bridge.syncCardGeometry({ cardId: 'c_1', h: 168.4, itemAnchors: { t1: 22.4 } }),
+    ).resolves.toBe(true)
+    expect(deps.writer.schedule).not.toHaveBeenCalled()
+  })
+
+  it('锚点键集合变化也会同步（条目增删后旧锚点必须被清掉）', async () => {
+    useBoardStore.setState({
+      cards: [makeCard('c_1', { h: 168, meta: { itemAnchors: { t1: 22, t2: 60 } } })],
+    })
+    const deps = makeDeps()
+    const bridge = createPluginBoardBridge(deps)
+
+    await expect(
+      bridge.syncCardGeometry({ cardId: 'c_1', h: 168, itemAnchors: { t1: 22 } }),
+    ).resolves.toBe(true)
+
+    expect(useBoardStore.getState().cards[0]?.meta.itemAnchors).toEqual({ t1: 22 })
+    expect(deps.writer.schedule).toHaveBeenCalled()
+  })
+
+  it('卡片不存在 / 只读时返回 false', async () => {
+    useBoardStore.setState({ cards: [makeCard('c_1')] })
+    const bridge = createPluginBoardBridge(makeDeps())
+
+    await expect(bridge.syncCardGeometry({ cardId: '不存在', h: 200 })).resolves.toBe(false)
+
+    useBoardStore.setState({ readOnly: true })
+    await expect(bridge.syncCardGeometry({ cardId: 'c_1', h: 200 })).resolves.toBe(false)
+  })
+})

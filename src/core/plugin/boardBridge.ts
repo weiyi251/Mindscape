@@ -14,7 +14,12 @@
 // 实现住在 pages/board/pluginBridgeImpl.ts，由 Board 注入依赖后组装。
 // ============================================================================
 
-import type { CreateCardInput, CreatePlainCardInput, UpdateCardContentInput } from './types'
+import type {
+  CreateCardInput,
+  CreatePlainCardInput,
+  SyncCardGeometryInput,
+  UpdateCardContentInput,
+} from './types'
 
 /** 画布提供给插件的能力 */
 export interface PluginBoardBridge {
@@ -36,6 +41,14 @@ export interface PluginBoardBridge {
    * 成功返回 true；卡片不存在 / 只读 / 未打开空间返回 false。
    */
   updateCardContent: (input: UpdateCardContentInput) => Promise<boolean>
+  /**
+   * 同步卡片几何（高度 + 条目锚点表）：**不入撤销栈**，直接写 store 并落盘。
+   *
+   * 为什么单独开一条通道：目标是「布局派生结果」（条目换行后变高、卡片被拖宽后
+   * 重排），不是用户动作 —— 进撤销栈会让一次拖动产生几十条记录，撤销按钮形同失灵。
+   * 插件负责幂等调用（值没变就别调），实现侧也会再做一次比对早点返回。
+   */
+  syncCardGeometry: (input: SyncCardGeometryInput) => Promise<boolean>
 }
 
 let bridge: PluginBoardBridge | null = null

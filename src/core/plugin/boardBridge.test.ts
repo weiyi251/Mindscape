@@ -22,6 +22,7 @@ function makeBridge(overrides: Partial<PluginBoardBridge> = {}): PluginBoardBrid
     createCardFromFile: async () => true,
     createCard: async () => null,
     updateCardContent: async () => false,
+    syncCardGeometry: async () => false,
     ...overrides,
   }
 }

@@ -119,6 +119,32 @@ export interface UpdateCardContentInput {
   h?: number
 }
 
+/**
+ * 卡片几何同步请求（2026-09-18 增补，服务于「长文本换行后高度自适应」）。
+ *
+ * 与 UpdateCardContentInput 的分工：
+ *   · updateCardContent —— **用户动作**（输入完成 / 勾选 / 增删条目），
+ *     进撤销栈，撤销一次完整回到原样；
+ *   · syncCardGeometry  —— **派生结果**（换行引起的行高变化、卡片被拖宽后重排），
+ *     **不入撤销栈** —— 它不是用户做的事，只是布局的必然结果。
+ *
+ * 为什么不入栈：拖宽度手柄会带来几十次连续重排，每记一条撤销的话，
+ * 用户按一次「撤销」只会看到高度微微变化，会以为撤销坏了。
+ * 真正的用户输入已由 updateCardContent 记录；meta 回滚后换行数随之变化，
+ * 本通道会自动把高度纠正回来。
+ */
+export interface SyncCardGeometryInput {
+  /** 目标卡片 id */
+  cardId: string
+  /** 内容实测高度（画布 px）；与现值一致时不写入 */
+  h: number
+  /**
+   * 条目锚点表（`Record<条目 id, 相对卡片顶边的 y>`，core 的 itemAnchors 协议）。
+   * 缺省表示只同步高度。
+   */
+  itemAnchors?: Record<string, number>
+}
+
 /** 宿主提供给插件的能力（activate(api) 的入参） */
 export interface PluginHostApi extends PluginApi {
   /** 对话框：插件自己渲染内容，宿主负责挂载与关闭 */
@@ -154,6 +180,12 @@ export interface PluginHostApi extends PluginApi {
      * 成功返回 true；卡片不存在 / 只读 / 未打开空间返回 false。
      */
     updateCardContent: (input: UpdateCardContentInput) => Promise<boolean>
+    /**
+     * 同步卡片几何（高度 + 条目锚点表）：直写入库并落盘，**不入撤销栈**。
+     * 用于「布局自己变了」而非「用户改了内容」的场景 —— 详见 SyncCardGeometryInput。
+     * 成功返回 true；卡片不存在 / 只读返回 false。
+     */
+    syncCardGeometry: (input: SyncCardGeometryInput) => Promise<boolean>
   }
   /** 插件私有配置（存在 plugins.json，卸载不清除） */
   config: {

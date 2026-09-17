@@ -19,6 +19,7 @@
 
 import type { Point } from '@/canvas/interaction/coordinates'
 import type { DropDestination } from '@/core/board/ingest'
+import { ITEM_ANCHORS_META_KEY, itemAnchorsOfMeta } from '@/core/board/cardMeta'
 import type { LayoutWriter } from '@/core/board/layoutWriter'
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
@@ -77,6 +78,19 @@ export interface PluginBridgeDeps {
 
 /** 无文件建卡的宿主默认尺寸（与新建便签一致；插件可用 w/h 覆盖） */
 const DEFAULT_PLAIN_CARD_SIZE = { w: 200, h: 160 }
+
+/** 几何同步的容差（px）：小于它的差异视为「没变」，避免亚像素抖动引发写入 */
+const SYNC_TOLERANCE = 0.5
+
+/** 两个锚点表是否等价（同容差；键集合也必须一致 —— 增删条目后旧键要被清掉） */
+function sameAnchors(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keysOfA = Object.keys(a)
+  if (keysOfA.length !== Object.keys(b).length) return false
+  return keysOfA.every((key) => {
+    const value = b[key]
+    return typeof value === 'number' && Math.abs(value - a[key]) <= SYNC_TOLERANCE
+  })
+}
 
 /** 组装插件画布桥（Board 挂载时调用，返回值交给 setPluginBoardBridge） */
 export function createPluginBoardBridge(deps: PluginBridgeDeps): PluginBoardBridge {
@@ -193,6 +207,33 @@ export function createPluginBoardBridge(deps: PluginBridgeDeps): PluginBoardBrid
           },
         ),
       )
+      deps.writer.schedule()
+      return true
+    },
+
+    syncCardGeometry: async (input) => {
+      const snapshot = useBoardStore.getState()
+      if (snapshot.readOnly) return false
+      const card = snapshot.cards.find((item) => item.id === input.cardId)
+      if (!card) return false
+
+      const heightChanged = Math.abs(card.h - input.h) > SYNC_TOLERANCE
+      const anchorsChanged =
+        input.itemAnchors !== undefined &&
+        !sameAnchors(itemAnchorsOfMeta(card.meta), input.itemAnchors)
+      // 幂等闸门：值没变就一个字都不写。少了这层，ResizeObserver 的每次抖动都会
+      // 触发写库 + 落盘（并可能让「改 → 重排 → 再改」变成自激循环）
+      if (!heightChanged && !anchorsChanged) return true
+
+      if (anchorsChanged && input.itemAnchors) {
+        useBoardStore
+          .getState()
+          .setCardMeta(card.id, { ...card.meta, [ITEM_ANCHORS_META_KEY]: input.itemAnchors })
+      }
+      if (heightChanged) {
+        // w 必须原样带上：setCardSizes 接收完整尺寸，漏写会把卡片压成零宽
+        useBoardStore.getState().setCardSizes([{ id: card.id, w: card.w, h: input.h }])
+      }
       deps.writer.schedule()
       return true
     },
