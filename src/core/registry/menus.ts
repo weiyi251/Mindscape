@@ -43,6 +43,8 @@ export const CARD_ACTION = {
   move: 'card.move',
   /** 便签颜色…（2026-09-15 用户需求：自定义便签底色，二级色板菜单） */
   setColor: 'card.setColor',
+  /** 重命名文件（2026-09-15 用户需求：画布内直接重命名卡片对应的硬盘文件） */
+  renameFile: 'card.renameFile',
 } as const
 
 /**
@@ -113,6 +115,15 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
     label: '便签颜色…',
     appliesTo: (card) => card.type === 'note',
     action: (ctx) => runAction(CARD_ACTION.setColor, '便签颜色…', ctx),
+  },
+  {
+    // 2026-09-15 用户需求「在空间中要可以显示文件名字并且可以重命名文件」：
+    // 有硬盘文件的卡片（图片 / 文件）才谈得上重命名；便签没有文件，不显示。
+    // 点击后弹输入浮层，物理改名 + 同步画布（可撤销，见 renameCardFile 命令）。
+    id: CARD_ACTION.renameFile,
+    label: '重命名文件',
+    appliesTo: (card) => card.filePath !== '',
+    action: (ctx) => runAction(CARD_ACTION.renameFile, '重命名文件', ctx),
   },
 ]
 

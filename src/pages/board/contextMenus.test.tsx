@@ -81,6 +81,7 @@ describe('buildCardMenuItems', () => {
     onMove: vi.fn(),
     onRestore: vi.fn(),
     onSetColor: vi.fn(),
+    onRenameFile: vi.fn(),
   }
 
   it('普通卡片：菜单项来自配置中心，「移除」标红', () => {
@@ -91,6 +92,7 @@ describe('buildCardMenuItems', () => {
     const ids = items.map((item) => item.id)
     expect(ids).toContain(CARD_ACTION.remove)
     expect(ids).toContain(CARD_ACTION.move)
+    expect(ids).toContain(CARD_ACTION.renameFile)
     expect(ids).not.toContain(CARD_ACTION.setColor)
     expect(items.find((item) => item.id === CARD_ACTION.remove)?.danger).toBe(true)
     // 非移除视图不插入「恢复」项
@@ -109,7 +111,19 @@ describe('buildCardMenuItems', () => {
     expect(onMove).toHaveBeenCalledWith(card, { x: 10, y: 20 })
   })
 
-  it('便签没有文件：不出现「移动到…」；出现「便签颜色…」且改写为二级菜单回调', () => {
+  it('「重命名文件」改写为浮层回调，只带卡片', () => {
+    const onRenameFile = vi.fn()
+    const card = fileCard()
+    const items = buildCardMenuItems({
+      ...base,
+      card,
+      onRenameFile,
+    })
+    items.find((item) => item.id === CARD_ACTION.renameFile)?.run()
+    expect(onRenameFile).toHaveBeenCalledWith(card)
+  })
+
+  it('便签没有文件：不出现「移动到…」与「重命名文件」；出现「便签颜色…」且改写为二级菜单回调', () => {
     const onSetColor = vi.fn()
     const card = fileCard({ type: 'note', filePath: '' })
     const items = buildCardMenuItems({
@@ -119,6 +133,7 @@ describe('buildCardMenuItems', () => {
     })
     const ids = items.map((item) => item.id)
     expect(ids).not.toContain(CARD_ACTION.move)
+    expect(ids).not.toContain(CARD_ACTION.renameFile)
     expect(ids).toContain(CARD_ACTION.setColor)
     items.find((item) => item.id === CARD_ACTION.setColor)?.run()
     expect(onSetColor).toHaveBeenCalledWith(card, { x: 10, y: 20 })

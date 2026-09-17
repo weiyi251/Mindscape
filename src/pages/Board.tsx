@@ -47,6 +47,7 @@ import { LayoutWriter } from '@/core/board/layoutWriter'
 import { History } from '@/core/commands/history'
 import { createMoveCardsCommand, hasMeaningfulMove } from '@/core/commands/impl/moveCards'
 import type { CardMoveDelta } from '@/core/commands/impl/moveCards'
+import type { CardFileRefUpdate } from '@/core/commands/impl/moveCardToFolder'
 import { createResizeCardsCommand, hasMeaningfulResize } from '@/core/commands/impl/resizeCards'
 import type { CardResizeDelta } from '@/core/commands/impl/resizeCards'
 import {
@@ -67,7 +68,6 @@ import {
   createSetConnectionLabelCommand,
 } from '@/core/commands/impl/connections'
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
-import { createMoveCardToFolderCommand, currentTopFolderOf } from '@/core/commands/impl/moveCardToFolder'
 import { registerAction } from '@/core/registry/actionRegistry'
 import { CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
@@ -101,7 +101,6 @@ import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
 import {
   buildCardMenuItems,
-  buildCardMoveItems,
   buildCanvasMenuItems,
   buildConnectionMenuItems,
   buildPartitionMenuItems,
@@ -109,6 +108,8 @@ import {
 import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
+import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
+import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -1401,69 +1402,42 @@ export function Board() {
   )
 
   /**
+   * 把文件归属更新写回资源表与 store（「移动到…」与「重命名文件」共用）：
+   * image 卡先重登记资源表（方案 A 裁决 6：资源写入早于 store 更新），
+   * undo 复用同一路径把原图绝对路径写回旧值。
+   */
+  const applyFileRefUpdates = useCallback((card: Card, updates: CardFileRefUpdate[]) => {
+    const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
+    if (card.type === 'image' && spacePath) {
+      for (const update of updates) {
+        setCardAsset(update.id, { originalPath: joinPath(spacePath, update.filePath) })
+      }
+    }
+    useBoardStore.getState().setCardFileRefs(updates)
+  }, [])
+
+  /**
    * 移动卡片到文件夹（2026-09-12 用户裁决「画布内切换图片所属文件夹」）：
-   * 弹出二级菜单列出全部分区 + `未分类`（= 空间主目录，2026-09-13 起「未分类」
-   * 不再是物理文件夹）；选定后走 moveCardToFolder 命令 ——
-   * 物理文件 moveFile + 卡片 filePath / originalPath / group 更新 +
-   * 目标分区扩框，undo 全部还原。文件列表与画布显示经 store 同步刷新。
+   * 编排（早退守卫 → 二级菜单 → 可撤销命令 → 错误提示）已外抽至
+   * moveCardFlow.ts（2026-09-15，为「重命名文件」腾 Board 行数预算）。
    */
   const handleCardMove = useCallback(
     (card: Card, screen: { x: number; y: number }) => {
       const snapshot = useBoardStore.getState()
-      const space = useSpacesStore.getState().getCurrentSpace()
-      if (!space) return
-      if (snapshot.readOnly) {
-        setActionError('布局由更新版本创建，处于只读模式，无法移动')
-        return
-      }
-      if (card.filePath === '') return
-
-      const move = (
-        targetFolderRel: string,
-        groupName: string | undefined,
-        partition: Partition | null,
-      ) => {
-        void history
-          .execute(
-            createMoveCardToFolderCommand(card, targetFolderRel, groupName, partition, {
-              spacePath: space.folderPath,
-              provider: localStorageProvider,
-              // 资源表写入必须早于 store 更新（渲染时读快照，方案 A 裁决 6）；
-              // undo 复用同一路径把原图绝对路径写回旧值
-              applyUpdate: (updates) => {
-                if (card.type === 'image') {
-                  for (const update of updates) {
-                    setCardAsset(update.id, {
-                      originalPath: joinPath(space.folderPath, update.filePath),
-                    })
-                  }
-                }
-                useBoardStore.getState().setCardFileRefs(updates)
-              },
-              applyPartitionRects: (rects) => useBoardStore.getState().setPartitionRects(rects),
-            }),
-          )
-          .then(() => writer.schedule())
-          .catch((error: unknown) => {
-            setActionError(
-              error instanceof Error ? `移动失败：${error.message}` : String(error),
-            )
-          })
-      }
-
-      const items = buildCardMoveItems({
+      openMoveCardMenu(card, screen, {
+        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+        provider: localStorageProvider,
         partitions: snapshot.partitions,
-        currentFolder: currentTopFolderOf(card.filePath),
-        onMove: move,
+        readOnly: snapshot.readOnly,
+        execute: (command) => history.execute(command),
+        schedule: () => writer.schedule(),
+        showMenu: setContextMenu,
+        onError: setActionError,
+        applyUpdate: (updates) => applyFileRefUpdates(card, updates),
+        applyPartitionRects: (rects) => useBoardStore.getState().setPartitionRects(rects),
       })
-
-      if (items.length === 0) {
-        setActionError('没有可移动到的其他文件夹')
-        return
-      }
-      setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [history, writer],
+    [history, writer, applyFileRefUpdates],
   )
 
   /** 删除连线（T3.2 / 断开连接）：一条命令入撤销栈，undo 原样恢复（含标签） */
@@ -1603,10 +1577,22 @@ export function Board() {
         onMove: handleCardMove,
         onRestore: handleRestoreCards,
         onSetColor: handleNoteColor,
+        // 「重命名文件」（2026-09-15 用户需求）：依赖组就地组装，编排见 renameFileFlow.ts
+        onRenameFile: (target) =>
+          openRenameFilePrompt(target, {
+            spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+            provider: localStorageProvider,
+            readOnly: useBoardStore.getState().readOnly,
+            history,
+            writer,
+            setPrompt,
+            setActionError,
+            applyFileRefs: applyFileRefUpdates,
+          }),
       })
       setContextMenu({ x: screen.x, y: screen.y, items })
     },
-    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor],
+    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor, history, writer, applyFileRefUpdates],
   )
 
   const handlePartitionContextMenu = useCallback(

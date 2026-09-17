@@ -65,24 +65,32 @@ export interface CardMenuParams {
   onRestore: (ids: string[]) => void
   /** 「便签颜色…」：展开二级色板菜单（2026-09-15 用户需求） */
   onSetColor: (card: Card, screen: ScreenPoint) => void
+  /** 「重命名文件」：弹输入浮层（2026-09-15 用户需求） */
+  onRenameFile: (card: Card) => void
 }
 
 /** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复」项） */
 export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[] {
-  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor } = params
+  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor, onRenameFile } = params
   const ctx = { spacePath, card }
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
     label: item.label,
     danger: item.id === CARD_ACTION.remove,
-    // 「移动到…」与「便签颜色…」不走配置中心的 action，改为展开二级菜单
+    // 「移动到…」「便签颜色…」「重命名文件」不走配置中心的 action，改为展开二级菜单 / 弹浮层
     run:
       item.id === CARD_ACTION.move
         ? () => onMove(card, screen)
         : item.id === CARD_ACTION.setColor
           ? () => onSetColor(card, screen)
-          : () => item.action(ctx),
-  }))
+          : item.id === CARD_ACTION.renameFile
+            ? () => onRenameFile(card)
+            : () => item.action(ctx),
+  })).filter(
+    // 已移除视图下不显示「重命名文件」：恢复入口才是主操作，改名容易与
+    // 「恢复后再整理」的正常动线混淆（remove / move 不受此限，沿用既有行为）
+    (item) => !(removedView && item.id === CARD_ACTION.renameFile),
+  )
 
   // 「恢复」（2026-09-13 用户裁决）：原来挂在顶栏的可折叠工具栏上，
   // 取消工具栏后并入右键菜单；右键的卡片若在选中集合里就整批恢复

@@ -227,14 +227,12 @@ function tagBar(card: Card, floating = false): ReactNode {
 }
 
 /**
- * 悬浮标记 chip（2026-09-14；位置 2026-09-14 第二次裁决改为**下方左下角**）：
+ * 悬浮标记 chip（2026-09-14；位置 2026-09-14 第二次裁决改为**下方左下角**；
+ * 2026-09-15 起改为由 belowCardStack 容器承载 —— chip 自身改为容器内的
+ * 流内元素，不再自带定位类）：
  * `card.meta.hoverLabel` 有值时出现。
  * 这是**通用**能力 —— 核心只回答「这张卡有没有悬停标记」，至于标记是谁写的、
  * 什么含义，与核心无关（首个使用方是色卡插件，把色号写在这里）。
- *
- * 位置：卡片盒**下方外侧左对齐**（top-full left-0），与右下角的分辨率徽章
- * （top-full right-0）左右对称 —— 色号在左、分辨率在右，悬停时一起淡入，
- * 上方外挂层只留给常驻的备注 / 标签，整体布局不再堆叠。
  *
  * 默认不可见，鼠标悬停在卡片上才淡入：用纯 CSS（group-hover）而不是 React 悬停
  * state —— 悬停是高频事件，进 state 会触发重渲染，违反 17.3 的红线。
@@ -251,11 +249,58 @@ function hoverLabelChip(card: Card): ReactNode {
       'data-hover-label': '',
       // 等宽字体：色号是一串定长编码，等宽更整齐，也与「不是正文」的语义相符
       className:
-        'absolute left-0 top-full z-20 mt-1.5 max-w-full truncate rounded-md border border-border/70 ' +
+        'max-w-full truncate rounded-md border border-border/70 ' +
         'bg-background/80 px-1.5 py-0.5 font-mono text-[11px] leading-snug text-foreground ' +
         'shadow-sm backdrop-blur-sm select-none pointer-events-none opacity-0 transition-opacity group-hover:opacity-100',
     },
     label,
+  )
+}
+
+/**
+ * 文件名 chip（2026-09-15 用户需求「在空间中要可以显示文件名字」）：
+ * 图片卡此前完全没有可见的文件名（只有 alt / title 悬停提示），现在**常驻**
+ * 显示在卡片盒下方外侧左对齐。文件卡已有文件名（renderFile 的主行）、
+ * 便签没有文件，都不需要这个 chip。
+ *
+ * 常驻显示（不随悬停淡入）—— 文件名是用户「随时想核对」的信息，与
+ * hoverLabel（色号，2026-09-14 裁决「默认不显示」）的可见性策略刻意不同。
+ * 不可交互（pointer-events-none）：别抢画布的指针事件；truncate 兜底超长名。
+ */
+function fileNameChip(card: Card): ReactNode {
+  return createElement(
+    'span',
+    {
+      key: 'file-name',
+      'data-file-name': '',
+      className:
+        'max-w-full truncate rounded-md border border-border/60 ' +
+        'bg-background/80 px-1.5 py-0.5 text-[11px] leading-snug text-muted-foreground ' +
+        'shadow-sm backdrop-blur-sm select-none pointer-events-none',
+    },
+    basename(card.filePath),
+  )
+}
+
+/**
+ * 卡片盒下方的外挂容器（2026-09-15 引入）：承载**常驻的文件名 chip** 与
+ * **悬停淡入的悬浮标记（hoverLabel）**，两者同在卡片盒**下方外侧左对齐**
+ * （与右下角的分辨率徽章左右对称），竖向堆叠互不遮挡。
+ * 容器渲染在 shell **之外**（shell 有 overflow-hidden 会裁掉悬挂部分）；
+ * absolute 的定位祖先仍是卡片根元素（Card.tsx 的定位容器）。
+ */
+function belowCardStack(card: Card): ReactNode {
+  const hoverChip = hoverLabelChip(card)
+  return createElement(
+    'div',
+    {
+      key: 'below-stack',
+      'data-below-stack': '',
+      className:
+        'absolute left-0 top-full z-20 mt-1.5 flex max-w-full flex-col items-start gap-1',
+    },
+    fileNameChip(card),
+    hoverChip,
   )
 }
 
@@ -385,9 +430,10 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
 
   const shellEl = shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body])
 
-  // 悬浮标记（色号等，2026-09-14 第二次裁决）：独立外挂元素，卡片盒**下方外侧
-  // 左对齐**淡入 —— 与右下角的分辨率徽章左右对称；上方外挂层只留常驻的备注/标签
-  const hoverChip = hoverLabelChip(card)
+  // 卡片盒下方外侧左对齐的外挂容器（2026-09-15）：常驻文件名 chip + 悬停淡入的
+  // 悬浮标记（色号等），竖向堆叠 —— 与右下角的分辨率徽章左右对称；上方外挂层
+  // 只留常驻的备注 / 标签
+  const belowStack = belowCardStack(card)
 
   // 实际分辨率徽章（2026-09-14 用户要求）：悬停在卡片盒**下方外侧**右对齐淡入
   // 「宽 × 高」。⚠️ 三个刻意的设计（详见 imageResolution.ts 文件头）：
@@ -405,10 +451,10 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
       'shadow-sm backdrop-blur-sm pointer-events-none select-none opacity-0 transition-opacity group-hover:opacity-100',
   })
 
-  // 外挂层 / 悬浮标记 / 分辨率徽章都必须渲染在 shell **之外**（shell 有
+  // 外挂层 / 下方外挂容器 / 分辨率徽章都必须渲染在 shell **之外**（shell 有
   // overflow-hidden 会裁掉悬挂部分）；Fragment 内 absolute 的定位祖先仍是
   // 卡片根元素（Card.tsx 的定位容器）
-  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay, hoverChip, resolutionBadge)
+  return createElement(Fragment, { key: 'image-root' }, shellEl, overlay, belowStack, resolutionBadge)
 }
 
 /** file：扩展名徽标 + 文件名（+ 备注条） */

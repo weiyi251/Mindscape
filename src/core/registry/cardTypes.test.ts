@@ -464,11 +464,15 @@ describe('图片卡悬浮标记（meta.hoverLabel）', () => {
     expect(chipTag).toContain('group-hover:opacity-100')
   })
 
-  it('标记挂在卡片盒下方外侧左对齐（与右下角的分辨率徽章左右对称）', () => {
+  it('标记挂在卡片盒下方外侧左对齐（定位类在下方外挂容器上，与分辨率徽章左右对称）', () => {
     const html = imageWith({ hoverLabel: '#5A7D6A' })
+    // 2026-09-15 起标记改由 belowCardStack 容器承载（容器里还有常驻文件名 chip），
+    // 定位类 top-full / left-0 移到容器上，chip 自身是容器内的流内元素
+    const stackTag = html.match(/<div data-below-stack[^>]*>/)?.[0] ?? ''
+    expect(stackTag).toContain('top-full')
+    expect(stackTag).toContain('left-0')
     const chipTag = html.match(/<span data-hover-label[^>]*>/)?.[0] ?? ''
-    expect(chipTag).toContain('top-full')
-    expect(chipTag).toContain('left-0')
+    expect(chipTag).not.toContain('top-full')
   })
 
   it('没有 hoverLabel 时不渲染标记（普通图片卡完全不受影响）', () => {
@@ -486,6 +490,48 @@ describe('图片卡悬浮标记（meta.hoverLabel）', () => {
       renderCard({ card: makeCard({ type: 'file', meta: { hoverLabel: '#5A7D6A' } }), selected: false }),
     )
     expect(html).not.toContain('data-hover-label')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 文件名 chip（2026-09-15 用户需求「在空间中要可以显示文件名字」）：
+// 图片卡常驻显示文件名（此前只有 alt / title 悬停提示），挂在下方外挂容器里。
+// ---------------------------------------------------------------------------
+
+describe('图片卡文件名 chip', () => {
+  function imageHtml(): string {
+    return renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+  }
+
+  it('常驻显示文件名（不带 opacity-0 —— 与悬停淡入的 hoverLabel 策略刻意不同）', () => {
+    const html = imageHtml()
+    const chipTag = html.match(/<span data-file-name[^>]*>/)?.[0] ?? ''
+    expect(chipTag).not.toBe('')
+    expect(chipTag).toContain('pointer-events-none')
+    expect(chipTag).not.toContain('opacity-0')
+    expect(html).toContain('>ref-01.jpg<')
+  })
+
+  it('文件名 chip 与 hoverLabel 同容器竖向堆叠（文件名在上、标记在下）', () => {
+    const html = renderToStaticMarkup(
+      renderCard({
+        card: makeCard({ type: 'image', meta: { hoverLabel: '#5A7D6A' } }),
+        selected: false,
+      }),
+    )
+    const stack = html.match(/<div data-below-stack[^>]*>[\s\S]*?<\/div>/)?.[0] ?? ''
+    expect(stack).toContain('data-file-name')
+    expect(stack).toContain('data-hover-label')
+    expect(stack.indexOf('data-file-name')).toBeLessThan(stack.indexOf('data-hover-label'))
+  })
+
+  it('file 卡不渲染文件名 chip（它已有主行文件名）', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'file', filePath: '方案/总平面.pdf' }), selected: false }),
+    )
+    expect(html).not.toContain('data-file-name')
   })
 })
 
