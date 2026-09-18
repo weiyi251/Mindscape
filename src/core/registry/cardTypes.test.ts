@@ -557,12 +557,31 @@ describe('图片卡实际分辨率徽章', () => {
     expect(badgeTag).toContain('pointer-events-none')
   })
 
-  it('徽章挂在卡片盒下方外侧右对齐（top-full + right-0，不遮挡图片）', () => {
+  it('徽章与文件名同处下方外挂容器（2026-09-18 并行布局：一行 justify-between）', () => {
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: false }),
     )
-    expect(html).toContain('top-full')
-    expect(html).toContain('right-0')
+    // 徽章不再是独立的 absolute 元素（原先 left-0 的文件名与 right-0 的徽章
+    // 在窄卡上必然重叠），而是挂进 data-below-stack 容器的右端
+    const stack = html.match(/<div data-below-stack[^>]*>[\s\S]*$/)?.[0] ?? ''
+    expect(stack).toContain('data-image-resolution')
+    const stackTag = html.match(/<div data-below-stack[^>]*>/)?.[0] ?? ''
+    expect(stackTag).toContain('top-full')
+    expect(stackTag).toContain('justify-between')
+  })
+
+  it('窄卡防重叠（2026-09-18 用户截图反馈）：徽章不收缩、文件名列收缩让位', () => {
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+    // 徽章 flex-none：再窄也保持完整可读（尺寸信息比文件名重要）
+    const badgeTag = html.match(/<span data-image-resolution[^>]*>/)?.[0] ?? ''
+    expect(badgeTag).toContain('flex-none')
+    // 左列 min-w-0 + 文件名 truncate：空间不足时文件名截断让位，两者不再叠字
+    const leftTag = html.match(/<div class="flex min-w-0 flex-col[^>]*>/)?.[0] ?? ''
+    expect(leftTag).not.toBe('')
+    const chipTag = html.match(/<span data-file-name[^>]*>/)?.[0] ?? ''
+    expect(chipTag).toContain('truncate')
   })
 
   it('img 携带 load / error 语义的兜底底色之外不再多渲染文本（SSR 不输出事件）', () => {
