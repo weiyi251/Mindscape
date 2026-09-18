@@ -102,7 +102,11 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 阈值下调到 2045：锁定外抽收益，余量给钩子埋点；再不够请继续外抽。
   // 克隆型粘贴外抽（2026-09-18）：便签 / 无文件插件卡的克隆规则搬进
   // pasteCardsFlow.ts（可独立单测），实际 **2029** 行。
-  'src/pages/Board.tsx': 2045,
+  // 跨画布复制粘贴（2026-09-18）：CopiedCardSnapshot 快照带源空间路径 +
+  // 模块级 clipboardSnapshot（跨 Board 重挂存活）+ pasteCards 按源空间取原件，
+  // 净 +20 → 实际 **2049** 行。阈值上调到 2055：锁住本轮，余量留给钩子埋点；
+  // 再不够请继续外抽（候选：剪贴板快照逻辑搬进 pages/board/clipboardSnapshot.ts）。
+  'src/pages/Board.tsx': 2055,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行

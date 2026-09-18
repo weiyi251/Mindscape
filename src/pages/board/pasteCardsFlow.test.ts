@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
 
-import { clonePastedCard } from './pasteCardsFlow'
+import { cardToClipboardText, cardsToClipboardText, clonePastedCard } from './pasteCardsFlow'
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return zCardSchema.parse({
@@ -59,5 +59,43 @@ describe('clonePastedCard（克隆型粘贴）', () => {
     const source = makeCard()
     clonePastedCard(source, 'new_5', 0, 0, '某分区')
     expect(source).toMatchObject({ id: 'src_1', x: 40, y: 60 })
+  })
+})
+
+describe('cardsToClipboardText（2026-09-18：复制到画布之外是一段一段的文字）', () => {
+  it('便签 → 备注正文；首尾空白裁掉', () => {
+    const note = makeCard({ type: 'note', note: '  购物清单\n鸡蛋  ' })
+    expect(cardToClipboardText(note)).toBe('购物清单\n鸡蛋')
+  })
+
+  it('待办卡 → meta.items 的条目内容逐行（脏条目剔除，不解释条目其它字段）', () => {
+    const todo = makeCard({
+      meta: {
+        items: [
+          { id: 't1', text: '买牛奶', done: false },
+          { id: 't2', text: '  ', done: false }, // 空白条目剔除
+          '脏数据', // 非对象剔除
+          { id: 't3', text: '交报告', done: true },
+        ],
+      },
+    })
+    expect(cardToClipboardText(todo)).toBe('买牛奶\n交报告')
+  })
+
+  it('文件 / 图片卡 → 文件名；空白便签 / 零条目待办 → 空串（整段跳过）', () => {
+    expect(cardToClipboardText(makeCard({ type: 'image', filePath: '图片/海报.png', meta: {} }))).toBe(
+      '海报.png',
+    )
+    expect(cardToClipboardText(makeCard({ type: 'todo', meta: {} }))).toBe('')
+    expect(cardToClipboardText(makeCard({ type: 'note', note: '', meta: {} }))).toBe('')
+  })
+
+  it('多卡合并：段落间空行分隔；空白段落整段跳过', () => {
+    const text = cardsToClipboardText([
+      makeCard({ id: 'a', type: 'note', note: '第一段', meta: {} }),
+      makeCard({ id: 'b', type: 'note', note: '   ', meta: {} }), // 空便签整段跳过
+      makeCard({ id: 'c', type: 'image', filePath: '图片/海报.png', meta: {} }),
+    ])
+    expect(text).toBe('第一段\n\n海报.png')
   })
 })

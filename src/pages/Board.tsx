@@ -97,7 +97,7 @@ import type { DropDestination } from '@/core/board/ingest'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { isValidFolderName } from '@/core/board/partitions'
-import { readClipboardFiles, writeClipboardFiles, writeClipboardText } from '@/core/system/clipboard'
+import { readClipboardFiles, writeClipboardText } from '@/core/system/clipboard'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
 import {
@@ -110,13 +110,29 @@ import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
-import { clonePastedCard } from '@/pages/board/pasteCardsFlow'
+import { cardsToClipboardText, clonePastedCard } from '@/pages/board/pasteCardsFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
+
+/**
+ * 应用内剪贴板快照：卡片数据 + **复制时所在空间**（2026-09-18 跨画布粘贴）。
+ * 带上源空间后，粘贴到另一个空间时才能按「源空间 / 相对路径」找到原件做拷贝；
+ * 无文件卡（便签 / 待办）的克隆不依赖它。
+ */
+interface CopiedCardSnapshot {
+  card: Card
+  spacePath: string
+}
+
+/**
+ * 应用内剪贴板的模块级存放：state 随 Board 挂载生灭，模块变量跨挂载存活 ——
+ * 「复制 → 回空间列表 → 进另一空间 → 粘贴」依赖这一点（2026-09-18 跨画布）。
+ */
+let clipboardSnapshot: CopiedCardSnapshot[] = []
 
 export function Board() {
   const spaces = useSpacesStore((state) => state.spaces)
@@ -174,7 +190,16 @@ export function Board() {
   /** 应用内卡片剪贴板（2026-09-11 用户裁决「所有类型的卡片都支持复制与粘贴」）。
    *  存已复制的卡片快照；粘贴时图片 / 文件都从原件拷贝（保留清晰度），便签克隆文字。
    *  仅应用内有效（系统剪贴板写文件需要额外插件，8.2 的截图粘贴不受影响）。 */
-  const [copiedCards, setCopiedCards] = useState<Card[]>([])
+  const [copiedCards, setCopiedCardsState] = useState<CopiedCardSnapshot[]>(
+    // 模块级快照兜底：返回空间列表再进另一空间时 Board 会重挂、state 重建，
+    // 模块变量不丢 —— 「复制 → 回列表 → 进另一空间 → 粘贴」才成为可能
+    () => clipboardSnapshot,
+  )
+  /** 应用内剪贴板写入：state 与模块级快照同步更新 */
+  const setCopiedCards = useCallback((next: CopiedCardSnapshot[]) => {
+    clipboardSnapshot = next
+    setCopiedCardsState(next)
+  }, [])
 
   /** 设置面板显隐（2026-09-12：外观 / 已移除视图 / 检查更新统一收纳） */
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -852,55 +877,49 @@ export function Board() {
     [buildIngestedCard, commitIngestedCards, resolvePasteDestination, viewportCenterCanvasPoint],
   )
 
-  // ---- 复制 / 粘贴卡片（2026-09-11 用户裁决：三种类型全支持，同空间跨分区复制）----
+  // ---- 复制 / 粘贴卡片（2026-09-11 三类型全支持；2026-09-18 起支持跨画布粘贴）----
 
   /**
-   * 复制卡片（菜单 / Ctrl+C 共用）：应用内快照（粘贴回空间用）+ 系统剪贴板互通
-   * （2026-09-13 用户裁决「文件优先」）。
-   *   · 选区含文件卡 → 把绝对路径写入系统剪贴板（Windows CF_HDROP），
-   *     资源管理器 / 桌面等外部软件 Ctrl+V 即粘贴文件；便签无磁盘文件不同步，
-   *     但仍留在应用内剪贴板，可粘贴回空间；
-   *   · 纯便签选区 → 写便签文本（CF_UNICODETEXT，可粘贴到记事本等）。
-   * 写系统剪贴板失败不阻断应用内复制：提示即可——用户仍能粘贴回空间，
+   * 复制卡片（菜单 / Ctrl+C 共用）：应用内快照 + 系统剪贴板文本。
+   *   · 应用内：快照带**复制时所在空间**（CopiedCardSnapshot）—— 粘贴到另一个
+   *     空间时文件卡按「源空间 / 相对路径」找到原件做拷贝；无文件卡（便签 /
+   *     待办）的克隆不依赖空间，天然跨画布；
+   *   · 外部（2026-09-18 用户裁决，取代 2026-09-13 的「CF_HDROP 文件优先」）：
+   *     写**一段一段的文字**（每卡一段：便签正文 / 待办条目 / 文件名），
+   *     记事本、聊天窗口等任何能收文字的地方都能直接粘贴。
+   * 写系统剪贴板失败不阻断应用内复制：提示即可——用户仍能粘贴回画布，
    * 但必须知道「外部粘贴不可用」（用户要求环境受限时给出明确提示）。
    */
-  const handleCopyCards = useCallback(async (cards: Card[]) => {
-    const copyable = cards.filter(isCopyableCard)
-    if (copyable.length === 0) return
-    setCopiedCards(copyable.map((card) => ({ ...card })))
-    setActionError(null)
+  const handleCopyCards = useCallback(
+    async (cards: Card[]) => {
+      const copyable = cards.filter(isCopyableCard)
+      if (copyable.length === 0) return
+      setActionError(null)
 
-    const space = useSpacesStore.getState().getCurrentSpace()
-    if (!space) return
-
-    const filePaths = copyable
-      // 只有真有文件的卡才写系统剪贴板；无文件卡（便签 / 待办等插件卡）混在
-      // 选区里时若不过滤，joinPath 会把「空间文件夹本身」写进系统剪贴板
-      .filter((card) => card.type !== 'note' && (card.originalPath || card.filePath) !== '')
-      .map((card) => joinPath(space.folderPath, card.originalPath || card.filePath))
-    try {
-      if (filePaths.length > 0) {
-        await writeClipboardFiles(filePaths)
-      } else {
-        const text = copyable
-          .filter((card) => card.type === 'note')
-          .map((card) => card.note)
-          .join('\n\n')
-        if (text) await writeClipboardText(text)
-      }
-    } catch (error) {
-      setActionError(
-        `已在应用内复制，但写入系统剪贴板失败：${error instanceof Error ? error.message : String(error)}`,
+      const space = useSpacesStore.getState().getCurrentSpace()
+      setCopiedCards(
+        copyable.map((card) => ({ card: { ...card }, spacePath: space?.folderPath ?? '' })),
       )
-    }
-  }, [])
+
+      try {
+        const text = cardsToClipboardText(copyable)
+        if (text) await writeClipboardText(text)
+      } catch (error) {
+        setActionError(
+          `已在应用内复制，但写入系统剪贴板失败：${error instanceof Error ? error.message : String(error)}`,
+        )
+      }
+    },
+    [setCopiedCards],
+  )
 
   /**
    * 粘贴已复制的卡片到指定落点（T3.8 扩展，2026-09-11 用户裁决）：
    *   · 图片 —— 原图字节拷贝（保留清晰度）+ 新缩略图；
    *   · 文件 —— 原件拷贝（copyFile）；
-   *   · 便签 —— 纯文字克隆，不产生任何文件。
-   * 三种类型共用同一条 addCards 命令入撤销栈。
+   *   · 便签 / 无文件插件卡 —— 纯数据克隆，不产生任何文件。
+   * 2026-09-18 起支持跨画布：快照带源空间路径，文件按「源空间 / 相对路径」取
+   * 原件拷到当前空间；三种类型共用同一条 addCards 命令入撤销栈。
    */
   const pasteCards = useCallback(
     async (
@@ -930,7 +949,7 @@ export function Board() {
       /** 依次取出不撞号的 id（usedIds 每轮都会追加，同一批粘贴内部也不会重号） */
       const takeId = () => nextCardId(usedIds)
 
-      for (const copied of copiedCards) {
+      for (const { card: copied, spacePath: sourceSpace } of copiedCards) {
         try {
           // 无文件的卡（便签 / 待办等插件卡）：不碰硬盘，数据层克隆
           //（两类卡的克隆规则在 pasteCardsFlow，可独立单测）
@@ -943,8 +962,9 @@ export function Board() {
             continue
           }
 
-          // 图片 / 文件：originalPath 是相对空间文件夹的路径 → 还原成绝对路径做源
-          const src = joinPath(space.folderPath, copied.originalPath || copied.filePath)
+          // 图片 / 文件：按「复制时所在空间」找原件（2026-09-18 跨画布粘贴），
+          // 拷贝到当前空间的目标目录 —— 跨空间是 copyFile 的绝对路径能力，天然支持
+          const src = joinPath(sourceSpace, copied.originalPath || copied.filePath)
           const id = takeId()
 
           // 图片与非图片统一走 copy_file（方案 A：复制时不再生成缩略图）

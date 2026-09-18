@@ -17,6 +17,7 @@
 import { cloneFilelessCard } from '@/core/board/ingest'
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
+import { basenameOf } from '@/core/utils/paths'
 
 /**
  * 由复制源构建「无文件卡」的粘贴副本：换新 id、落到指定画布坐标（坐标取整，
@@ -47,4 +48,38 @@ export function clonePastedCard(
   }
   // 无文件插件卡（待办卡等）：内容全在 meta 里，整卡克隆
   return cloneFilelessCard(copied, id, x, y, groupName)
+}
+
+/**
+ * 单张卡的**外部剪贴板文本**（2026-09-18 用户裁决：复制到画布之外就是文字）：
+ *   · 便签有备注 → 备注正文；
+ *   · 待办卡等插件卡 → 条目内容逐行（只认 `meta.items` 数组这个通用形状，
+ *     不 import 任何插件 —— 键名是插件自己的约定，core 与本层都不解释含义）；
+ *   · 文件 / 图片卡 → 文件名；
+ *   · 什么都取不出（空白便签 / 零条目待办）→ 空串，整段跳过 ——
+ *     复制一张空卡粘出「note」这种类型代号只会让人困惑。
+ */
+export function cardToClipboardText(card: Card): string {
+  if (card.note.trim() !== '') return card.note.trim()
+  const items = card.meta['items']
+  if (Array.isArray(items)) {
+    const lines = items
+      .map((item) =>
+        item !== null && typeof item === 'object' && typeof (item as { text?: unknown }).text === 'string'
+          ? ((item as { text: string }).text.trim())
+          : '',
+      )
+      .filter((text) => text !== '')
+    if (lines.length > 0) return lines.join('\n')
+  }
+  if (card.filePath !== '') return basenameOf(card.filePath)
+  return ''
+}
+
+/** 多张卡 → 一段一段的文字（段落间空行分隔，与便签多选的外部粘贴一致） */
+export function cardsToClipboardText(cards: Card[]): string {
+  return cards
+    .map(cardToClipboardText)
+    .filter((text) => text !== '')
+    .join('\n\n')
 }
