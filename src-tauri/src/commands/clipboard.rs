@@ -118,31 +118,49 @@ mod native {
     ///
     /// 为什么需要它（2026-09-18 回归修复）：原先「复制卡片」改为只写文本后，
     /// 资源管理器里粘贴只能得到文件名 —— write_text 会先 empty_clipboard，
-    /// 两次调用各自清空，两格式无法共存。本函数在**同一次打开**里先后写两格式
-    /// （先文件后文本，第二次不清空）：资源管理器按 CF_HDROP 粘贴出文件，
-    /// 记事本 / 聊天框按 CF_UNICODETEXT 粘贴出文字，互不打架。
+    /// 两次调用各自清空，两格式无法共存。
     ///
-    /// 失败语义：文件校验不过（无有效文件）→ 中文 Err（调用方降级只写文本）；
-    /// 文本为空 → 跳过文本段（仍返回成功，文件已写入）。
+    /// ⚠️ 实现要点（真机测试 `real_clipboard_dual_format_roundtrip` 实测教训）：
+    /// clipboard-win 的**高级 setter（formats::FileList / Unicode 的 write_clipboard）
+    /// 内部自带 open + empty** —— 第二次调用会把先写入的格式清掉，双格式名存实亡。
+    /// 因此这里全程**一个打开会话 + raw::set_without_clear**：
+    ///   · CF_HDROP：手工构造 DROPFILES 头（pFiles=20、fWide=1）+ UTF-16LE
+    ///     路径列表（每路径 \0 结尾、整体再 \0）；
+    ///   · CF_UNICODETEXT：UTF-16LE + 双 \0 终止（文本为空时跳过，文件已就位不算错）。
     pub fn write_files_and_text(paths: &[String], text: &str) -> Result<usize, String> {
         let files = validate_file_paths(paths)?;
-        let path_texts: Vec<String> = files
-            .iter()
-            .map(|path| path.to_string_lossy().into_owned())
-            .collect();
 
         let _clipboard = open_clipboard()?;
         empty_clipboard()?;
-        formats::FileList
-            .write_clipboard(path_texts.as_slice())
+
+        // 1) CF_HDROP：DROPFILES 头（20 字节）+ 宽字符路径列表 + 终止 NUL
+        let mut hdrop: Vec<u8> = Vec::with_capacity(64);
+        hdrop.extend_from_slice(&20u32.to_le_bytes()); // pFiles = sizeof(DROPFILES)
+        hdrop.extend_from_slice(&0i32.to_le_bytes()); // pt.x
+        hdrop.extend_from_slice(&0i32.to_le_bytes()); // pt.y
+        hdrop.extend_from_slice(&0u32.to_le_bytes()); // fNC = FALSE
+        hdrop.extend_from_slice(&1u32.to_le_bytes()); // fWide = TRUE（宽字符）
+        for path in &files {
+            for unit in path.to_string_lossy().encode_utf16() {
+                hdrop.extend_from_slice(&unit.to_le_bytes());
+            }
+            hdrop.extend_from_slice(&[0, 0]); // 路径以 NUL 结尾
+        }
+        hdrop.extend_from_slice(&[0, 0]); // 列表以空路径（双 NUL）终止
+        raw::set_without_clear(formats::CF_HDROP, &hdrop)
             .map_err(|error| format!("写入系统剪贴板失败：{error}"))?;
 
-        // 文本段非空才追加：文本为空不是错误（文件已就位）
+        // 2) CF_UNICODETEXT：非空才追加（UTF-16LE + 双 NUL 终止）
         if !text.is_empty() {
-            formats::Unicode
-                .write_clipboard(&text.to_string())
+            let mut wide: Vec<u8> = Vec::with_capacity(text.len() * 2 + 2);
+            for unit in text.encode_utf16() {
+                wide.extend_from_slice(&unit.to_le_bytes());
+            }
+            wide.extend_from_slice(&[0, 0]);
+            raw::set_without_clear(formats::CF_UNICODETEXT, &wide)
                 .map_err(|error| format!("写入系统剪贴板失败：{error}"))?;
         }
+
         Ok(files.len())
     }
 
@@ -271,9 +289,17 @@ mod tests {
 
     // Windows 桌面会话下额外验证真实读写往返（CI 无桌面时剪贴板打开可能失败，
     // 因此仅在打开成功时断言；打开失败本身也验证了中文错误路径）。
+    //
+    // ⚠️ 两个真实剪贴板测试必须**串行**：cargo test 默认并行，而系统剪贴板是
+    // 全局互斥资源 —— 一个测试 empty_clipboard 会把另一个刚写入的内容清掉
+    // （2026-09-18 实测：并行跑时两个测试的 read 都返回空，误报「写入失败」）。
+    #[cfg(windows)]
+    static CLIPBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[cfg(windows)]
     #[test]
     fn real_clipboard_roundtrip_when_available() {
+        let _guard = CLIPBOARD_LOCK.lock().unwrap_or_else(|error| error.into_inner());
         let dir = temp_dir("roundtrip");
         let file = dir.join("互通.txt");
         std::fs::write(&file, b"x").unwrap();
@@ -284,6 +310,43 @@ mod tests {
                 assert_eq!(count, 1);
                 let files = native::read_files().unwrap();
                 assert_eq!(files, vec![path_text]);
+            }
+            // 无头会话 / 剪贴板被占用：只要求错误是中文且可展示
+            Err(error) => assert!(!error.is_empty(), "错误信息不能为空"),
+        }
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    // 【双格式共存真机验证】（2026-09-18：复制文件卡后在外部粘贴出真文件的关键）
+    // clipboard-win 的高级 setter（formats::Unicode.write_clipboard）若内部自带
+    // open + empty，第二次写入会把先写入的 CF_HDROP 冲掉 —— 双格式就名存实亡。
+    // 本测试在真实桌面会话下验证「一次写入后两种格式都能读回」；打开失败（无头 /
+    // 被占用）时退化为中文错误断言。
+    #[cfg(windows)]
+    #[test]
+    fn real_clipboard_dual_format_roundtrip_when_available() {
+        let _guard = CLIPBOARD_LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let dir = temp_dir("dual-format");
+        let file = dir.join("外贴文件.txt");
+        std::fs::write(&file, b"x").unwrap();
+        let path_text = file.to_string_lossy().into_owned();
+
+        match native::write_files_and_text(&[path_text.clone()], "双格式文本") {
+            Ok(count) => {
+                assert_eq!(count, 1);
+                // 文件格式还在（关键断言：文本段写入没有清掉 CF_HDROP）
+                let files = native::read_files().unwrap();
+                assert_eq!(files, vec![path_text], "CF_HDROP 被后续文本写入清掉——双格式未共存");
+                // 文本格式也读得回（Getter trait 须在作用域内才能调 read_clipboard）
+                use clipboard_win::Getter as _;
+                let _clipboard =
+                    clipboard_win::Clipboard::new_attempts(10).expect("打开剪贴板失败（读回文本）");
+                let mut text = String::new();
+                clipboard_win::formats::Unicode
+                    .read_clipboard(&mut text)
+                    .expect("读回 CF_UNICODETEXT 失败");
+                assert_eq!(text, "双格式文本");
             }
             // 无头会话 / 剪贴板被占用：只要求错误是中文且可展示
             Err(error) => assert!(!error.is_empty(), "错误信息不能为空"),
