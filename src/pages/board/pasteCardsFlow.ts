@@ -15,9 +15,10 @@
 // ============================================================================
 
 import { cloneFilelessCard } from '@/core/board/ingest'
+import { writeClipboardFilesAndText, writeClipboardText } from '@/core/system/clipboard'
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
-import { basenameOf } from '@/core/utils/paths'
+import { basenameOf, joinPath } from '@/core/utils/paths'
 
 /**
  * 由复制源构建「无文件卡」的粘贴副本：换新 id、落到指定画布坐标（坐标取整，
@@ -82,4 +83,39 @@ export function cardsToClipboardText(cards: Card[]): string {
     .map(cardToClipboardText)
     .filter((text) => text !== '')
     .join('\n\n')
+}
+
+/**
+ * 把选区写入系统剪贴板的**全部外部格式**（2026-09-18 回归修复后归口于此）：
+ *   · 选区里有文件卡 → `writeClipboardFilesAndText` 一次写入 CF_HDROP + 文本
+ *     两种格式（资源管理器粘贴出文件、记事本粘贴出文字）。⚠️ 不能分两次写：
+ *     writeClipboardText 会清空剪贴板把文件格式冲掉 —— 这正是「复制文件变成
+ *     粘贴文件名」回归的根因。双写失败（含路径全部失效）降级为只写文本；
+ *   · 纯无文件选区（spacePath 为空视为拿不到原件，同此）→ 只写文本。
+ * 返回给 Board 的错误信息（降级成功时为 null）由调用方直接展示。
+ */
+export async function copyCardsToSystemClipboard(
+  cards: Card[],
+  spacePath: string,
+): Promise<string | null> {
+  const text = cardsToClipboardText(cards)
+  const filePaths =
+    spacePath === ''
+      ? []
+      : cards.filter((card) => card.filePath !== '').map((card) => joinPath(spacePath, card.originalPath || card.filePath))
+
+  try {
+    if (filePaths.length > 0) {
+      try {
+        await writeClipboardFilesAndText(filePaths, text)
+      } catch {
+        await writeClipboardText(text)
+      }
+    } else if (text) {
+      await writeClipboardText(text)
+    }
+    return null
+  } catch (error) {
+    return `已在应用内复制，但写入系统剪贴板失败：${error instanceof Error ? error.message : String(error)}`
+  }
 }

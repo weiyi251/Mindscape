@@ -97,7 +97,7 @@ import type { DropDestination } from '@/core/board/ingest'
 import type { AddCardsSource } from '@/core/commands/impl/addCards'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { isValidFolderName } from '@/core/board/partitions'
-import { readClipboardFiles, writeClipboardText } from '@/core/system/clipboard'
+import { readClipboardFiles } from '@/core/system/clipboard'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
 import {
@@ -110,7 +110,7 @@ import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
-import { cardsToClipboardText, clonePastedCard } from '@/pages/board/pasteCardsFlow'
+import { copyCardsToSystemClipboard, clonePastedCard } from '@/pages/board/pasteCardsFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
@@ -880,13 +880,13 @@ export function Board() {
   // ---- 复制 / 粘贴卡片（2026-09-11 三类型全支持；2026-09-18 起支持跨画布粘贴）----
 
   /**
-   * 复制卡片（菜单 / Ctrl+C 共用）：应用内快照 + 系统剪贴板文本。
+   * 复制卡片（菜单 / Ctrl+C 共用）：应用内快照 + 系统剪贴板。
    *   · 应用内：快照带**复制时所在空间**（CopiedCardSnapshot）—— 粘贴到另一个
    *     空间时文件卡按「源空间 / 相对路径」找到原件做拷贝；无文件卡（便签 /
    *     待办）的克隆不依赖空间，天然跨画布；
-   *   · 外部（2026-09-18 用户裁决，取代 2026-09-13 的「CF_HDROP 文件优先」）：
-   *     写**一段一段的文字**（每卡一段：便签正文 / 待办条目 / 文件名），
-   *     记事本、聊天窗口等任何能收文字的地方都能直接粘贴。
+   *   · 外部：文件卡一次写入 CF_HDROP + 文本双格式（资源管理器粘文件、
+   *     记事本粘文字），纯无文件选区只写文本 —— 规则与降级在
+   *     pasteCardsFlow.copyCardsToSystemClipboard（可独立单测）。
    * 写系统剪贴板失败不阻断应用内复制：提示即可——用户仍能粘贴回画布，
    * 但必须知道「外部粘贴不可用」（用户要求环境受限时给出明确提示）。
    */
@@ -896,19 +896,11 @@ export function Board() {
       if (copyable.length === 0) return
       setActionError(null)
 
-      const space = useSpacesStore.getState().getCurrentSpace()
-      setCopiedCards(
-        copyable.map((card) => ({ card: { ...card }, spacePath: space?.folderPath ?? '' })),
-      )
+      const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath ?? ''
+      setCopiedCards(copyable.map((card) => ({ card: { ...card }, spacePath })))
 
-      try {
-        const text = cardsToClipboardText(copyable)
-        if (text) await writeClipboardText(text)
-      } catch (error) {
-        setActionError(
-          `已在应用内复制，但写入系统剪贴板失败：${error instanceof Error ? error.message : String(error)}`,
-        )
-      }
+      const failure = await copyCardsToSystemClipboard(copyable, spacePath)
+      if (failure) setActionError(failure)
     },
     [setCopiedCards],
   )

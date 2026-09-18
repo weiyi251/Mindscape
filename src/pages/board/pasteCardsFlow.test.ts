@@ -1,15 +1,24 @@
 // ============================================================================
 // 模块说明（中文）
 // pasteCardsFlow.ts（克隆型粘贴）的单元测试：便签与无文件插件卡两条克隆规则、
-// 分组覆盖、坐标取整、以及「源卡不被改动」的复制语义。
+// 分组覆盖、坐标取整、外部剪贴板的格式裁决（文件 / 文本双写或降级）、
+// 以及「源卡不被改动」的复制语义。
 // ============================================================================
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
 
-import { cardToClipboardText, cardsToClipboardText, clonePastedCard } from './pasteCardsFlow'
+import { cardToClipboardText, cardsToClipboardText, clonePastedCard, copyCardsToSystemClipboard } from './pasteCardsFlow'
+
+// 剪贴板写入是 Tauri 命令（vitest 无桌面环境）：mock 成 spy 观察调用契约
+const writeFilesAndText = vi.fn(async () => 1)
+const writeText = vi.fn(async () => undefined)
+vi.mock('@/core/system/clipboard', () => ({
+  writeClipboardFilesAndText: (...args: unknown[]) => writeFilesAndText(...(args as [])),
+  writeClipboardText: (...args: unknown[]) => writeText(...(args as [])),
+}))
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return zCardSchema.parse({
@@ -97,5 +106,52 @@ describe('cardsToClipboardText（2026-09-18：复制到画布之外是一段一�
       makeCard({ id: 'c', type: 'image', filePath: '图片/海报.png', meta: {} }),
     ])
     expect(text).toBe('第一段\n\n海报.png')
+  })
+})
+
+describe('copyCardsToSystemClipboard（2026-09-18：文件/文本双格式归口）', () => {
+  beforeEach(() => {
+    writeFilesAndText.mockClear()
+    writeText.mockClear()
+  })
+
+  it('选区有文件卡：一次写入 CF_HDROP + 文本双格式（绝不分两次写——后者会清空前者的格式）', async () => {
+    const failure = await copyCardsToSystemClipboard(
+      [makeCard({ type: 'image', filePath: '图片/海报.png', meta: {} })],
+      'E:\\Mindscape\\空间A',
+    )
+    expect(failure).toBeNull()
+    expect(writeFilesAndText).toHaveBeenCalledWith(['E:\\Mindscape\\空间A\\图片\\海报.png'], '海报.png')
+    expect(writeText).not.toHaveBeenCalled()
+  })
+
+  it('纯无文件选区：只写文本（文件卡但 spacePath 为空同此——拿不到原件路径）', async () => {
+    await copyCardsToSystemClipboard([makeCard()], 'E:\\Mindscape\\空间A')
+    expect(writeFilesAndText).not.toHaveBeenCalled()
+    expect(writeText).toHaveBeenCalledWith('买牛奶')
+
+    writeText.mockClear()
+    await copyCardsToSystemClipboard([makeCard({ type: 'image', filePath: 'a.png', meta: {} })], '')
+    expect(writeFilesAndText).not.toHaveBeenCalled()
+    expect(writeText).toHaveBeenCalledWith('a.png')
+  })
+
+  it('双写失败降级为只写文本；连文本也失败才返回中文错误信息', async () => {
+    writeFilesAndText.mockRejectedValueOnce(new Error('路径失效'))
+    const failure = await copyCardsToSystemClipboard(
+      [makeCard({ type: 'file', filePath: 'docs/报告.pdf', meta: {} })],
+      'E:\\空间',
+    )
+    expect(failure).toBeNull()
+    expect(writeText).toHaveBeenCalledWith('报告.pdf')
+
+    writeFilesAndText.mockRejectedValueOnce(new Error('路径失效'))
+    writeText.mockRejectedValueOnce(new Error('无法打开剪贴板'))
+    const failure2 = await copyCardsToSystemClipboard(
+      [makeCard({ type: 'file', filePath: 'docs/报告.pdf', meta: {} })],
+      'E:\\空间',
+    )
+    expect(failure2).toContain('写入系统剪贴板失败')
+    expect(failure2).toContain('无法打开剪贴板')
   })
 })

@@ -114,6 +114,38 @@ mod native {
         Ok(())
     }
 
+    /// 一次打开剪贴板，同时写入 CF_HDROP（文件列表）与 CF_UNICODETEXT（文本）。
+    ///
+    /// 为什么需要它（2026-09-18 回归修复）：原先「复制卡片」改为只写文本后，
+    /// 资源管理器里粘贴只能得到文件名 —— write_text 会先 empty_clipboard，
+    /// 两次调用各自清空，两格式无法共存。本函数在**同一次打开**里先后写两格式
+    /// （先文件后文本，第二次不清空）：资源管理器按 CF_HDROP 粘贴出文件，
+    /// 记事本 / 聊天框按 CF_UNICODETEXT 粘贴出文字，互不打架。
+    ///
+    /// 失败语义：文件校验不过（无有效文件）→ 中文 Err（调用方降级只写文本）；
+    /// 文本为空 → 跳过文本段（仍返回成功，文件已写入）。
+    pub fn write_files_and_text(paths: &[String], text: &str) -> Result<usize, String> {
+        let files = validate_file_paths(paths)?;
+        let path_texts: Vec<String> = files
+            .iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect();
+
+        let _clipboard = open_clipboard()?;
+        empty_clipboard()?;
+        formats::FileList
+            .write_clipboard(path_texts.as_slice())
+            .map_err(|error| format!("写入系统剪贴板失败：{error}"))?;
+
+        // 文本段非空才追加：文本为空不是错误（文件已就位）
+        if !text.is_empty() {
+            formats::Unicode
+                .write_clipboard(&text.to_string())
+                .map_err(|error| format!("写入系统剪贴板失败：{error}"))?;
+        }
+        Ok(files.len())
+    }
+
     /// 读取系统剪贴板里的文件路径列表；剪贴板上没有文件时返回空列表（不是错误）。
     pub fn read_files() -> Result<Vec<String>, String> {
         if !clipboard_win::is_format_avail(formats::CF_HDROP) {
@@ -145,6 +177,10 @@ mod native {
         Err(UNSUPPORTED.to_string())
     }
 
+    pub fn write_files_and_text(_paths: &[String], _text: &str) -> Result<usize, String> {
+        Err(UNSUPPORTED.to_string())
+    }
+
     pub fn read_files() -> Result<Vec<String>, String> {
         Err(UNSUPPORTED.to_string())
     }
@@ -164,6 +200,13 @@ pub fn write_clipboard_files(paths: Vec<String>) -> Result<usize, String> {
 #[tauri::command]
 pub fn write_clipboard_text(text: String) -> Result<(), String> {
     native::write_text(&text)
+}
+
+/// 同时写入文件列表（CF_HDROP）与文本（CF_UNICODETEXT）：一次打开剪贴板写两格式，
+/// 资源管理器粘贴出文件、记事本粘贴出文字（2026-09-18 回归修复）。
+#[tauri::command]
+pub fn write_clipboard_files_and_text(paths: Vec<String>, text: String) -> Result<usize, String> {
+    native::write_files_and_text(&paths, &text)
 }
 
 /// 读取系统剪贴板里的文件路径列表；没有文件时返回空列表。

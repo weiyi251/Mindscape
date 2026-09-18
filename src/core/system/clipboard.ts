@@ -30,6 +30,16 @@ export async function writeClipboardText(text: string): Promise<void> {
 }
 
 /**
+ * 一次写入「文件列表 + 文本」两种格式（2026-09-18 回归修复）：
+ * 资源管理器按 CF_HDROP 粘贴出文件，记事本 / 聊天框按 CF_UNICODETEXT
+ * 粘贴出文字 —— 两次独立调用会互相清空剪贴板，必须合在同一命令里。
+ * 返回实际写入的文件数；无有效文件时抛中文错误（调用方降级为只写文本）。
+ */
+export async function writeClipboardFilesAndText(paths: string[], text: string): Promise<number> {
+  return invoke<number>('write_clipboard_files_and_text', { paths, text })
+}
+
+/**
  * 读取系统剪贴板里的文件路径列表；剪贴板上没有文件（截图 / 纯文本）时返回 []。
  * 非桌面环境（浏览器 dev / vitest）同样返回 []——那是「无文件可粘贴」的同义场景。
  */

@@ -42,6 +42,7 @@ pub fn run() {
             commands::system::open_with_default,
             commands::system::reveal_in_explorer,
             commands::clipboard::write_clipboard_files,
+            commands::clipboard::write_clipboard_files_and_text,
             commands::clipboard::write_clipboard_text,
             commands::clipboard::read_clipboard_files,
         ])
