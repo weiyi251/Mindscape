@@ -98,6 +98,15 @@ describe('todoGeometryOf', () => {
     expect(todoGeometryOf([{ id: 't1', top: 10, height: 24 }], 137).height).toBe(137)
   })
 
+  it('行底边超出兜底高度时以行底边为准（2026-09-18 均分改造：内容溢出时卡片必须跟着长高）', () => {
+    // 兜底高度（条目区分配高度）= 100，但最后一行底边在 150 —— 卡片高度取 150 + 下边距
+    const rows = [
+      { id: 't1', top: 10, height: 24 },
+      { id: 't2', top: 120, height: 30 },
+    ]
+    expect(todoGeometryOf(rows, 100).height).toBe(120 + 30 + TODO_PAD_BOTTOM)
+  })
+
   it('容器未排版（高度 0）时退回「最后一行底部 + 下内边距」', () => {
     // 用多行数据：单行时会被最小卡片高度兜住，测不出这条回退公式
     const rows = [

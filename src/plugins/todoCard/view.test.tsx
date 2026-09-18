@@ -100,8 +100,14 @@ describe('TodoCardView 静态渲染', () => {
     expect(markup.match(/data-card-interactive/g)?.length).toBe(ITEMS.length * 4 + 1 + 1)
   })
 
-  it('内容层用文档流排布（flex-col），行位置由浏览器算出而非写死', () => {
-    expect(html()).toContain('flex flex-col')
+  it('条目区 flex 占满剩余高度，行均分拉伸（2026-09-18 拖高均分需求）', () => {
+    const markup = html()
+    // 条目区：flex-1 + min-h-0 锁定分配高度（均分的前提）
+    expect(markup).toContain('flex min-h-0 flex-1 flex-col')
+    // 每一行：grow + basis-0 均分多余空间；shrink-0 空间不足不压缩（溢出交给实测增高）
+    expect(markup.match(/grow shrink-0 basis-0/g)?.length).toBe(ITEMS.length)
+    // 文本框 min-h-full：行被拉伸时文本框跟随行高
+    expect(markup).toContain('min-h-full')
   })
 
   it('标题行常驻渲染（2026-09-18 用户需求）：无标题显示淡占位，有标题显示标题文本', () => {

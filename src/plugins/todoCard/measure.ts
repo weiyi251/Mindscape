@@ -87,22 +87,25 @@ export function measureTodoRows(root: TodoRootElement | null): TodoRowMeasuremen
 }
 
 /**
- * 由「行的实测值 + 内容自然高度」推出几何：
+ * 由「行的实测值 + 兜底高度」推出几何：
  *   · 锚点 = 行垂直中心（连线点画在行右缘中点，两者必须重合）
- *   · 高度 = 内容容器的自然高度（已含上下内边距）
- * 容器还没排版（offsetHeight = 0）时退回「最后一行底部 + 下内边距」，
- * 再兜一层最小高度 —— 免得卡片被压成一条线。
+ *   · 高度 = **max(最后一行底边 + 下内边距, 兜底高度)**，再兜一层最小高度。
+ *
+ * 为什么以行底边为主判据（2026-09-18「拖高均分」改造）：条目区改为 flex 均分后，
+ * 容器高度**恒等于 card.h**（被拉伸），「容器自然高度」不再反映内容需要 ——
+ * 内容变多时行只是溢出容器（不压缩，见 view 的 shrink-0），唯一可靠的信号是
+ * 实测行的底边位置；内容变少时行被拉伸回填，底边 ≈ 容器底边，同样稳定。
+ * 容器还没排版（兜底高度 = 0）时退回最小高度，免得卡片被压成一条线。
  */
-export function todoGeometryOf(rows: TodoRowMeasurement[], contentHeight: number): TodoGeometry {
+export function todoGeometryOf(rows: TodoRowMeasurement[], fallbackHeight: number): TodoGeometry {
   const anchors: Record<string, number> = {}
   let bottom = 0
   for (const row of rows) {
     anchors[row.id] = round(row.top + row.height / 2)
     bottom = Math.max(bottom, row.top + row.height)
   }
-  const measured = pixel(contentHeight)
-  const height =
-    measured !== null && measured > 0 ? measured : Math.max(bottom + TODO_PAD_BOTTOM, TODO_MIN_HEIGHT)
+  const fallback = pixel(fallbackHeight) ?? 0
+  const height = Math.max(bottom + TODO_PAD_BOTTOM, fallback, TODO_MIN_HEIGHT)
   return { anchors, height: Math.max(round(height), TODO_MIN_HEIGHT) }
 }
 

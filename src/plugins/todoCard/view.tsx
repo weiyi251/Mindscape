@@ -93,10 +93,8 @@ export function TodoCardView({ card, api }: TodoCardViewProps) {
   const [draft, setDraft] = useState('')
   /** 最近一次本地提交的序列化指纹：区分「撤销 / 重做的外部变化」与「自己刚提交的」 */
   const lastCommittedRef = useRef(JSON.stringify(items))
-  /** 内容层：它的自然高度就是卡片应有的高度（外层固定 card.h，会裁切） */
+  /** 内容层：条目区，flex-1 占满卡片剩余高度（行均分拉伸，见 JSX 注释） */
   const contentRef = useRef<HTMLDivElement>(null)
-  /** 量测层：标题行 + 条目区的整体（卡片高度 = 它的自然高度） */
-  const measureRef = useRef<HTMLDivElement>(null)
 
   // ---- 标题（2026-09-18 用户需求）：点击标题行进入行内编辑（与便签同一交互语言）----
   const [titleEditing, setTitleEditing] = useState(false)
@@ -136,15 +134,16 @@ export function TodoCardView({ card, api }: TodoCardViewProps) {
    */
   useEffect(() => {
     const content = contentRef.current
-    const measure = measureRef.current
-    if (!content || !measure) return
+    if (!content) return
     let frame = 0
 
     const sync = () => {
       frame = 0
-      // 先让输入框贴合当前宽度下的行数，再量 —— 顺序反了会量到上一帧的旧高度
+      // 先让输入框贴合内容行数，再量 —— 顺序反了会量到上一帧的旧高度
       growAllTextareas(content)
-      const next = todoGeometryOf(measureTodoRows(content), measure.offsetHeight)
+      // 兜底高度用条目区分配高度（flex-1 锁定值）：内容不足时行被拉伸回填，
+      // 高度不写小（用户拖高留白属于意图）；内容超出时行溢出，行底边主导写高
+      const next = todoGeometryOf(measureTodoRows(content), content.offsetHeight)
       const height = Math.max(next.height, card.h)
       // 幂等闸门：值没变就不写。少了它，「写入 → 重渲染 → 再测量」会变成自激循环
       if (!needsGeometrySync({ height: card.h, anchors: itemAnchorsOfMeta(card.meta) }, { height, anchors: next.anchors }))
@@ -159,10 +158,8 @@ export function TodoCardView({ card, api }: TodoCardViewProps) {
       if (frame === 0) frame = requestAnimationFrame(sync)
     }
 
-    // 观察量测层（标题 + 条目的整体自然高度）、条目区（宽度）与每一行
-    // （某行换行后变高）—— 三者缺一不可
+    // 观察条目区（宽度 / 分配高度）与每一行（换行、拉伸、增删都改行高）
     const observer = new ResizeObserver(schedule)
-    observer.observe(measure)
     observer.observe(content)
     for (const row of Array.from(content.querySelectorAll('[data-todo-row]'))) {
       observer.observe(row)
@@ -246,116 +243,117 @@ export function TodoCardView({ card, api }: TodoCardViewProps) {
   }, [api, card.id, card.meta, items])
 
   return (
-    <div className="h-full w-full overflow-hidden rounded-sm bg-note/90">
-      {/* 量测层：标题行 + 条目区的整体，文档流自然高度 = 卡片应有高度
-          （外层 overflow-hidden 固定 card.h 只负责裁切；拖 s 手柄调高后
-          外层比自然高度高，留白属于用户意图，实测不写小 —— 见 sync 注释） */}
-      <div ref={measureRef}>
-        {/* 标题行（2026-09-18 用户需求）：有标题显示标题，无标题显示淡占位；
-            单击进入行内编辑（data-card-interactive 让画布按下早退，不触发拖拽）。
-            无论有无标题都常驻 —— 「点击哪里改标题」必须可发现 */}
-        <div style={{ paddingTop: TODO_PAD_TOP, paddingLeft: 10, paddingRight: 10 }}>
-          {titleEditing ? (
-            <input
-              ref={titleInputRef}
-              data-card-interactive
-              value={titleDraft}
-              onChange={(event) => setTitleDraft(event.target.value)}
-              onBlur={commitTitle}
-              onPointerDown={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                // Enter 提交、Esc 放弃（恢复原值）—— 与分区改名同一套按键语言
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  commitTitle()
-                } else if (event.key === 'Escape') {
-                  event.preventDefault()
-                  setTitleDraft(titleOfMeta(card.meta))
-                  setTitleEditing(false)
-                }
-              }}
-              spellCheck={false}
-              placeholder={TODO_CARD_TEXT.titlePlaceholder}
-              className="w-full select-text rounded bg-transparent text-[13px] font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
-            />
-          ) : (
-            <button
-              type="button"
-              data-card-interactive
-              data-todo-title
-              title={TODO_CARD_TEXT.titleEditLabel}
-              onClick={() => {
+    // 外层 flex-col：标题行固定高，条目区 flex-1 占满剩余高度 ——
+    // 用户拖高卡片后多出的空间由**所有条目行均分**（行 grow + basis-0），
+    // 文本框随行一同拉伸（items-stretch）；内容超出时行不压缩（shrink-0），
+    // 溢出被实测行底边捕获并写高卡片（见 measure.todoGeometryOf）。
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-sm bg-note/90">
+      {/* 标题行（2026-09-18 用户需求）：有标题显示标题，无标题显示淡占位；
+          单击进入行内编辑（data-card-interactive 让画布按下早退，不触发拖拽）。
+          无论有无标题都常驻 —— 「点击哪里改标题」必须可发现 */}
+      <div style={{ paddingTop: TODO_PAD_TOP, paddingLeft: 10, paddingRight: 10 }} className="flex-none">
+        {titleEditing ? (
+          <input
+            ref={titleInputRef}
+            data-card-interactive
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={commitTitle}
+            onPointerDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              // Enter 提交、Esc 放弃（恢复原值）—— 与分区改名同一套按键语言
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitTitle()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
                 setTitleDraft(titleOfMeta(card.meta))
-                setTitleEditing(true)
-              }}
-              className={`w-full cursor-text select-none truncate rounded text-left text-[13px] font-semibold outline-none ${
-                titleOfMeta(card.meta) === '' ? 'text-muted-foreground/50' : 'text-foreground'
-              }`}
-            >
-              {titleOfMeta(card.meta) === ''
-                ? TODO_CARD_TEXT.titlePlaceholder
-                : titleOfMeta(card.meta)}
-            </button>
-          )}
-        </div>
-
-        {/* 条目区：文档流，行随文本内容自然增高；拖动排序的 move / up 挂在这里
-            （手柄 setPointerCapture 后事件仍派发到捕获元素，冒泡回本层） */}
-        <div
-          ref={contentRef}
-          onPointerMove={handleDragMove}
-          onPointerUp={handleDragEnd}
-          onPointerCancel={handleDragEnd}
-          className="flex flex-col gap-[2px]"
-          style={{
-            paddingTop: 4,
-            paddingBottom: TODO_PAD_BOTTOM,
-            paddingLeft: 10,
-            paddingRight: 10,
-          }}
-        >
-          {ordered.map((item, index) => (
-            <TodoRow
-              key={item.id}
-              cardId={card.id}
-              item={item}
-              index={index + 1}
-              dragging={dragId === item.id}
-              dragBlocked={dragId !== null && dragId !== item.id}
-              onDragStart={(id) => setDragId(id)}
-              onToggle={() =>
-                commit(items.map((entry) => (entry.id === item.id ? { ...entry, done: !entry.done } : entry)))
+                setTitleEditing(false)
               }
-              onTextChange={(text) =>
-                commit(items.map((entry) => (entry.id === item.id ? { ...entry, text } : entry)))
-              }
-              onRemove={() => {
-                commit(items.filter((entry) => entry.id !== item.id))
-              }}
-            />
-          ))}
+            }}
+            spellCheck={false}
+            placeholder={TODO_CARD_TEXT.titlePlaceholder}
+            className="w-full select-text rounded bg-transparent text-[13px] font-semibold text-foreground outline-none placeholder:text-muted-foreground/50"
+          />
+        ) : (
+          <button
+            type="button"
+            data-card-interactive
+            data-todo-title
+            title={TODO_CARD_TEXT.titleEditLabel}
+            onClick={() => {
+              setTitleDraft(titleOfMeta(card.meta))
+              setTitleEditing(true)
+            }}
+            className={`w-full cursor-text select-none truncate rounded text-left text-[13px] font-semibold outline-none ${
+              titleOfMeta(card.meta) === '' ? 'text-muted-foreground/50' : 'text-foreground'
+            }`}
+          >
+            {titleOfMeta(card.meta) === ''
+              ? TODO_CARD_TEXT.titlePlaceholder
+              : titleOfMeta(card.meta)}
+          </button>
+        )}
+      </div>
 
-          {/* 底部添加行：＋ 号 + 占位输入，回车 / 失焦提交 */}
-          <div className="flex min-h-6 items-center gap-1.5">
-            <span className="flex h-4 w-4 flex-none items-center justify-center rounded border border-dashed border-todo/70 text-[10px] leading-none text-todo/80">
-              +
-            </span>
-            <input
-              data-card-interactive
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  addRow()
-                }
-              }}
-              onBlur={addRow}
-              placeholder={TODO_CARD_TEXT.addPlaceholder}
-              spellCheck={false}
-              className="h-full w-full min-w-0 select-text rounded bg-transparent px-1 text-[13px] text-foreground placeholder:text-muted-foreground/60 outline-none"
-            />
-          </div>
+      {/* 条目区：flex-1 占满卡片剩余高度（min-h-0 锁定分配值、溢出裁切 ——
+          均分的前提是容器高度确定）；行底边溢出时由实测写高卡片。
+          拖动排序的 move / up 挂在这里（手柄 setPointerCapture 后
+          事件仍派发到捕获元素，冒泡回本层） */}
+      <div
+        ref={contentRef}
+        onPointerMove={handleDragMove}
+        onPointerUp={handleDragEnd}
+        onPointerCancel={handleDragEnd}
+        className="flex min-h-0 flex-1 flex-col gap-[2px] overflow-hidden"
+        style={{
+          paddingTop: 4,
+          paddingBottom: TODO_PAD_BOTTOM,
+          paddingLeft: 10,
+          paddingRight: 10,
+        }}
+      >
+        {ordered.map((item, index) => (
+          <TodoRow
+            key={item.id}
+            cardId={card.id}
+            item={item}
+            index={index + 1}
+            dragging={dragId === item.id}
+            dragBlocked={dragId !== null && dragId !== item.id}
+            onDragStart={(id) => setDragId(id)}
+            onToggle={() =>
+              commit(items.map((entry) => (entry.id === item.id ? { ...entry, done: !entry.done } : entry)))
+            }
+            onTextChange={(text) =>
+              commit(items.map((entry) => (entry.id === item.id ? { ...entry, text } : entry)))
+            }
+            onRemove={() => {
+              commit(items.filter((entry) => entry.id !== item.id))
+            }}
+          />
+        ))}
+
+        {/* 底部添加行：＋ 号 + 占位输入，回车 / 失焦提交；不参与均分（flex-none） */}
+        <div className="flex min-h-6 flex-none items-center gap-1.5">
+          <span className="flex h-4 w-4 flex-none items-center justify-center rounded border border-dashed border-todo/70 text-[10px] leading-none text-todo/80">
+            +
+          </span>
+          <input
+            data-card-interactive
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                addRow()
+              }
+            }}
+            onBlur={addRow}
+            placeholder={TODO_CARD_TEXT.addPlaceholder}
+            spellCheck={false}
+            className="h-full w-full min-w-0 select-text rounded bg-transparent px-1 text-[13px] text-foreground placeholder:text-muted-foreground/60 outline-none"
+          />
         </div>
       </div>
     </div>
@@ -411,7 +409,10 @@ function TodoRow({
     // 拖动排序也靠它把指针下的元素反查成条目 id
     <div
       data-todo-row={item.id}
-      className={`group/row flex min-h-6 items-stretch gap-1.5 ${dragging ? 'opacity-40' : ''}`}
+      // grow + basis-0：条目区有多余空间时**所有行均分**（拖高手柄调高后
+      // 文本框跟着拉伸）；shrink-0：空间不足时行保持内容高度（溢出由实测
+      // 行底边捕获并写高卡片），min-h-6 保底不压扁
+      className={`group/row flex min-h-6 grow shrink-0 basis-0 items-stretch gap-1.5 ${dragging ? 'opacity-40' : ''}`}
     >
       {/* 拖拽排序手柄（2026-09-18 用户需求）：六个点示意可拖；悬停显形。
           data-card-interactive 让画布按下早退（拖手柄不是拖卡片）；
@@ -450,29 +451,30 @@ function TodoRow({
         ✓
       </button>
 
-      {/* 多行文本：非受控（打字零重渲染），失焦 / Esc 提交；换行由 CSS 负责，
-          高度由 autoGrow 贴合内容（rows=1 起步，长文本自动长高） */}
-      <textarea
-        data-card-interactive
-        rows={1}
-        defaultValue={item.text}
-        onBlur={(event) => {
-          const text = event.target.value.trim()
-          if (text !== committedRef.current) {
-            committedRef.current = text
-            onTextChange(text)
-          }
-        }}
-        onKeyDown={(event) => {
-          // Enter 现在是换行（不再抢去提交）；Esc 收工
-          if (event.key === 'Escape') event.currentTarget.blur()
-        }}
-        spellCheck={false}
-        placeholder={TODO_CARD_TEXT.addPlaceholder}
-        className={`min-h-6 min-w-0 flex-1 resize-none select-text overflow-hidden whitespace-pre-wrap break-words rounded bg-transparent px-1 py-0.5 text-[13px] leading-5 outline-none placeholder:text-muted-foreground/60 ${
-          item.done ? 'text-muted-foreground line-through' : 'text-foreground'
-        }`}
-      />
+        {/* 多行文本：非受控（打字零重渲染），失焦 / Esc 提交；换行由 CSS 负责。
+            min-h-full + autoGrow：行被 flex 均分拉伸时文本框跟随行高（拉伸态），
+            行高不足内容时 autoGrow 撑高行并触发卡片增高（内容态） */}
+        <textarea
+          data-card-interactive
+          rows={1}
+          defaultValue={item.text}
+          onBlur={(event) => {
+            const text = event.target.value.trim()
+            if (text !== committedRef.current) {
+              committedRef.current = text
+              onTextChange(text)
+            }
+          }}
+          onKeyDown={(event) => {
+            // Enter 现在是换行（不再抢去提交）；Esc 收工
+            if (event.key === 'Escape') event.currentTarget.blur()
+          }}
+          spellCheck={false}
+          placeholder={TODO_CARD_TEXT.addPlaceholder}
+          className={`min-h-full min-w-0 flex-1 resize-none select-text overflow-hidden whitespace-pre-wrap break-words rounded bg-transparent px-1 py-0.5 text-[13px] leading-5 outline-none placeholder:text-muted-foreground/60 ${
+            item.done ? 'text-muted-foreground line-through' : 'text-foreground'
+          }`}
+        />
 
       {/* 删除按钮：悬停显形（纯 CSS，高频安全） */}
       <button
