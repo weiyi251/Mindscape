@@ -14,10 +14,16 @@ import {
   TODO_PAD_TOP,
   TODO_ROW_HEIGHT,
   TODO_ROW_STEP,
+  metaWithPlacement,
   metaWithTodos,
+  metaWithTitle,
   newTodoItem,
+  orderedTodoItems,
+  placementOfMeta,
+  reorderTodos,
   todoCardHeight,
   todoItemAnchors,
+  titleOfMeta,
   todosOfMeta,
 } from './todos'
 
@@ -85,5 +91,82 @@ describe('todoCard 数据：newTodoItem', () => {
     ]
     expect(newTodoItem(items, '丙').id).toBe('t5')
     expect(newTodoItem([], '丁').id).toBe('t1')
+  })
+})
+
+describe('todoCard 标题（2026-09-18 用户需求）', () => {
+  it('titleOfMeta：非字符串 / 缺键返回空串；首尾空白裁掉', () => {
+    expect(titleOfMeta({})).toBe('')
+    expect(titleOfMeta({ title: 42 })).toBe('')
+    expect(titleOfMeta({ title: '  周一清单  ' })).toBe('周一清单')
+  })
+
+  it('metaWithTitle：写入裁剪后的标题；空串删键（不留脏数据）；其余 meta 键保留', () => {
+    expect(metaWithTitle({}, '清单').title).toBe('清单')
+    expect('title' in metaWithTitle({ title: '旧' }, '  ')).toBe(false)
+    const original = { hoverLabel: 'x' }
+    const next = metaWithTitle(original, '新')
+    expect(original).not.toHaveProperty('title')
+    expect(next.hoverLabel).toBe('x')
+  })
+})
+
+describe('todoCard 完成项排列（2026-09-18 用户需求）', () => {
+  it('placementOfMeta：缺键 / 非法值兜底 none；bottom / top 正常读回', () => {
+    expect(placementOfMeta({})).toBe('none')
+    expect(placementOfMeta({ completedPlacement: '坏' })).toBe('none')
+    expect(placementOfMeta({ completedPlacement: 'bottom' })).toBe('bottom')
+    expect(placementOfMeta({ completedPlacement: 'top' })).toBe('top')
+  })
+
+  it('metaWithPlacement：none 删键（默认值不落盘）；其余键保留', () => {
+    expect('completedPlacement' in metaWithPlacement({}, 'none')).toBe(false)
+    expect(metaWithPlacement({ hoverLabel: 'x' }, 'bottom')).toEqual({
+      hoverLabel: 'x',
+      completedPlacement: 'bottom',
+    })
+  })
+
+  it('orderedTodoItems：bottom 完成沉底、top 完成浮顶，组内相对次序稳定（稳定排序）', () => {
+    const items = [
+      { id: 't1', text: '甲', done: false },
+      { id: 't2', text: '乙', done: true },
+      { id: 't3', text: '丙', done: false },
+      { id: 't4', text: '丁', done: true },
+    ]
+    expect(orderedTodoItems(items, 'none')).toEqual(items)
+    expect(orderedTodoItems(items, 'bottom').map((item) => item.id)).toEqual(['t1', 't3', 't2', 't4'])
+    expect(orderedTodoItems(items, 'top').map((item) => item.id)).toEqual(['t2', 't4', 't1', 't3'])
+  })
+
+  it('orderedTodoItems 不改动入参数组（渲染派生，数据顺序不动）', () => {
+    const items = [
+      { id: 't1', text: '甲', done: false },
+      { id: 't2', text: '乙', done: true },
+    ]
+    orderedTodoItems(items, 'bottom')
+    expect(items.map((item) => item.id)).toEqual(['t1', 't2'])
+  })
+})
+
+describe('todoCard 拖动排序（2026-09-18 用户需求）', () => {
+  it('reorderTodos：把 dragId 移到 targetId 位置，其余次序平移', () => {
+    const items = [
+      { id: 't1', text: '甲', done: false },
+      { id: 't2', text: '乙', done: false },
+      { id: 't3', text: '丙', done: false },
+    ]
+    expect(reorderTodos(items, 't1', 't3').map((item) => item.id)).toEqual(['t2', 't3', 't1'])
+    expect(reorderTodos(items, 't3', 't1').map((item) => item.id)).toEqual(['t3', 't1', 't2'])
+  })
+
+  it('reorderTodos：同位置 / 找不到 id 时原样返回（不产生无意义的提交）', () => {
+    const items = [
+      { id: 't1', text: '甲', done: false },
+      { id: 't2', text: '乙', done: false },
+    ]
+    expect(reorderTodos(items, 't1', 't1')).toEqual(items)
+    expect(reorderTodos(items, 't9', 't2')).toEqual(items)
+    expect(reorderTodos(items, 't1', 't9')).toEqual(items)
   })
 })

@@ -17,4 +17,17 @@ export const TODO_CARD_TEXT = {
   removeLabel: '删除这条待办',
   /** 连线点的悬停提示 */
   connectLabel: '拖到目标卡片或条目创建连线',
+  /** 标题行无标题时的占位文字（2026-09-18 用户需求：待办卡支持标题） */
+  titlePlaceholder: '标题',
+  /** 标题行进入编辑的悬停提示 */
+  titleEditLabel: '点击编辑标题',
+  /** 拖拽排序手柄的悬停提示（2026-09-18 用户需求：条目拖动排序） */
+  dragLabel: '拖动调整顺序',
+  /** 完成项排列菜单（2026-09-18 用户需求：完成项自动置底或置顶） */
+  placementMenuLabel: '完成项排列',
+  placementNone: '不重排',
+  placementBottom: '已完成置底',
+  placementTop: '已完成置顶',
+  /** 菜单里标记「当前已选」的前缀（右键菜单没有勾选框，用文本前缀标记） */
+  placementActivePrefix: '✓ ',
 } as const

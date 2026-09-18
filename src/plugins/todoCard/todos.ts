@@ -34,6 +34,20 @@ export interface TodoItem {
 /** 条目数组在 meta 里的键名 */
 export const TODO_ITEMS_META_KEY = 'items'
 
+/** 卡片标题在 meta 里的键名（2026-09-18 用户需求：待办卡支持标题） */
+export const TODO_TITLE_META_KEY = 'title'
+
+/**
+ * 完成项的排列策略（2026-09-18 用户需求：完成项自动置底或置顶，可自定义）。
+ *   · 'none'   —— 不重排（默认，保持用户手动排序）；
+ *   · 'bottom' —— 已完成条目移到列表底部；
+ *   · 'top'    —— 已完成条目移到列表顶部。
+ */
+export type TodoCompletedPlacement = 'none' | 'bottom' | 'top'
+
+/** placement 在 meta 里的键名 */
+export const TODO_PLACEMENT_META_KEY = 'completedPlacement'
+
 // ---------------------------------------------------------------------------
 // 布局常量（画布像素；view.tsx 的样式必须与这里对齐 —— 锚点 / 高度靠它们算）
 // ---------------------------------------------------------------------------
@@ -127,4 +141,73 @@ export function newTodoItem(existing: TodoItem[], text: string): TodoItem {
     if (match) max = Math.max(max, Number(match[1]))
   }
   return { id: `t${max + 1}`, text, done: false }
+}
+
+// ---------------------------------------------------------------------------
+// 标题与完成项排列（2026-09-18 用户需求）
+// ---------------------------------------------------------------------------
+
+/**
+ * 从 meta 读卡片标题：非字符串 / 纯空白一律返回空串（= 无标题）。
+ * 视图层对空串不渲染标题行内容（见 view.tsx）。
+ */
+export function titleOfMeta(meta: Meta): string {
+  const raw = meta[TODO_TITLE_META_KEY]
+  return typeof raw === 'string' ? raw.trim() : ''
+}
+
+/**
+ * 生成带标题的 meta 快照（不改动原对象）。标题为空串时**删键**——
+ * 与 noteColor 同一策略：meta 里不残留空字符串脏数据。
+ */
+export function metaWithTitle(meta: Meta, title: string): Meta {
+  const next = { ...meta }
+  const trimmed = title.trim()
+  if (trimmed === '') delete next[TODO_TITLE_META_KEY]
+  else next[TODO_TITLE_META_KEY] = trimmed
+  return next
+}
+
+/**
+ * 从 meta 读完成项排列策略：脏数据（非法值）兜底 'none'。
+ */
+export function placementOfMeta(meta: Meta): TodoCompletedPlacement {
+  const raw = meta[TODO_PLACEMENT_META_KEY]
+  return raw === 'bottom' || raw === 'top' ? raw : 'none'
+}
+
+/**
+ * 生成带排列策略的 meta 快照。'none' 时删键（默认值不落盘，数据更干净）。
+ */
+export function metaWithPlacement(meta: Meta, placement: TodoCompletedPlacement): Meta {
+  const next = { ...meta }
+  if (placement === 'none') delete next[TODO_PLACEMENT_META_KEY]
+  else next[TODO_PLACEMENT_META_KEY] = placement
+  return next
+}
+
+/**
+ * 条目的**显示顺序**：按排列策略把完成项沉底 / 浮顶（稳定排序 ——
+ * 同组内的相对顺序不变，用户手动拖出来的次序得以保留）。
+ * 数据顺序（items 本身）不被改动：重排是渲染派生，切回 'none' 即还原。
+ */
+export function orderedTodoItems(items: TodoItem[], placement: TodoCompletedPlacement): TodoItem[] {
+  if (placement === 'none') return items
+  const pending = items.filter((item) => !item.done)
+  const done = items.filter((item) => item.done)
+  return placement === 'bottom' ? [...pending, ...done] : [...done, ...pending]
+}
+
+/**
+ * 拖动排序：把 dragId 的条目移到 targetId 当前所在的位置（其余条目次序平移）。
+ * 纯函数，找不到 id 时原样返回新数组（视图拖一个已删条目不至于崩）。
+ */
+export function reorderTodos(items: TodoItem[], dragId: string, targetId: string): TodoItem[] {
+  const from = items.findIndex((item) => item.id === dragId)
+  const to = items.findIndex((item) => item.id === targetId)
+  if (from === -1 || to === -1 || from === to) return items
+  const next = [...items]
+  const [moved] = next.splice(from, 1)
+  next.splice(to, 0, moved)
+  return next
 }

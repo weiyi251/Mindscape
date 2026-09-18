@@ -91,7 +91,8 @@ export function CardView({
     onNoteEditFinish?.(card.id, noteDraft)
   }
 
-  /** 缩放手柄模式（2026-09-17）：default = 右下角（便签另有三边）；widthOnly = 仅左缘（插件高度自适应） */
+  /** 缩放手柄模式：default = 右下角（便签另有三边）；widthOnly = 仅左缘；
+      widthHeight = 左缘 + 下缘（2026-09-18 待办卡，可拖高） */
   const resizeMode = resizeHandleModeFor(card.type)
 
   return (
@@ -201,13 +202,24 @@ export function CardView({
         />
       ) : null}
 
-      {/* 左缘中点宽度手柄（2026-09-17，widthOnly 模式）：只调宽 —— 高度由插件
-          按内容自适应并经桥提交（updateCardContent），不允许拖高。
-          w 边缩放复用便签同款控制器路径（edgeResizeOutcome('w')），Canvas 零改动 */}
-      {selected && resizeMode === 'widthOnly' ? (
+      {/* 左缘中点宽度手柄（2026-09-17 起，widthOnly / widthHeight 模式）：
+          widthOnly 只调宽 —— 高度由插件按内容自适应并经桥提交，不允许拖高；
+          widthHeight（2026-09-18 待办卡）再补一个下缘高度手柄（见下）。
+          w / s 边缩放复用便签同款控制器路径（edgeResizeOutcome），Canvas 零改动 */}
+      {selected && (resizeMode === 'widthOnly' || resizeMode === 'widthHeight') ? (
         <div
           data-resize-edge="w"
           className="absolute -left-1.5 top-1/2 h-6 w-2 -translate-y-1/2 cursor-ew-resize rounded-full border border-background bg-primary shadow-sm"
+        />
+      ) : null}
+
+      {/* 下缘中点高度手柄（2026-09-18 用户需求：待办卡支持拖拽调高）。
+          仅 widthHeight 模式渲染；插件侧几何同步「只增不减」——
+          拖高留出的空白不会被实测内容高度吃掉，内容长高时照常跟上 */}
+      {selected && resizeMode === 'widthHeight' ? (
+        <div
+          data-resize-edge="s"
+          className="absolute -bottom-1.5 left-1/2 h-2 w-6 -translate-x-1/2 cursor-ns-resize rounded-full border border-background bg-primary shadow-sm"
         />
       ) : null}
     </div>
