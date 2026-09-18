@@ -505,12 +505,14 @@ describe('图片卡文件名 chip', () => {
     )
   }
 
-  it('常驻显示文件名（不带 opacity-0 —— 与悬停淡入的 hoverLabel 策略刻意不同）', () => {
+  it('文件名与分辨率徽章同款：悬停才显示（2026-09-18 用户裁决，取代常驻）', () => {
     const html = imageHtml()
     const chipTag = html.match(/<span data-file-name[^>]*>/)?.[0] ?? ''
     expect(chipTag).not.toBe('')
     expect(chipTag).toContain('pointer-events-none')
-    expect(chipTag).not.toContain('opacity-0')
+    // 与徽章同款淡入：默认 opacity-0，group-hover 才出现（纯 CSS，17.3）
+    expect(chipTag).toContain('opacity-0')
+    expect(chipTag).toContain('group-hover:opacity-100')
     expect(html).toContain('>ref-01.jpg<')
   })
 
@@ -557,29 +559,22 @@ describe('图片卡实际分辨率徽章', () => {
     expect(badgeTag).toContain('pointer-events-none')
   })
 
-  it('徽章与文件名同处下方外挂容器（2026-09-18 并行布局：一行 justify-between）', () => {
+  it('徽章独立挂在图片右上角（2026-09-18 用户裁决：bottom-full + right-0，不遮挡图片）', () => {
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: false }),
     )
-    // 徽章不再是独立的 absolute 元素（原先 left-0 的文件名与 right-0 的徽章
-    // 在窄卡上必然重叠），而是挂进 data-below-stack 容器的右端
-    const stack = html.match(/<div data-below-stack[^>]*>[\s\S]*$/)?.[0] ?? ''
-    expect(stack).toContain('data-image-resolution')
-    const stackTag = html.match(/<div data-below-stack[^>]*>/)?.[0] ?? ''
-    expect(stackTag).toContain('top-full')
-    expect(stackTag).toContain('justify-between')
+    const badgeTag = html.match(/<span data-image-resolution[^>]*>/)?.[0] ?? ''
+    expect(badgeTag).toContain('bottom-full')
+    expect(badgeTag).toContain('right-0')
+    // 徽章不再挤进下方外挂容器 —— 那里只有文件名与悬浮标记
+    const stack = html.match(/<div data-below-stack[^>]*>[\s\S]*<\/div>/)?.[0] ?? ''
+    expect(stack).not.toContain('data-image-resolution')
   })
 
-  it('窄卡防重叠（2026-09-18 用户截图反馈）：徽章不收缩、文件名列收缩让位', () => {
+  it('文件名截断兜底：超长名不越过卡片右缘（悬停显示也不破版）', () => {
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: false }),
     )
-    // 徽章 flex-none：再窄也保持完整可读（尺寸信息比文件名重要）
-    const badgeTag = html.match(/<span data-image-resolution[^>]*>/)?.[0] ?? ''
-    expect(badgeTag).toContain('flex-none')
-    // 左列 min-w-0 + 文件名 truncate：空间不足时文件名截断让位，两者不再叠字
-    const leftTag = html.match(/<div class="flex min-w-0 flex-col[^>]*>/)?.[0] ?? ''
-    expect(leftTag).not.toBe('')
     const chipTag = html.match(/<span data-file-name[^>]*>/)?.[0] ?? ''
     expect(chipTag).toContain('truncate')
   })
