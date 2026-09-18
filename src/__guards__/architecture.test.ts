@@ -99,7 +99,9 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   //   但已接近见底：下一步若还要动 Board，请优先继续外抽而不是调阈值。
   // 待办卡片插件（2026-09-17）：画布桥实现整块外抽到 pages/board/pluginBridgeImpl.ts
   // （usedCardIds + createPluginBoardBridge），Board 侧只留一行装配，实际 **2037** 行。
-  // 阈值下调到 2045：锁定外抽收益，余量 8 行给钩子埋点；再不够请继续外抽。
+  // 阈值下调到 2045：锁定外抽收益，余量给钩子埋点；再不够请继续外抽。
+  // 克隆型粘贴外抽（2026-09-18）：便签 / 无文件插件卡的克隆规则搬进
+  // pasteCardsFlow.ts（可独立单测），实际 **2029** 行。
   'src/pages/Board.tsx': 2045,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行

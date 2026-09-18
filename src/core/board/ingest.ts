@@ -19,6 +19,7 @@
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'
+import { zCardSchema } from '@/core/types'
 import { joinPath } from '@/core/utils/paths'
 import { pad2 } from '@/core/utils/time'
 
@@ -32,13 +33,48 @@ import { pad2 } from '@/core/utils/time'
 export const UNCLASSIFIED_DIR = '未分类'
 
 /**
- * 可复制的卡片判定（2026-09-11 用户裁决：图片 / 文件 / 便签都支持复制与粘贴）。
- *   · 便签：纯文字、无硬盘文件，无条件可复制（粘贴时克隆文字内容）；
+ * 核心三类型的集合：图片 / 文件的复制粘贴依赖硬盘文件（copyFile），
+ * 与「内容就在卡片数据里」的无文件卡是两条不同的粘贴路径。
+ */
+const FILE_BACKED_CARD_TYPES = new Set(['image', 'file'])
+
+/**
+ * 可复制的卡片判定（2026-09-11 用户裁决：图片 / 文件 / 便签都支持复制与粘贴；
+ * 2026-09-18 扩展：无文件的插件卡——如待办卡——同样可复制）。
+ *   · 便签 / 无文件插件卡：内容存在卡片数据里（note / meta），克隆即可复制；
  *   · 图片 / 文件：必须有硬盘文件（filePath 非空）才拷贝得出来。
  * 不可复制的卡片直接排除，不会进入应用内剪贴板。
  */
 export function isCopyableCard(card: Pick<Card, 'type' | 'filePath'>): boolean {
-  return card.type === 'note' || card.filePath !== ''
+  if (card.filePath !== '') return true
+  // 无文件：便签是历史先例；其余无文件类型只能是插件自绘卡（createCard 建的），
+  // 内容全在 meta 里 —— 同样按「克隆」路径复制
+  return card.type === 'note' || !FILE_BACKED_CARD_TYPES.has(card.type)
+}
+
+/**
+ * 无文件插件卡的粘贴克隆（2026-09-18，待办卡等）：整卡复制数据、换新 id 与位置。
+ *
+ * 与 cardWithoutEditables 的差异（为什么不清 meta）：「粘贴不复制备注与标签」
+ * 裁决针对的是**图片 / 文件卡**的编辑层信息；插件卡的 meta 就是**内容本体**
+ * （待办卡的条目清单全在里面），清掉等于粘贴出一张空卡 —— 与便签克隆
+ * 必须保留 note 是同一条道理。
+ */
+export function cloneFilelessCard(
+  copied: Card,
+  id: string,
+  x: number,
+  y: number,
+  groupName: string | null,
+): Card {
+  const clone = zCardSchema.parse({
+    ...copied,
+    id,
+    x: Math.round(x),
+    y: Math.round(y),
+  })
+  if (groupName) clone.group = groupName
+  return clone
 }
 
 /**

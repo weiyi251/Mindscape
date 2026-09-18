@@ -110,6 +110,7 @@ import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
+import { clonePastedCard } from '@/pages/board/pasteCardsFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
@@ -873,7 +874,9 @@ export function Board() {
     if (!space) return
 
     const filePaths = copyable
-      .filter((card) => card.type !== 'note')
+      // 只有真有文件的卡才写系统剪贴板；无文件卡（便签 / 待办等插件卡）混在
+      // 选区里时若不过滤，joinPath 会把「空间文件夹本身」写进系统剪贴板
+      .filter((card) => card.type !== 'note' && (card.originalPath || card.filePath) !== '')
       .map((card) => joinPath(space.folderPath, card.originalPath || card.filePath))
     try {
       if (filePaths.length > 0) {
@@ -929,24 +932,13 @@ export function Board() {
 
       for (const copied of copiedCards) {
         try {
-          // 便签：没有硬盘文件，直接克隆文字内容与尺寸
-          if (copied.type === 'note') {
+          // 无文件的卡（便签 / 待办等插件卡）：不碰硬盘，数据层克隆
+          //（两类卡的克隆规则在 pasteCardsFlow，可独立单测）
+          if (copied.filePath === '' && copied.originalPath === '') {
             const id = takeId()
-            const note = zCardSchema.parse({
-              id,
-              type: 'note',
-              filePath: '',
-              originalPath: '',
-              x: Math.round(point.x + offset),
-              y: Math.round(point.y + offset),
-              w: copied.w,
-              h: copied.h,
-              note: copied.note,
-            })
-            if (dest.groupName) note.group = dest.groupName
-
+            const clone = clonePastedCard(copied, id, point.x + offset, point.y + offset, dest.groupName)
             usedIds.push(id)
-            cards.push(note)
+            cards.push(clone)
             offset += 24
             continue
           }

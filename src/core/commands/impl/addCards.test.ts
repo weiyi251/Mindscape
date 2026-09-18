@@ -10,11 +10,12 @@ import { createAddCardsCommand } from './addCards'
 import {
   cardWithoutEditables,
   expandedBounds,
+  cloneFilelessCard,
   isCopyableCard,
   pasteFileName,
   resolveDropDestination,
 } from '@/core/board/ingest'
-import type { Partition } from '@/core/types'
+import type { Card, Partition } from '@/core/types'
 
 function makeCard(id: string, x = 0, y = 0) {
   return {
@@ -201,6 +202,42 @@ describe('isCopyableCard', () => {
   it('图片 / 文件：filePath 为空（文件缺失）时不可复制', () => {
     expect(isCopyableCard({ type: 'image', filePath: '' })).toBe(false)
     expect(isCopyableCard({ type: 'file', filePath: '' })).toBe(false)
+  })
+
+  it('无文件插件卡（2026-09-18 扩展，待办卡等）：内容在 meta 里，可复制', () => {
+    expect(isCopyableCard({ type: 'todo', filePath: '' })).toBe(true)
+    // 有硬盘文件的插件卡同样可复制（走文件拷贝路径）
+    expect(isCopyableCard({ type: 'colorCard', filePath: '色卡/a.png' })).toBe(true)
+  })
+})
+
+describe('cloneFilelessCard（2026-09-18：无文件插件卡的粘贴克隆）', () => {
+  const source = makeCard('todo_1') as Card
+
+  it('整卡克隆：换新 id 与位置，meta（内容本体）原样保留', () => {
+    const withMeta = { ...source, x: 40, y: 60, meta: { items: [{ id: 't1', text: '买牛奶', done: false }] } } as Card
+    const clone = cloneFilelessCard(withMeta, 'todo_2', 100.6, 200.4, null)
+
+    expect(clone.id).toBe('todo_2')
+    expect(clone.x).toBe(101) // 坐标取整（与建卡一致）
+    expect(clone.y).toBe(200)
+    expect(clone.type).toBe(source.type)
+    expect(clone.w).toBe(source.w)
+    expect(clone.h).toBe(source.h)
+    // meta 是待办卡的内容本体，清掉等于粘贴出一张空卡
+    expect(clone.meta).toEqual(withMeta.meta)
+  })
+
+  it('落点命中分区时分组随目标（不沿用源卡的 group）', () => {
+    const grouped = { ...source, group: '旧分区' } as Card
+    expect(cloneFilelessCard(grouped, 'todo_3', 0, 0, '新分区').group).toBe('新分区')
+    expect(cloneFilelessCard(grouped, 'todo_4', 0, 0, null).group).toBe('旧分区')
+  })
+
+  it('不改动源卡（复制语义）', () => {
+    const withMeta = { ...source, meta: { items: [] } } as Card
+    cloneFilelessCard(withMeta, 'todo_5', 0, 0, null)
+    expect(withMeta.id).toBe('todo_1')
   })
 })
 
