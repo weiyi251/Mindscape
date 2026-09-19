@@ -107,8 +107,7 @@ chore: 升级 Tauri 依赖
 pnpm icon
 ```
 
-脚本会绘制 1024×1024 源图、生成浏览器 favicon，并调用 Tauri CLI 派生各平台图标。
-设计参数集中在 `scripts/generate-icon.mjs` 顶部。
+脚本以 `src-tauri/icons/app-icon.jpg`（1080×1080 源图）为源：调用 Tauri CLI 派生各平台桌面图标，并由 128×128 派生图生成浏览器 favicon（`public/favicon.svg`）。
 
 ## 发布新版本
 

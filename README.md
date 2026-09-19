@@ -151,10 +151,10 @@ src/
 ├── styles/                  # 全局样式与主题变量
 
 src-tauri/
-├── icons/                   # 应用图标（app-icon.png 是源图，其余由 pnpm icon 派生）
+├── icons/                   # 应用图标（app-icon.jpg 是源图，其余由 pnpm icon 派生）
 └── src/commands/            # Rust 端命令：fs_ops / layout / thumbnail / system
 
-scripts/generate-icon.mjs    # 图标生成脚本（矢量光栅化，无第三方依赖）
+scripts/generate-icon.mjs    # 图标生成脚本（Tauri CLI 派生桌面图标 + 浏览器 favicon）
 scripts/release.mjs          # 发版脚本：签名打包 + 生成自动更新清单 latest.json
 public/favicon.svg           # 浏览器标签页图标
 .github/workflows/ci.yml     # CI：前端质量门 + Rust 单元测试
