@@ -10,6 +10,7 @@
 // 实现任务：T2.2 / T2.3 / T2.9。
 // ============================================================================
 
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 import type { Command } from '../types'
 
 /** 单张卡片的位移记录：按下时坐标 → 松手时坐标（画布坐标） */
@@ -43,6 +44,12 @@ export function createMoveCardsCommand(
 
     do() {
       apply(moves.map((move) => ({ id: move.id, x: move.to.x, y: move.to.y })))
+      // 插件生命周期钩子（2026-09-20 埋点）：松手提交一次（拖拽过程不触发）；
+      // redo 把卡片移回同一位置也如实通知。无意义的零位移命令不会走到这里
+      // （hasMeaningfulMove 已在上游过滤）。
+      for (const move of moves) {
+        emitHookTyped('cardMoved', { cardId: move.id, x: move.to.x, y: move.to.y })
+      }
     },
 
     undo() {

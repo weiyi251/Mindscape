@@ -16,6 +16,7 @@
 
 import type { Card } from '@/core/types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 import type { Command } from '../types'
 
 /** 一次「复制来源」记录：redo 重建副本时需要 */
@@ -76,6 +77,9 @@ export function createAddCardsCommand(
       if (hasRun) await ensureFiles()
       hasRun = true
       deps.applyAdd(payload.cards)
+      // 插件生命周期钩子（2026-09-20 埋点）：do() 是「卡片出现在画布」的唯一汇聚点，
+      // 新建 / 拖入 / 粘贴 / 插件建卡共用本命令；redo 再次出现也如实通知。
+      for (const card of payload.cards) emitHookTyped('cardCreated', { card })
     },
 
     async undo() {

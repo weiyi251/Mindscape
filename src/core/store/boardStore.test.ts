@@ -11,6 +11,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { createBoardStore } from '@/core/store/boardStore'
 import { clearCardAssets, getCardOriginalPath } from '@/core/board/cardAssets'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
+import { registerHook, resetPluginCenter } from '@/core/registry/pluginCenter'
+import type { HookPayloadMap } from '@/core/registry/pluginCenter'
 import { createEmptyLayout, zCardSchema } from '@/core/types'
 import { History } from '@/core/commands/history'
 import { createRemoveCardsCommand } from '@/core/commands/impl/removeCards'
@@ -1299,5 +1301,40 @@ describe('boardStore.applyDeleteRemovedCards · 彻底删除内存清理', () =>
     expect(store.getState().removed).toBe(before.removed)
     expect(store.getState().removedCards).toBe(before.removedCards)
     expect(store.getState().selectedIds).toBe(before.selectedIds)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// 插件生命周期钩子：cardSelected（2026-09-20 埋点）
+// ---------------------------------------------------------------------------
+
+describe('boardStore · 插件生命周期钩子 cardSelected', () => {
+  it('选中集合变化时触发一次；cardId 为最后点选的卡片，清空时为空串', () => {
+    resetPluginCenter()
+    const seen: HookPayloadMap['cardSelected'][] = []
+    registerHook('cardSelected', (payload) =>
+      seen.push(payload as HookPayloadMap['cardSelected']),
+    )
+
+    const store = createStore(createFakeProvider([]))
+
+    store.getState().selectCards(['a'])
+    expect(seen).toEqual([{ cardId: 'a', selectedIds: ['a'] }])
+
+    // 集合变化：追加 b（cardId = 最后一张）
+    store.getState().selectCards(['a', 'b'])
+    expect(seen).toEqual([
+      { cardId: 'a', selectedIds: ['a'] },
+      { cardId: 'b', selectedIds: ['a', 'b'] },
+    ])
+
+    // 集合未变化：不触发
+    store.getState().selectCards(['a', 'b'])
+    expect(seen).toHaveLength(2)
+
+    // 清空选中（含取消选中）：cardId 为空串
+    store.getState().selectCards([])
+    expect(seen[2]).toEqual({ cardId: '', selectedIds: [] })
   })
 })

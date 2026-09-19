@@ -70,6 +70,7 @@ import {
 } from '@/core/commands/impl/connections'
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
 import { registerAction } from '@/core/registry/actionRegistry'
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 import { CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
 import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { metaWithTags, tagsOfMeta } from '@/core/board/cardMeta'
@@ -1661,10 +1662,13 @@ export function Board() {
         // 不落盘的话修复只停在内存：用户随后的操作一旦抛错（命令不入栈、不写盘），
         // 磁盘上的坏数据会一直保留，且期间的操作继续在坏数据上出错。
         if (useBoardStore.getState().needsMigration) void writer.flush()
+        // 插件生命周期钩子（2026-09-20 埋点）：加载成功才算「进入空间」
+        emitHookTyped('spaceOpened', { spacePath: target.folderPath })
       })
     }
 
     return () => {
+      if (target) emitHookTyped('spaceClosed', { spacePath: target.folderPath })
       useBoardStore.getState().reset()
     }
   }, [currentSpaceId, history, writer])

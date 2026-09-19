@@ -52,6 +52,7 @@ import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
 import { localLayoutStore } from '@/core/storage/appLayoutStore'
 import type { AppLayoutStore } from '@/core/storage/appLayoutStore'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 import { createCardsFromEntries } from '@/core/board/buildCards'
 import type { CardSize } from '@/core/board/buildCards'
 import { cardTypeFor } from '@/core/board/imageTypes'
@@ -348,7 +349,18 @@ export function createBoardStore(
 
     selectCards(ids) {
       // 选中集合互斥（5.1）：选中卡片时取消分区选中
+      const previous = get().selectedIds
+      const changed =
+        previous.length !== ids.length || ids.some((id, index) => previous[index] !== id)
       set({ selectedIds: [...ids], selectedPartitionId: null })
+      // 插件生命周期钩子（2026-09-20 埋点）：集合真正变化才触发；
+      // cardId = 本次选中的最后一张卡片，清空选中时为空串。
+      if (changed) {
+        emitHookTyped('cardSelected', {
+          cardId: ids.length > 0 ? ids[ids.length - 1] : '',
+          selectedIds: [...ids],
+        })
+      }
     },
 
     selectPartition(id) {

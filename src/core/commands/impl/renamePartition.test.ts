@@ -6,6 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createRenamePartitionCommand } from './renamePartition'
+import { registerHook, resetPluginCenter } from '@/core/registry/pluginCenter'
+import type { HookPayloadMap } from '@/core/registry/pluginCenter'
 import { isValidFolderName } from '@/core/board/partitions'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { History } from '@/core/commands/history'
@@ -123,5 +125,43 @@ describe('createRenamePartitionCommand', () => {
 
     await expect(command.do()).rejects.toThrow('文件夹被占用')
     expect(applies).toEqual([])
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// 插件生命周期钩子：partitionRenamed（2026-09-20 埋点）
+// ---------------------------------------------------------------------------
+
+describe('插件生命周期钩子：partitionRenamed', () => {
+  it('do 成功改名后触发一次（undo 不触发）', async () => {
+    resetPluginCenter()
+    const seen: HookPayloadMap['partitionRenamed'][] = []
+    registerHook('partitionRenamed', (payload) =>
+      seen.push(payload as HookPayloadMap['partitionRenamed']),
+    )
+
+    // setup() 在上面的 describe 作用域内，这里内联同样构造（provider + apply 打桩）
+    const provider = {
+      async renameDir(oldPath: string, newName: string) {
+        return `${oldPath}\\..\\${newName}`
+      },
+    } as unknown as StorageProvider
+    const command = createRenamePartitionCommand(
+      {
+        partitionId: 'p_001',
+        oldName: '旧名',
+        newName: '新名',
+        oldFolderPath: '旧名',
+        newFolderPath: '新名',
+      },
+      { spacePath: 'D:\\空间', provider, apply: () => {} },
+    )
+
+    await command.do()
+    expect(seen).toEqual([{ partitionId: 'p_001', previousName: '旧名', nextName: '新名' }])
+
+    await command.undo()
+    expect(seen).toHaveLength(1)
   })
 })

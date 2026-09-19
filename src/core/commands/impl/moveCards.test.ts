@@ -9,6 +9,8 @@ import { describe, expect, it } from 'vitest'
 import { History } from '../history'
 import { createMoveCardsCommand, hasMeaningfulMove } from './moveCards'
 import type { CardMoveDelta } from './moveCards'
+import { registerHook, resetPluginCenter } from '@/core/registry/pluginCenter'
+import type { HookPayloadMap } from '@/core/registry/pluginCenter'
 
 /** 记录 apply 收到的每一次写入，便于断言顺序 */
 function createRecorder() {
@@ -90,5 +92,26 @@ describe('hasMeaningfulMove', () => {
     expect(
       hasMeaningfulMove([{ id: 'a', from: { x: 5, y: 5 }, to: { x: 5, y: 6 } }]),
     ).toBe(true)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// 插件生命周期钩子：cardMoved（2026-09-20 埋点）
+// ---------------------------------------------------------------------------
+
+describe('插件生命周期钩子：cardMoved', () => {
+  it('do 时按位移逐卡触发；undo 不触发', () => {
+    resetPluginCenter()
+    const seen: HookPayloadMap['cardMoved'][] = []
+    registerHook('cardMoved', (payload) => seen.push(payload as HookPayloadMap['cardMoved']))
+
+    const { apply } = createRecorder()
+    const command = createMoveCardsCommand(SINGLE, apply)
+    command.do()
+    expect(seen).toEqual([{ cardId: 'c_001', x: 110, y: 220 }])
+
+    command.undo()
+    expect(seen).toEqual([{ cardId: 'c_001', x: 110, y: 220 }])
   })
 })

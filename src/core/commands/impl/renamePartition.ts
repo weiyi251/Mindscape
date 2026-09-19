@@ -15,6 +15,7 @@
 import type { Command } from '../types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { joinPath } from '@/core/utils/paths'
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 
 export interface RenamePartitionDelta {
   partitionId: string
@@ -65,6 +66,12 @@ export function createRenamePartitionCommand(
         delta.newName,
       )
       applyTo(delta.newName, delta.newFolderPath, delta.oldName, delta.newName)
+      // 插件生命周期钩子（2026-09-20 埋点）：硬盘文件夹已同步改名后才触发
+      emitHookTyped('partitionRenamed', {
+        partitionId: delta.partitionId,
+        previousName: delta.oldName,
+        nextName: delta.newName,
+      })
     },
 
     async undo() {

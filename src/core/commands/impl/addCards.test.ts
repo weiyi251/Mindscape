@@ -16,6 +16,8 @@ import {
   resolveDropDestination,
 } from '@/core/board/ingest'
 import type { Card, Partition } from '@/core/types'
+import { registerHook, resetPluginCenter } from '@/core/registry/pluginCenter'
+import type { HookPayloadMap } from '@/core/registry/pluginCenter'
 
 function makeCard(id: string, x = 0, y = 0) {
   return {
@@ -266,5 +268,31 @@ describe('cardWithoutEditables（2026-09-13 用户裁决：粘贴不复制备注
     // 不改动源卡（复制语义）
     expect(source.note).toBe('原图的备注')
     expect(source.meta).toEqual({ tags: ['图标'] })
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// 插件生命周期钩子：cardCreated（2026-09-20 埋点）
+// ---------------------------------------------------------------------------
+
+describe('插件生命周期钩子：cardCreated', () => {
+  it('do 时每张卡触发一次；undo 不触发', async () => {
+    resetPluginCenter()
+    const seen: string[] = []
+    registerHook('cardCreated', (payload) => {
+      seen.push((payload as HookPayloadMap['cardCreated']).card.id)
+    })
+
+    const { deps } = makeDeps()
+    const command = createAddCardsCommand(
+      { cards: [makeCard('c_001'), makeCard('c_002')], createdFiles: [], sources: [] },
+      deps,
+    )
+    await command.do()
+    expect(seen).toEqual(['c_001', 'c_002'])
+
+    await command.undo()
+    expect(seen).toEqual(['c_001', 'c_002'])
   })
 })

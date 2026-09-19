@@ -14,6 +14,8 @@ import {
   removedPathFor,
 } from './removeCards'
 import { History } from '@/core/commands/history'
+import { registerHook, resetPluginCenter } from '@/core/registry/pluginCenter'
+import type { HookPayloadMap } from '@/core/registry/pluginCenter'
 
 function card(id: string, filePath: string): Card {
   return {
@@ -286,4 +288,40 @@ describe('createRemoveCardsCommand · 级联断开连线', () => {
     })()
     return { context, connections }
   }
+})
+
+
+// ---------------------------------------------------------------------------
+// 插件生命周期钩子：cardRemoved（2026-09-20 埋点）
+// ---------------------------------------------------------------------------
+
+describe('插件生命周期钩子：cardRemoved', () => {
+  it('do 成功移走后触发，cardIds 只含真正移除的卡片', async () => {
+    resetPluginCenter()
+    const SPACE = 'D:\\空间'
+    const seen: HookPayloadMap['cardRemoved'][] = []
+    registerHook('cardRemoved', (payload) => seen.push(payload as HookPayloadMap['cardRemoved']))
+
+    const provider = {
+      async moveFile(from: string, to: string) {
+        if (from.includes('bad.jpg')) throw new Error('无权限访问')
+        return to
+      },
+    } as unknown as StorageProvider
+    const context = {
+      spacePath: SPACE,
+      provider,
+      applyRemove: () => {},
+      applyRestore: () => {},
+      getConnections: () => [] as Connection[],
+      applyRemoveConnections: () => {},
+      applyAddConnections: () => {},
+    }
+    const command = createRemoveCardsCommand(
+      [card('c_001', 'a.jpg'), card('c_bad', 'bad.jpg'), card('c_note', '')],
+      context,
+    )
+    await command.do()
+    expect(seen).toEqual([{ cardIds: ['c_001', 'c_note'] }])
+  })
 })

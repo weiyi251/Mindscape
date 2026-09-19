@@ -29,6 +29,7 @@ import type { Command } from '../types'
 import type { StorageProvider } from '@/core/storage/StorageProvider'
 import { joinPath, relativePathOf } from '@/core/utils/paths'
 import { runWithConcurrency } from '@/core/board/imageSizes'
+import { emitHookTyped } from '@/core/registry/pluginCenter'
 
 /** 被移除文件在 `_已移除` 下的相对路径：保留原文件夹结构（7.1） */
 export function removedPathFor(filePath: string): string {
@@ -167,6 +168,10 @@ export function createRemoveCardsCommand(
 
       // 便签等无文件卡片：只从画布移除，不产生 removed 记录（undo 直接放回）
       context.applyRemove({ cards: [...movedCards, ...virtualCards], entries })
+      // 插件生命周期钩子（2026-09-20 埋点）：只上报真正移走的卡片；整体失败（抛错）不触发
+      emitHookTyped('cardRemoved', {
+        cardIds: [...movedCards, ...virtualCards].map((card) => card.id),
+      })
     },
 
     async undo() {
