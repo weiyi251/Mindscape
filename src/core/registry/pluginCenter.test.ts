@@ -19,8 +19,6 @@ import {
   getPluginMenuItemsForCard,
   registerCanvasMenuItem,
   listRegisteredCanvasMenuItems,
-  registerToolbarItem,
-  listRegisteredToolbarItems,
   registerHook,
   unregisterHook,
   emitHook,
@@ -83,7 +81,6 @@ describe('resetPluginCenter', () => {
   it('空白状态下所有注册表为空', () => {
     expect(listRegisteredCardTypes()).toEqual([])
     expect(listRegisteredMenuItems()).toEqual([])
-    expect(listRegisteredToolbarItems()).toEqual([])
     expect(getPluginMenuItemsForCard(makeCard())).toEqual([])
     expect(countHookHandlers('cardMoved')).toBe(0)
   })
@@ -175,46 +172,7 @@ describe('接口 2 registerMenuItem', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 接口 3：registerToolbarItem
-// ---------------------------------------------------------------------------
-
-describe('接口 3 registerToolbarItem', () => {
-  it('注册后可列出，且动作可执行', () => {
-    const calls: string[] = []
-    registerToolbarItem({
-      id: 'tb-1',
-      label: '新建',
-      action: () => calls.push('clicked'),
-    })
-
-    const items = listRegisteredToolbarItems()
-    expect(items).toHaveLength(1)
-    expect(items[0].label).toBe('新建')
-
-    items[0].action()
-    expect(calls).toEqual(['clicked'])
-  })
-
-  it('id 为空时抛错', () => {
-    expect(() => registerToolbarItem({ id: '', label: 'x', action: () => {} })).toThrow(
-      /id 不能为空/,
-    )
-  })
-
-  it('重复注册同一 id：console.warn 提示并覆盖', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    registerToolbarItem({ id: 'tb-1', label: '旧', action: () => {} })
-    registerToolbarItem({ id: 'tb-1', label: '新', action: () => {} })
-
-    expect(warn).toHaveBeenCalledTimes(1)
-    expect(listRegisteredToolbarItems()).toHaveLength(1)
-    expect(listRegisteredToolbarItems()[0].label).toBe('新')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// 接口 5：registerHook / emitHook
+// 接口 4：registerHook / emitHook
 // ---------------------------------------------------------------------------
 
 describe('接口 5 registerHook / emitHook', () => {
@@ -317,7 +275,6 @@ describe('getRegistryVersion', () => {
 
     registerMenuItem(makeMenuItem('version-menu'))
     registerCanvasMenuItem(makeCanvasMenuItem('version-canvas'))
-    registerToolbarItem({ id: 'version-tb', label: 'x', action: () => {} })
     registerHook('cardSelected', () => {})
     expect(getRegistryVersion()).toBeGreaterThan(afterCard)
 
@@ -349,7 +306,6 @@ describe('createPluginApi + disposePlugin', () => {
     api.registerCardType(makeCardType('alpha-card'))
     api.registerMenuItem(makeMenuItem('alpha-menu'), 'alpha-card')
     api.registerCanvasMenuItem(makeCanvasMenuItem('alpha-canvas'))
-    api.registerToolbarItem({ id: 'alpha-tb', label: '新建', action: () => {} })
     api.registerHook('cardMoved', () => {})
 
     expect(api.pluginId).toBe('com.example.alpha')
@@ -358,7 +314,6 @@ describe('createPluginApi + disposePlugin', () => {
       cardTypes: 1,
       menuItems: 1,
       canvasMenuItems: 1,
-      toolbarItems: 1,
       hooks: 1,
     })
   })
@@ -370,7 +325,6 @@ describe('createPluginApi + disposePlugin', () => {
     alpha.registerCardType(makeCardType('alpha-card'))
     alpha.registerMenuItem(makeMenuItem('alpha-menu'))
     alpha.registerCanvasMenuItem(makeCanvasMenuItem('alpha-canvas'))
-    alpha.registerToolbarItem({ id: 'alpha-tb', label: 'a', action: () => {} })
     const alphaHook = vi.fn()
     alpha.registerHook('cardMoved', alphaHook)
 
@@ -380,11 +334,10 @@ describe('createPluginApi + disposePlugin', () => {
 
     const removed = disposePlugin('com.example.alpha')
 
-    expect(removed).toBe(5)
+    expect(removed).toBe(4)
     expect(getRegisteredCardType('alpha-card')).toBeUndefined()
     expect(listRegisteredMenuItems()).toHaveLength(0)
     expect(listRegisteredCanvasMenuItems()).toHaveLength(0)
-    expect(listRegisteredToolbarItems()).toHaveLength(0)
     // alpha 的钩子已摘除，beta 的仍在
     expect(emitHook('cardMoved', null)).toBe(1)
     expect(alphaHook).not.toHaveBeenCalled()

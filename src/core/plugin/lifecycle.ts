@@ -63,7 +63,6 @@ export function hasNoContributions(contributions: PluginContributions): boolean 
     contributions.cardTypes === 0 &&
     contributions.menuItems === 0 &&
     contributions.canvasMenuItems === 0 &&
-    contributions.toolbarItems === 0 &&
     contributions.hooks === 0
   )
 }

@@ -21,7 +21,6 @@ const EMPTY_CONTRIBUTIONS = {
   cardTypes: 0,
   menuItems: 0,
   canvasMenuItems: 0,
-  toolbarItems: 0,
   hooks: 0,
 }
 

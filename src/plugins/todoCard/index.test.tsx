@@ -40,7 +40,6 @@ function makeHarness(): Harness {
     registerCardType: (def: CardTypeDef) => cardTypes.push(def),
     registerMenuItem: (item: MenuItem) => cardMenuItems.push(item),
     registerCanvasMenuItem: (item: CanvasMenuItem) => menuItems.push(item),
-    registerToolbarItem: vi.fn(),
     registerHook: vi.fn(),
     ui: { openDialog: vi.fn(), closeDialog: vi.fn() },
     fs: { writeBytes: vi.fn(), pickDirectory: vi.fn() },
@@ -88,7 +87,6 @@ describe('todoCardPlugin.activate', () => {
       TODO_CARD_TEXT.placementBottom,
       TODO_CARD_TEXT.placementTop,
     ])
-    expect(harness.api.registerToolbarItem).not.toHaveBeenCalled()
     expect(harness.api.registerHook).not.toHaveBeenCalled()
   })
 

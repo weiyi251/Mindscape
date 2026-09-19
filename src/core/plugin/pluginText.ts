@@ -41,7 +41,6 @@ export const PLUGIN_TEXT = {
   contributeCardTypes: '卡片类型',
   contributeMenuItems: '卡片菜单项',
   contributeCanvasMenuItems: '画布菜单项',
-  contributeToolbarItems: '工具栏项',
   contributeHooks: '生命周期钩子',
   /* 确认弹窗 */
   uninstallTitle: '卸载插件',
@@ -91,7 +90,6 @@ export function contributionsLine(contributions: PluginContributions): string {
   push(contributions.cardTypes, PLUGIN_TEXT.contributeCardTypes)
   push(contributions.menuItems, PLUGIN_TEXT.contributeMenuItems)
   push(contributions.canvasMenuItems, PLUGIN_TEXT.contributeCanvasMenuItems)
-  push(contributions.toolbarItems, PLUGIN_TEXT.contributeToolbarItems)
   push(contributions.hooks, PLUGIN_TEXT.contributeHooks)
   return parts.join(' · ')
 }

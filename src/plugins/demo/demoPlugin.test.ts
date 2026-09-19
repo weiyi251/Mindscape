@@ -18,7 +18,6 @@ import type { Card } from '@/core/types'
 import {
   getRegisteredCardType,
   getPluginMenuItemsForCard,
-  listRegisteredToolbarItems,
   emitHook,
   resetPluginCenter,
 } from '@/core/registry/pluginCenter'
@@ -111,15 +110,6 @@ describe('T0.9 验收：临时测试插件注册菜单项', () => {
   })
 })
 
-describe('T0.9 验收：临时测试插件注册工具栏项', () => {
-  it('工具栏项注册成功且动作可执行', () => {
-    const item = listRegisteredToolbarItems().find((t) => t.id === 'demo.toolbar.addColorCard')
-    expect(item?.label).toBe('新建色卡')
-
-    item?.action()
-    expect(demoActionLog.lastAction).toBe('demo.toolbar.addColorCard')
-  })
-})
 
 describe('T0.9 验收：临时测试插件注册钩子', () => {
   it('钩子注册成功，核心触发后插件逻辑被执行', () => {

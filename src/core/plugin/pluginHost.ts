@@ -52,7 +52,6 @@ const EMPTY_CONTRIBUTIONS: PluginContributions = {
   cardTypes: 0,
   menuItems: 0,
   canvasMenuItems: 0,
-  toolbarItems: 0,
   hooks: 0,
 }
 

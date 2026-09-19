@@ -22,7 +22,7 @@ function makeRecord(over: Partial<PluginRecord> = {}): PluginRecord {
     main: 'index.js',
     state: 'installed',
     detail: '',
-    contributions: { cardTypes: 0, menuItems: 0, canvasMenuItems: 0, toolbarItems: 0, hooks: 0 },
+    contributions: { cardTypes: 0, menuItems: 0, canvasMenuItems: 0, hooks: 0 },
     config: {},
     ...over,
   }

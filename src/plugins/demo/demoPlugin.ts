@@ -10,9 +10,10 @@
 // 本插件的唯一用途是证明 17.8 的插件接口真实可用：
 //   · registerCardType    —— 新增一个「色卡」类型（不在核心三种类型之内）
 //   · registerMenuItem    —— 新增「导出为图片」「标记为参考」两个菜单项
-//   · registerToolbarItem —— 新增一个工具栏项
 //   · registerHook        —— 监听 cardMoved 钩子并计数
 //   · meta 扩展位          —— 往 card.meta 里写插件私有字段（无需接口）
+// （registerToolbarItem 扩展点已于 2026-09-20 移除 —— 宿主没有工具栏渲染端，
+//   见 pluginCenter.ts 模块说明；工具栏演示随之删除。）
 //
 // 重要：它**不在 builtinPlugins.ts 里**，因此不会被应用加载 ——
 // 它注册的卡片类型只有占位渲染，出现在用户界面里没有意义。
@@ -27,11 +28,10 @@ import type { Card } from '@/core/types'
 import {
   registerCardType,
   registerMenuItem,
-  registerToolbarItem,
   registerHook,
   countHookHandlers,
 } from '@/core/registry/pluginCenter'
-import type { CardTypeDef, MenuItem, ToolbarItemDef } from '@/core/registry/pluginCenter'
+import type { CardTypeDef, MenuItem } from '@/core/registry/pluginCenter'
 
 /** 插件新增的卡片类型标识（核心三种为 image / file / note） */
 export const DEMO_CARD_TYPE = 'demo-color-card'
@@ -51,7 +51,7 @@ export interface DemoMeta {
 export const demoHookState = { cardMovedCount: 0 }
 
 /**
- * 演示用：记录菜单 / 工具栏动作最近一次的调用参数。
+ * 演示用：记录菜单动作最近一次的调用参数。
  * 单元测试据此断言「动作确实跑到了」。
  */
 export const demoActionLog: { lastAction: string | null; lastPayload: unknown } = {
@@ -128,20 +128,6 @@ export const demoEditColorMenuItem: MenuItem = {
 }
 
 // ---------------------------------------------------------------------------
-// 工具栏项定义
-// ---------------------------------------------------------------------------
-
-export const demoToolbarItem: ToolbarItemDef = {
-  id: 'demo.toolbar.addColorCard',
-  label: '新建色卡',
-  icon: 'palette',
-  action: () => {
-    demoActionLog.lastAction = 'demo.toolbar.addColorCard'
-    demoActionLog.lastPayload = undefined
-  },
-}
-
-// ---------------------------------------------------------------------------
 // 安装
 // ---------------------------------------------------------------------------
 
@@ -159,8 +145,6 @@ export function installDemoPlugin(): void {
 
   // 限定为插件自己的色卡类型
   registerMenuItem(demoEditColorMenuItem, DEMO_CARD_TYPE)
-
-  registerToolbarItem(demoToolbarItem)
 
   registerHook('cardMoved', () => {
     demoHookState.cardMovedCount += 1

@@ -44,3 +44,7 @@ vite.config.ts.timestamp-*.mjs
 # 这里加一道保险，防止误放进来后被提交 —— 私钥泄露等于任何人都能伪造更新包。
 # 公钥是纯文本，直接写在 tauri.conf.json 的 plugins.updater.pubkey 里，不需要文件。
 *.key
+
+# 本机 git 事故备份与 ZCode 会话工具配置（个人数据，不入库）
+.git.bak-*/
+.zcodeignore

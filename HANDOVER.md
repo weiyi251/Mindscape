@@ -29,7 +29,7 @@ src/
 │   ├── store/             Zustand：boardStore / spacesStore / updaterStore
 │   ├── commands/          命令系统 + 撤销重做栈（impl/ 下逐个命令，history 上限 50 步）
 │   ├── registry/          cardTypes（image/file/note 三种核心类型）/ menus（一份配置+appliesTo 过滤）/
-│   │                      toolbar / pluginCenter（5 个扩展钩子）/ actionRegistry（动作落点）
+│   │                      pluginCenter（4 个扩展点 + 7 个钩子）/ actionRegistry（动作落点）
 │   ├── storage/           StorageProvider 接口 + LocalFolderProvider；spacesFile.ts 管空间列表
 │   ├── updater/           自动更新封装（检查/下载/重启）
 │   └── utils/             paths / id / time / runtime / theme / media

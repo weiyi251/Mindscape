@@ -5,10 +5,14 @@
 //
 //   1. registerCardType    —— 卡片类型注册（插件可新增色卡、便签等类型）
 //   2. registerMenuItem    —— 右键菜单注册（可按卡片类型区分 + appliesTo 过滤）
-//   3. registerToolbarItem —— 工具栏注册
-//   4. meta 数据扩展位      —— 直接用 card.meta / partition.meta / layout.extensions，
+//   3. meta 数据扩展位      —— 直接用 card.meta / partition.meta / layout.extensions，
 //                             无需额外接口，故本文件不提供函数
-//   5. registerHook        —— 生命周期钩子（7 种事件）
+//   4. registerHook        —— 生命周期钩子（7 种事件）
+//
+// 【2026-09-20 移除工具栏扩展点】原接口 3 registerToolbarItem 已删除：真实工具栏
+// `icon-toolbar.tsx` 早在 2026-09-13 移除（功能并入右键菜单），该扩展点从此没有
+// 渲染端，留着只会误导插件作者（「注册了却不显示」）。插件动作入口统一走
+// 卡片菜单 / 画布菜单（见 docs/插件开发指南.md 扩展点状态表）。
 //
 // 【2026-09-14 插件管理期扩展（对应 docs/插件功能实施方案.md §4）】
 // 上一版只有「注册」没有「归属」，因此无法实现「禁用 / 卸载」（不知道该删哪些）。
@@ -114,17 +118,6 @@ export interface CanvasMenuItem {
 }
 
 // ---------------------------------------------------------------------------
-// 3. 工具栏注册
-// ---------------------------------------------------------------------------
-
-export interface ToolbarItemDef {
-  id: string
-  label: string
-  icon?: string
-  action: () => void
-}
-
-// ---------------------------------------------------------------------------
 // 5. 生命周期钩子
 // ---------------------------------------------------------------------------
 
@@ -171,11 +164,10 @@ export interface HookPayloadMap {
 const cardTypes = new Map<string, CardTypeDef>()
 const pluginMenuItems = new Map<string, { item: MenuItem; cardType?: string }>()
 const canvasMenuItems = new Map<string, CanvasMenuItem>()
-const toolbarItems = new Map<string, ToolbarItemDef>()
 const hookHandlers = new Map<HookName, Set<HookFn>>()
 
 /** 归属登记：插件 id → 该插件登记过的条目（禁用 / 卸载时据此回收） */
-type OwnedKind = 'cardType' | 'menuItem' | 'canvasMenuItem' | 'toolbarItem' | 'hook'
+type OwnedKind = 'cardType' | 'menuItem' | 'canvasMenuItem' | 'hook'
 
 interface OwnedRegistration {
   kind: OwnedKind
@@ -184,7 +176,6 @@ interface OwnedRegistration {
    *   cardType       → type
    *   menuItem       → `${cardType ?? '*'}:${id}`
    *   canvasMenuItem → id
-   *   toolbarItem    → id
    *   hook           → HookName
    */
   key: string
@@ -292,29 +283,14 @@ export function listRegisteredCanvasMenuItems(): CanvasMenuItem[] {
 }
 
 // ---------------------------------------------------------------------------
-// 接口 3：工具栏
-// ---------------------------------------------------------------------------
-
-export function registerToolbarItem(item: ToolbarItemDef): void {
-  if (!item.id) throw new Error('registerToolbarItem 失败：id 不能为空')
-  if (toolbarItems.has(item.id)) warnDuplicate('工具栏项', item.id)
-  toolbarItems.set(item.id, item)
-  bumpRegistryVersion()
-}
-
-export function listRegisteredToolbarItems(): ToolbarItemDef[] {
-  return [...toolbarItems.values()]
-}
-
-// ---------------------------------------------------------------------------
-// 接口 4：数据扩展位
+// 接口 3：数据扩展位
 // ---------------------------------------------------------------------------
 
 // 17.8 明确：直接用 card.meta / partition.meta / layout.extensions，无需额外接口。
 // 相关类型见 core/types.ts（Meta / zMetaSchema）。
 
 // ---------------------------------------------------------------------------
-// 接口 5：生命周期钩子
+// 接口 4：生命周期钩子
 // ---------------------------------------------------------------------------
 
 /** 注册钩子（17.8 签名：返回 void）。需要注销请用 unregisterHook。 */
@@ -380,7 +356,6 @@ export function listPluginContributions(pluginId: string): {
   cardTypes: number
   menuItems: number
   canvasMenuItems: number
-  toolbarItems: number
   hooks: number
 } {
   const owned = pluginOwners.get(pluginId) ?? []
@@ -389,7 +364,6 @@ export function listPluginContributions(pluginId: string): {
     cardTypes: count('cardType'),
     menuItems: count('menuItem'),
     canvasMenuItems: count('canvasMenuItem'),
-    toolbarItems: count('toolbarItem'),
     hooks: count('hook'),
   }
 }
@@ -406,7 +380,6 @@ export interface PluginApi {
   registerCardType: (def: CardTypeDef) => void
   registerMenuItem: (item: MenuItem, cardType?: string) => void
   registerCanvasMenuItem: (item: CanvasMenuItem) => void
-  registerToolbarItem: (item: ToolbarItemDef) => void
   registerHook: (name: HookName, fn: HookFn) => void
 }
 
@@ -432,10 +405,6 @@ export function createPluginApi(pluginId: string): PluginApi {
     registerCanvasMenuItem(item) {
       registerCanvasMenuItem(item)
       own({ kind: 'canvasMenuItem', key: item.id, ref: item })
-    },
-    registerToolbarItem(item) {
-      registerToolbarItem(item)
-      own({ kind: 'toolbarItem', key: item.id, ref: item })
     },
     registerHook(name, fn) {
       registerHook(name, fn)
@@ -477,14 +446,6 @@ export function disposePlugin(pluginId: string): number {
           removed += 1
         }
         break
-      case 'toolbarItem':
-        if (
-          toolbarItems.get(registration.key) === registration.ref &&
-          toolbarItems.delete(registration.key)
-        ) {
-          removed += 1
-        }
-        break
       case 'hook': {
         const set = hookHandlers.get(registration.key as HookName)
         if (set && registration.hookFn && set.delete(registration.hookFn)) removed += 1
@@ -514,7 +475,6 @@ export function resetPluginCenter(): void {
   cardTypes.clear()
   pluginMenuItems.clear()
   canvasMenuItems.clear()
-  toolbarItems.clear()
   hookHandlers.clear()
   pluginOwners.clear()
   bumpRegistryVersion()

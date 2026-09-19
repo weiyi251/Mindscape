@@ -33,7 +33,6 @@ describe('contributionsLine', () => {
         cardTypes: 1,
         menuItems: 0,
         canvasMenuItems: 1,
-        toolbarItems: 0,
         hooks: 2,
       }),
     ).toBe('卡片类型 1 · 画布菜单项 1 · 生命周期钩子 2')
@@ -45,7 +44,6 @@ describe('contributionsLine', () => {
         cardTypes: 0,
         menuItems: 0,
         canvasMenuItems: 0,
-        toolbarItems: 0,
         hooks: 0,
       }),
     ).toBe('')
@@ -69,7 +67,6 @@ describe('pluginSubtitle', () => {
         cardTypes: 1,
         menuItems: 0,
         canvasMenuItems: 0,
-        toolbarItems: 0,
         hooks: 0,
       },
       config: {},

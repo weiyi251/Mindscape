@@ -55,7 +55,6 @@ export interface PluginContributions {
   cardTypes: number
   menuItems: number
   canvasMenuItems: number
-  toolbarItems: number
   hooks: number
 }
 

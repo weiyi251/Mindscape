@@ -32,7 +32,6 @@ function makeHarness(): Harness {
     registerCardType: vi.fn(),
     registerMenuItem: vi.fn(),
     registerCanvasMenuItem: (item: CanvasMenuItem) => registered.push(item),
-    registerToolbarItem: vi.fn(),
     registerHook: vi.fn(),
     ui: {
       openDialog: (title: string, render: () => unknown) => opened.push({ title, render }),
@@ -72,7 +71,6 @@ describe('colorCardPlugin.activate', () => {
     // 而本插件目前确实只需要一个画布菜单入口
     expect(harness.api.registerCardType).not.toHaveBeenCalled()
     expect(harness.api.registerMenuItem).not.toHaveBeenCalled()
-    expect(harness.api.registerToolbarItem).not.toHaveBeenCalled()
     expect(harness.api.registerHook).not.toHaveBeenCalled()
   })
 
