@@ -168,6 +168,7 @@ export function createPluginBoardBridge(deps: PluginBridgeDeps): PluginBoardBrid
         y: Math.round(point.y),
         w: input.w ?? DEFAULT_PLAIN_CARD_SIZE.w,
         h: input.h ?? DEFAULT_PLAIN_CARD_SIZE.h,
+        ...(input.note ? { note: input.note } : {}),
         ...(input.meta ? { meta: input.meta } : {}),
       })
 

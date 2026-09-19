@@ -1,0 +1,8 @@
+{
+  "id": "example.dated-note",
+  "name": "日期便签",
+  "version": "1.0.0",
+  "description": "画布空白右键「新建日期便签」：创建一张已写好今天日期与星期的便签。",
+  "author": "Mindscape 官方示例",
+  "main": "index.js"
+}

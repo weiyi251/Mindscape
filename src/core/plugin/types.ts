@@ -102,6 +102,12 @@ export interface CreatePlainCardInput {
   h?: number
   /** 插件私有数据，写入 card.meta（浅复制；插件按自己的键名组织） */
   meta?: Record<string, unknown>
+  /**
+   * 便签正文（2026-09-20 补充）：`type: 'note'` 时的初始文字。
+   * note 是 Card 的一级字段（不在 meta 里），之前插件建便签只能建出空便签，
+   * 想预填内容（如官方示例「日期便签」）就没有通道。
+   */
+  note?: string
 }
 
 /** 卡片内容更新请求（插件卡片，如待办卡） */

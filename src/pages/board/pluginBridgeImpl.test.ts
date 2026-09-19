@@ -136,6 +136,21 @@ describe('createPluginBoardBridge · createCard', () => {
     expect(card?.meta).toEqual({ items: [{ id: 't1', text: '甲', done: false }] })
   })
 
+  it('note 字段：type 为 note 时预填便签正文（2026-09-20 官方示例插件依赖）', async () => {
+    useSpacesStore.setState({ spaces: [SPACE], currentSpaceId: SPACE.id })
+    const bridge = createPluginBoardBridge(makeDeps())
+
+    const id = await bridge.createCard({ type: 'note', note: '2026-09-20 周日' })
+    const card = useBoardStore.getState().cards.find((item) => item.id === id)
+    expect(card?.type).toBe('note')
+    expect(card?.note).toBe('2026-09-20 周日')
+
+    // 不传 note 时保持空串（zod 默认），行为与旧版完全一致
+    const plainId = await bridge.createCard({ type: 'note' })
+    const plain = useBoardStore.getState().cards.find((item) => item.id === plainId)
+    expect(plain?.note).toBe('')
+  })
+
   it('未打开空间 / 只读模式返回 null，不建卡', async () => {
     const bridge = createPluginBoardBridge(makeDeps())
     await expect(bridge.createCard({ type: 'todo' })).resolves.toBeNull()
