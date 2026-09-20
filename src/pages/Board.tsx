@@ -32,6 +32,7 @@ import { PluginDialogHost } from '@/components/ui/plugin-dialog-host'
 import { SettingsPanel } from '@/components/ui/settings-panel'
 import { SETTINGS_TEXT } from '@/components/ui/settingsText'
 import { CardSearchPanel } from '@/components/ui/card-search'
+import { UnframedFoldersBar } from '@/components/ui/unframed-folders-bar'
 import { ArchiveIcon, ArrowLeftIcon, MoonIcon, SettingsIcon, SunIcon } from '@/components/ui/icons'
 import { Canvas } from '@/canvas/Canvas'
 import type { CanvasApi } from '@/canvas/Canvas'
@@ -1848,6 +1849,10 @@ export function Board() {
           {notice}
         </div>
       ))}
+
+      {/* A2（2026-09-20 用户计划第 2 步）：磁盘上有子文件夹、画布上却没有框时，
+          提示「一键生成分区框」。状态与编排都在组件内部（Board 行数棘轮只剩个位数）。 */}
+      <UnframedFoldersBar history={history} writer={writer} onError={setActionError} />
 
       {saveError ? (
         <div className="border-b border-destructive/40 bg-destructive/5 px-5 py-2 text-xs text-destructive">

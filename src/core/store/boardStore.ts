@@ -62,7 +62,13 @@ import type { ImageSizeBatchResult } from '@/core/board/imageSizes'
 import { clearCardAssets, registerCardAssets } from '@/core/board/cardAssets'
 import { mergeScannedWithLayout } from '@/core/board/layoutMerge'
 import { DEFAULT_GRID_OPTIONS } from '@/core/board/grid'
-import { PARTITION_PADDING, PARTITION_TITLE_HEIGHT, createPartitions, selectPartitionDirs } from '@/core/board/partitions'
+import {
+  PARTITION_PADDING,
+  PARTITION_TITLE_HEIGHT,
+  createPartitions,
+  findUnframedFolders,
+  selectPartitionDirs,
+} from '@/core/board/partitions'
 
 /** 默认视图状态（无 layout 或读取失败时使用） */
 const DEFAULT_CANVAS: CanvasState = { zoom: 1, offsetX: 0, offsetY: 0 }
@@ -106,6 +112,14 @@ export interface BoardState {
   error: string | null
   /** 非致命提示（缩略图失败 / 布局损坏 / 版本过高），可直接展示 */
   notices: string[]
+  /**
+   * 磁盘上有子文件夹、画布上却没有对应分区框的文件夹名（A2，2026-09-20 用户计划第 2 步）。
+   *
+   * 出现的原因见 core/board/partitions.findUnframedFolders：空子文件夹不会有包围盒，
+   * 自动建框会跳过它们。这里存本次 loadSpace 算出的差集，UI 据此提示「一键补框」；
+   * 补完框或用户选择「暂不生成」后清空（重进空间会重新算一遍）。
+   */
+  unframedFolders: string[]
   /**
    * 选中集合（17.3：选中集合属于「需要触发重渲染的低频数据」，进 Zustand）。
    * T2.2 单击选中 / 取消选中；T2.3 框选与多选拖动复用。
@@ -185,6 +199,15 @@ export interface BoardState {
    * 只写内存态 —— 同名文件夹的落地由 core/commands/impl/createPartition.ts 负责。
    */
   addPartition: (partition: Partition) => void
+  /**
+   * 批量追加分区框（A2「磁盘有子文件夹、画布无框 → 一键补框」）。
+   * 与 addPartition 的差别只在「一次写一批」，避免逐个 setState。
+   */
+  addPartitions: (partitions: Partition[]) => void
+  /**
+   * 写入「待补框的文件夹名」（A2）。一键补框成功后、或用户点了「暂不生成」时传空数组。
+   */
+  setUnframedFolders: (names: string[]) => void
   /**
    * 移除分区框（新建分区的 undo 走它）。只动 partitions，**不碰硬盘**；
    * 目录回收由命令的 undo 负责。被移除的分区若正选中则一并清掉选中态。
@@ -341,6 +364,7 @@ export function createBoardStore(
     status: 'idle',
     error: null,
     notices: [],
+    unframedFolders: [],
     selectedIds: [],
     selectedConnectionIds: [],
     selectedPartitionId: null,
@@ -540,6 +564,15 @@ export function createBoardStore(
       set((state) => ({ partitions: [...state.partitions, partition] }))
     },
 
+    addPartitions(partitions) {
+      if (partitions.length === 0) return
+      set((state) => ({ partitions: [...state.partitions, ...partitions] }))
+    },
+
+    setUnframedFolders(names) {
+      set({ unframedFolders: [...names] })
+    },
+
     removePartitions(ids) {
       if (ids.length === 0) return
       const idSet = new Set(ids)
@@ -663,6 +696,7 @@ export function createBoardStore(
         status: 'loading',
         error: null,
         notices: [],
+        unframedFolders: [],
         cards: [],
         partitions: [],
         connections: [],
@@ -774,6 +808,14 @@ export function createBoardStore(
         // 7) 分区框：已有记录沿用；新子文件夹按合并后的卡片包围盒建框（第六章）
         const partitions = createPartitions(partitionNames, mergedCards, layout.partitions)
 
+        // 7.1) A2：磁盘上有目录、画布上却没框的文件夹（空子文件夹走不到自动建框），
+        //      留给 UI 提示「一键补框」。用 partitionDirs 而非 partitionNames ——
+        //      后者会漏掉「子文件夹读取失败」的那几个（它们同样没有框）。
+        const unframedFolders = findUnframedFolders(
+          partitionDirs.map((dir) => dir.name),
+          partitions,
+        )
+
         // ⚠️ 顺序要求：资源必须先于 cards 写入，卡片渲染时才能读到原图路径
         registerCardAssets(mergedCards, space.folderPath)
 
@@ -788,6 +830,7 @@ export function createBoardStore(
           needsMigration: idsPatched || patchedOriginalPath,
           status: 'ready',
           notices: [...notices, ...partitionNotices, ...imageSizeNotice(sizes)],
+          unframedFolders,
         })
       } catch (error) {
         if (token !== loadToken) return
@@ -813,6 +856,7 @@ export function createBoardStore(
         status: 'idle',
         error: null,
         notices: [],
+        unframedFolders: [],
         selectedIds: [],
         selectedConnectionIds: [],
         selectedPartitionId: null,

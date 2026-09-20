@@ -17,7 +17,7 @@ import { createEmptyLayout, zCardSchema } from '@/core/types'
 import { History } from '@/core/commands/history'
 import { createRemoveCardsCommand } from '@/core/commands/impl/removeCards'
 import { StorageError } from '@/core/storage/StorageProvider'
-import type { Layout, RemovedEntry, Space } from '@/core/types'
+import type { Layout, Partition, RemovedEntry, Space } from '@/core/types'
 import type { DirEntry, ImageSize, StorageProvider } from '@/core/storage/StorageProvider'
 import type { AppLayoutStore } from '@/core/storage/appLayoutStore'
 
@@ -282,6 +282,86 @@ describe('boardStore.loadSpace · 分区框（T2.5）', () => {
     expect(store.getState().partitions[0].collapsed).toBe(true)
     store.getState().setPartitionCollapsed(id, false)
     expect(store.getState().partitions[0].collapsed).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A2（2026-09-20 用户计划第 2 步）：磁盘有子文件夹、画布无框 → 一键补框
+// ---------------------------------------------------------------------------
+
+describe('boardStore · A2 未建框的文件夹', () => {
+  it('有内容的子文件夹自动建框 → 不需要补框', async () => {
+    const dirPath = 'D:\\Mindscape\\01_项目A\\参考资料'
+    const store = createStore(
+      createFakeProvider([entry('参考资料', true)], { [dirPath]: [entry('a.jpg')] }),
+    )
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().partitions).toHaveLength(1)
+    expect(store.getState().unframedFolders).toEqual([])
+  })
+
+  it('空子文件夹（画布上没框）→ 记入 unframedFolders；有内容的不算', async () => {
+    const full = 'D:\\Mindscape\\01_项目A\\有内容'
+    const store = createStore(
+      createFakeProvider([entry('有内容', true), entry('空的', true)], {
+        [full]: [entry('a.jpg')],
+      }),
+    )
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().unframedFolders).toEqual(['空的'])
+  })
+
+  it('子文件夹读取失败也算「没有框」（用户可一键补框，不必先修目录权限）', async () => {
+    const bad = 'D:\\Mindscape\\01_项目A\\坏文件夹'
+    const store = createStore(
+      createFakeProvider([entry('坏文件夹', true)], { [bad]: new Error('路径不存在') }),
+    )
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().unframedFolders).toEqual(['坏文件夹'])
+  })
+
+  it('保留目录 / 隐藏目录不算缺失（它们本来就不该有框）', async () => {
+    const store = createStore(
+      createFakeProvider([entry('.mindscape', true), entry('_已移除', true), entry('.缓存', true)]),
+    )
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().unframedFolders).toEqual([])
+  })
+
+  it('setUnframedFolders 覆盖写入、addPartitions 批量追加、reset 清空', async () => {
+    const store = createStore(createFakeProvider([entry('空的', true)]))
+    await store.getState().loadSpace(SPACE)
+    expect(store.getState().unframedFolders).toEqual(['空的'])
+
+    store.getState().setUnframedFolders([])
+    expect(store.getState().unframedFolders).toEqual([])
+
+    const box: Partition = {
+      id: 'p_001',
+      name: '空的',
+      folderPath: '空的',
+      x: 0,
+      y: 0,
+      w: 360,
+      h: 260,
+      color: '#5A7D6A',
+      collapsed: false,
+      meta: {},
+    }
+    store.getState().addPartitions([box])
+    expect(store.getState().partitions).toEqual([box])
+
+    store.getState().reset()
+    expect(store.getState().unframedFolders).toEqual([])
+    expect(store.getState().partitions).toEqual([])
   })
 })
 

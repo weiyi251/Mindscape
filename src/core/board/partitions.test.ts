@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Card, Partition } from '@/core/types'
 import {
+  FRAME_PLACEMENT_GAP,
   NEW_PARTITION_HEIGHT,
   NEW_PARTITION_WIDTH,
   PARTITION_PALETTE,
@@ -16,6 +17,8 @@ import {
   checkNewPartitionName,
   createPartitionAt,
   createPartitions,
+  createPartitionsForFolders,
+  findUnframedFolders,
   isReservedPartitionName,
   isValidFolderName,
   resolvePartitionColor,
@@ -252,5 +255,92 @@ describe('isValidFolderName（与 Rust 侧双保险的既有规则回归）', ()
     expect(isValidFolderName('a\\b')).toBe(false)
     expect(isValidFolderName('.')).toBe(false)
     expect(isValidFolderName('.git')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A2（2026-09-20 用户计划第 2 步）：磁盘有子文件夹、画布无框 → 一键补框
+// ---------------------------------------------------------------------------
+
+describe('findUnframedFolders', () => {
+  it('返回磁盘上有、画布上无框的文件夹名（保持扫描顺序）', () => {
+    const existing = [partition({ id: 'p_001', name: 'A', folderPath: 'A' })]
+    expect(findUnframedFolders(['A', '空文件夹', 'B'], existing)).toEqual(['空文件夹', 'B'])
+  })
+
+  it('按 folderPath 匹配：框改名后仍算「已建框」', () => {
+    const existing = [partition({ id: 'p_001', name: '改名后的显示名', folderPath: '磁盘名' })]
+    expect(findUnframedFolders(['磁盘名'], existing)).toEqual([])
+  })
+
+  it('画布上一个框都没有时全部算缺失；空输入返回空数组', () => {
+    expect(findUnframedFolders(['A', 'B'], [])).toEqual(['A', 'B'])
+    expect(findUnframedFolders([], [partition({})])).toEqual([])
+  })
+
+  it('重名目录项只报一次（防重复建框）', () => {
+    expect(findUnframedFolders(['A', 'A'], [])).toEqual(['A'])
+  })
+})
+
+describe('createPartitionsForFolders', () => {
+  it('空文件夹用默认尺寸，并排在所有既有元素（分区框 + 卡片）的下方', () => {
+    const existing = [partition({ id: 'p_001', folderPath: 'A', x: 100, y: 50, w: 300, h: 200 })]
+    const cards = [card({ id: 'c_001', x: 0, y: 0, w: 220, h: 160 })]
+    // 既有元素下缘 = max(50+200, 0+160) = 250
+    const [created] = createPartitionsForFolders({ names: ['空文件夹'], cards, existing })
+
+    expect(created.name).toBe('空文件夹')
+    expect(created.folderPath).toBe('空文件夹')
+    expect(created.w).toBe(NEW_PARTITION_WIDTH)
+    expect(created.h).toBe(NEW_PARTITION_HEIGHT)
+    expect(created.x).toBe(0) // 与既有元素的最左缘对齐
+    expect(created.y).toBe(250 + FRAME_PLACEMENT_GAP)
+    expect(created.collapsed).toBe(false)
+    expect(created.meta).toEqual({})
+  })
+
+  it('多个空文件夹垂直依次排开，互不重叠', () => {
+    const results = createPartitionsForFolders({ names: ['一', '二', '三'], cards: [], existing: [] })
+
+    expect(results.map((item) => item.y)).toEqual([
+      0,
+      NEW_PARTITION_HEIGHT + FRAME_PLACEMENT_GAP,
+      (NEW_PARTITION_HEIGHT + FRAME_PLACEMENT_GAP) * 2,
+    ])
+    expect(results.every((item) => item.x === 0)).toBe(true)
+  })
+
+  it('id 接着既有分区递增、配色接着既有数量轮换（避免撞色）', () => {
+    const existing = [partition({ id: 'p_004', folderPath: 'A' })]
+    const results = createPartitionsForFolders({ names: ['B'], cards: [], existing })
+
+    expect(results[0].id).toBe('p_005')
+    expect(results[0].color).toBe(PARTITION_PALETTE[1]) // 已有 1 个 → 从 1 号色开始
+  })
+
+  it('该文件夹在画布上有归属卡片时按包围盒定框（异常自愈路径）', () => {
+    const cards = [
+      card({ id: 'c_001', group: '有内容的', x: 80, y: 80, w: 132, h: 80 }),
+      card({ id: 'c_002', group: '有内容的', x: 212, y: 80, w: 100, h: 80 }),
+    ]
+    const [created] = createPartitionsForFolders({ names: ['有内容的'], cards, existing: [] })
+
+    expect(created.x).toBe(80 - PARTITION_PADDING)
+    expect(created.y).toBe(80 - PARTITION_TITLE_HEIGHT - PARTITION_PADDING)
+    expect(created.w).toBe(232 + PARTITION_PADDING * 2)
+    expect(created.h).toBe(80 + PARTITION_TITLE_HEIGHT + PARTITION_PADDING * 2)
+  })
+
+  it('没有待补框的文件夹时返回空数组（不产生无意义命令）', () => {
+    expect(createPartitionsForFolders({ names: [], cards: [], existing: [] })).toEqual([])
+  })
+
+  it('避让只由空框占位：有卡片的框不推进下方游标', () => {
+    const cards = [card({ id: 'c_001', group: '有内容的', x: 0, y: 0, w: 100, h: 100 })]
+    const results = createPartitionsForFolders({ names: ['有内容的', '空的'], cards, existing: [] })
+
+    // 「空的」跟着障碍物下缘（卡片 y=0..100）往下排，而不是被「有内容的」框再往下推
+    expect(results[1].y).toBe(100 + FRAME_PLACEMENT_GAP)
   })
 })

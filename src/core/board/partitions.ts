@@ -303,3 +303,108 @@ export function createPartitions(
 
   return results
 }
+
+// ---------------------------------------------------------------------------
+// A2（2026-09-20 用户计划第 2 步）：磁盘有子文件夹、画布无框 → 一键补框
+// ---------------------------------------------------------------------------
+
+/** 补框时相邻新框之间的垂直间距（画布坐标），与扫描行带的间隙同一量级 */
+export const FRAME_PLACEMENT_GAP = 40
+
+/**
+ * 找出「磁盘上有子文件夹、画布上却没有对应分区框」的文件夹名。
+ *
+ * 【为什么会出现这种不一致】`createPartitions` 对**空子文件夹**
+ * （框内没有卡片 → 没有包围盒）一律不建框 —— 于是磁盘上的空文件夹
+ * 在画布上完全隐形：用户看不到它，也没法把卡片拖进去。
+ * A2 的做法是进入空间时把这份差集交给 UI 提示，由用户决定是否一键补框。
+ *
+ * 【为什么补框不碰硬盘】目录本来就存在，这是「发现」而不是「创建」；
+ * 反过来，撤销补框也**绝不能删目录**（那是用户的文件夹，不是我们建的）。
+ *
+ * @param dirNames 磁盘上扫描到的子文件夹名（已由 selectPartitionDirs 滤过保留名 / 隐藏目录）
+ * @param existing 画布上的既有分区框
+ */
+export function findUnframedFolders(
+  dirNames: readonly string[],
+  existing: readonly Partition[],
+): string[] {
+  const framed = new Set(existing.map((item) => item.folderPath))
+  const seen = new Set<string>()
+  const missing: string[] = []
+  for (const name of dirNames) {
+    if (framed.has(name) || seen.has(name)) continue
+    seen.add(name)
+    missing.push(name)
+  }
+  return missing
+}
+
+/** 补框入参 */
+export interface MissingFrameInput {
+  /** 待补框的文件夹名（磁盘上已存在；顺序即建框顺序） */
+  names: readonly string[]
+  /** 合并后的画布卡片：group 命中的按包围盒定框，其余只作为避让障碍 */
+  cards: readonly Card[]
+  /** 画布既有分区框（取号 / 配色轮换 / 避让都用它） */
+  existing: readonly Partition[]
+}
+
+/**
+ * 为「磁盘有目录、画布无框」的文件夹批量补框（纯函数，不碰硬盘、不碰 store）。
+ *
+ * 几何规则：
+ *   · 该文件夹在画布上**有**归属卡片（group === name）→ 与 `createPartitions` 完全一致：
+ *     框 = 卡片包围盒 + 内边距 + 标题条。正常路径下不会走到这里（有内容的文件夹
+ *     进空间时已自动建框），保留它是为了「框架被外部改动抹掉」这类异常自愈；
+ *   · 空文件夹（A2 的主场景）→ 用默认尺寸，并**排在所有既有元素（分区框 + 卡片）的下方**，
+ *     逐个向下排开，保证不叠在既有内容上。
+ *
+ * id 接着既有分区递增；配色接着既有分区数量从 8 色板轮换（与自动建框同一套，避免撞色）。
+ */
+export function createPartitionsForFolders(input: MissingFrameInput): Partition[] {
+  const { names, cards, existing } = input
+  if (names.length === 0) return []
+
+  // 避让障碍 = 既有分区框 + 全部卡片；新框统一落到它们的下缘以下
+  const obstacles = [
+    ...existing.map((item) => ({ x: item.x, y: item.y, w: item.w, h: item.h })),
+    ...cards.map((item) => ({ x: item.x, y: item.y, w: item.w, h: item.h })),
+  ]
+  const occupied = boundingBoxOfCards(obstacles)
+  const cursorX = occupied ? Math.round(occupied.x) : 0
+  let cursorY = occupied ? Math.round(occupied.y + occupied.h + FRAME_PLACEMENT_GAP) : 0
+
+  const usedIds = existing.map((item) => item.id)
+  let autoIndex = existing.length
+  const results: Partition[] = []
+
+  for (const name of names) {
+    const box = boundingBoxOfCards(cards.filter((card) => card.group === name))
+    const w = box ? box.w + PARTITION_PADDING * 2 : NEW_PARTITION_WIDTH
+    const h = box ? box.h + PARTITION_TITLE_HEIGHT + PARTITION_PADDING * 2 : NEW_PARTITION_HEIGHT
+    const x = box ? box.x - PARTITION_PADDING : cursorX
+    const y = box ? box.y - PARTITION_TITLE_HEIGHT - PARTITION_PADDING : cursorY
+
+    const id = nextPartitionId(usedIds)
+    usedIds.push(id)
+    results.push({
+      id,
+      name,
+      folderPath: name, // 一层扫描：folderPath 就是子文件夹名
+      x,
+      y,
+      w,
+      h,
+      color: resolvePartitionColor('auto', autoIndex),
+      collapsed: false,
+      meta: {},
+    })
+    autoIndex += 1
+
+    // 只有空框才占位（有卡片的框落在内容上，不占用下方排布游标）
+    if (!box) cursorY += h + FRAME_PLACEMENT_GAP
+  }
+
+  return results
+}
