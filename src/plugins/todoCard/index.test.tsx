@@ -103,6 +103,27 @@ describe('todoCardPlugin.activate', () => {
     expect(def.render({ card: makeTodoCard(), selected: false })).toBeTruthy()
   })
 
+  it('searchText：标题与条目正文逐行拼接（2026-09-20 搜索打通插件卡）', async () => {
+    const harness = makeHarness()
+    await todoCardPlugin.activate(harness.api)
+
+    const def = harness.cardTypes[0]
+    const card = {
+      ...makeTodoCard(),
+      meta: {
+        title: '采购清单',
+        items: [
+          { id: 't1', text: '买牛奶', done: false },
+          { id: 't2', text: '买面包', done: true },
+        ],
+      },
+    }
+    expect(def.searchText?.(card)).toBe('采购清单\n买牛奶\n买面包')
+
+    // 空卡：标题与条目全空 → 空串（不参与 extra 匹配）
+    expect(def.searchText?.(makeTodoCard())).toBe('')
+  })
+
   it('「完成项排列」：点击写入 meta.completedPlacement，且只作用于 todo 类型', async () => {
     const harness = makeHarness()
     await todoCardPlugin.activate(harness.api)

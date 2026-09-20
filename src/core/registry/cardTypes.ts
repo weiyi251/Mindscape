@@ -589,6 +589,20 @@ export function resizeHandleModeFor(type: string): 'default' | 'widthOnly' | 'wi
 }
 
 /**
+ * 该卡片的「自有可搜索文本」（2026-09-20 搜索打通插件卡）：
+ * 由卡片类型的 `searchText(card)` 提供（如待办卡的标题与条目正文）；
+ * 未注册 / 未声明的类型返回空串 —— 行为与旧版一致（只有文件名 / 备注 / 分区名参与搜索）。
+ * 异常兜底：插件回调抛错时吞掉返回空串（搜索不该因为某个插件而崩）。
+ */
+export function searchTextOfCard(card: Card): string {
+  try {
+    return getCardTypeDef(card.type)?.searchText?.(card) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/**
  * 已提示过"与核心同名"的插件类型 id。
  * 去重的原因：listCardTypes 可能被频繁调用（每次渲染列表），不能反复刷日志。
  */

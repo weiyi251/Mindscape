@@ -17,7 +17,7 @@
 
 import type { BuiltinPluginDescriptor } from '@/core/plugin/types'
 import { TodoCardView } from './view'
-import { TODO_DEFAULT_W, metaWithPlacement, placementOfMeta, todoCardHeight } from './todos'
+import { TODO_DEFAULT_W, metaWithPlacement, placementOfMeta, titleOfMeta, todosOfMeta, todoCardHeight } from './todos'
 import type { TodoCompletedPlacement } from './todos'
 import { TODO_CARD_TEXT } from './text'
 
@@ -51,6 +51,11 @@ export const todoCardPlugin: BuiltinPluginDescriptor = {
       menu: [],
       defaultSize: { w: TODO_DEFAULT_W, h: todoCardHeight(0) },
       resizeHandles: 'widthHeight',
+      // Ctrl+F 搜索（2026-09-20 搜索打通插件卡）：标题 + 每条待办正文都参与匹配
+      searchText: (card) =>
+        [titleOfMeta(card.meta), ...todosOfMeta(card.meta).map((item) => item.text)]
+          .filter((text) => text !== '')
+          .join('\n'),
     })
 
     // 待办卡右键菜单（与全应用同一 ContextMenu 渲染层，风格天然统一）：

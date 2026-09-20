@@ -13,20 +13,29 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
+import type { Card } from '@/core/types'
+import { searchTextOfCard } from '@/core/registry/cardTypes'
 import type { CardSearchDoc } from '@/core/board/search'
 import { describeHits, matchCards, stepIndex } from '@/core/board/search'
 
 export interface UseCardSearchOptions {
   /** 参与搜索的卡片（调用方决定范围：正常视图 / 已移除视图） */
-  docs: readonly CardSearchDoc[]
+  cards: readonly Card[]
   /** 跳到某个命中项（选中 + 视口居中），由持有画布 API 的一方实现 */
   jumpTo: (id: string) => void
 }
 
-export function useCardSearch({ docs, jumpTo }: UseCardSearchOptions) {
+export function useCardSearch({ cards, jumpTo }: UseCardSearchOptions) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(-1)
+
+  // 组装搜索文档：插件卡的自有文本（如待办标题与条目）作为 extra 字段参与匹配
+  //（2026-09-20 搜索打通插件卡）。纯数据映射，卡片数量级内开销可忽略。
+  const docs = useMemo<CardSearchDoc[]>(
+    () => cards.map((card) => ({ ...card, extra: searchTextOfCard(card) })),
+    [cards],
+  )
 
   const hits = useMemo(() => matchCards(docs, query), [docs, query])
   const items = useMemo(() => describeHits(docs, hits), [docs, hits])

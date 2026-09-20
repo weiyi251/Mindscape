@@ -29,16 +29,22 @@ export interface CardSearchDoc {
   note: string
   /** 所属分区名，没有分区时为空 */
   group?: string
+  /**
+   * 插件卡声明的自有可搜索文本（2026-09-20 搜索打通插件卡）：
+   * 由卡片类型注册表的 `searchText(card)` 提供（如待办卡的标题与条目），
+   * 缺省为空 —— 该类型就只有文件名 / 备注 / 分区名参与匹配
+   */
+  extra?: string
 }
 
 /** 命中的字段名，用于告诉用户「为什么这张卡被搜到」 */
-export type SearchFieldKey = 'name' | 'note' | 'group'
+export type SearchFieldKey = 'name' | 'note' | 'group' | 'extra'
 
 export interface CardSearchHit {
   id: string
-  /** 命中的字段，按 name → note → group 顺序排列，至少一项 */
+  /** 命中的字段，按 name → note → group → extra 顺序排列，至少一项 */
   fields: SearchFieldKey[]
-  /** 便签正文命中时的上下文摘录（已压平换行、超长加省略号）；否则空串 */
+  /** 正文类字段命中时的上下文摘录（已压平换行、超长加省略号）；否则空串 */
   excerpt: string
 }
 
@@ -66,7 +72,8 @@ export function excerptOf(text: string, rawQuery: string, radius = 24): string {
 
 /**
  * 按查询词过滤卡片。空查询返回空数组（见模块说明）。
- * `excerpt` 优先取便签正文 —— 文件名本身在 UI 上已经显示，正文摘录才是额外信息。
+ * `excerpt` 优先取便签正文，其次插件卡的自有文本 —— 文件名本身在 UI 上已经显示，
+ * 正文摘录才是额外信息。
  */
 export function matchCards(
   docs: readonly CardSearchDoc[],
@@ -87,11 +94,18 @@ export function matchCards(
     const group = doc.group ?? ''
     if (group !== '' && group.toLowerCase().includes(query)) fields.push('group')
 
+    const extra = doc.extra ?? ''
+    if (extra !== '' && extra.toLowerCase().includes(query)) fields.push('extra')
+
     if (fields.length === 0) continue
     hits.push({
       id: doc.id,
       fields,
-      excerpt: fields.includes('note') ? excerptOf(doc.note, query) : '',
+      excerpt: fields.includes('note')
+        ? excerptOf(doc.note, query)
+        : fields.includes('extra')
+          ? excerptOf(extra, query)
+          : '',
     })
   }
   return hits
@@ -117,6 +131,7 @@ export const SEARCH_FIELD_LABELS: Record<SearchFieldKey, string> = {
   name: '文件名',
   note: '便签',
   group: '分区',
+  extra: '内容',
 }
 
 /** 搜索结果在浮层里的一条展示数据 */

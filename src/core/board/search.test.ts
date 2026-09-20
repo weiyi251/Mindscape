@@ -196,8 +196,45 @@ describe('stepIndex：命中项之间移动', () => {
 })
 
 describe('SEARCH_FIELD_LABELS：命中字段中文标签', () => {
-  it('三种字段都有标签', () => {
-    expect(SEARCH_FIELD_LABELS).toEqual({ name: '文件名', note: '便签', group: '分区' })
+  it('四种字段都有标签', () => {
+    expect(SEARCH_FIELD_LABELS).toEqual({
+      name: '文件名',
+      note: '便签',
+      group: '分区',
+      extra: '内容',
+    })
+  })
+})
+
+describe('matchCards · extra：插件卡自有可搜索文本（2026-09-20）', () => {
+  it('extra 命中 → fields 含 extra，摘录取 extra 上下文', () => {
+    const docs = [
+      doc({ id: 't1', filePath: '', extra: '购物清单\n买牛奶\n买面包' }),
+    ]
+    const hits = matchCards(docs, '牛奶')
+    expect(hits).toHaveLength(1)
+    expect(hits[0].fields).toEqual(['extra'])
+    expect(hits[0].excerpt).toContain('牛奶')
+  })
+
+  it('note 与 extra 同时命中 → 摘要优先 note', () => {
+    const docs = [
+      doc({ id: 't2', filePath: '', note: '备注里有牛奶', extra: '条目里有牛奶' }),
+    ]
+    const hits = matchCards(docs, '牛奶')
+    expect(hits[0].fields).toEqual(['note', 'extra'])
+    expect(hits[0].excerpt).toBe('备注里有牛奶')
+  })
+
+  it('extra 为空 / 缺省：行为与旧版一致，不误命中', () => {
+    expect(matchCards([doc({ id: 'a', filePath: '图.png' })], '任何词') ).toEqual([])
+    expect(matchCards([doc({ id: 'b', filePath: '图.png', extra: '' })], '任何词')).toEqual([])
+  })
+
+  it('describeHits：extra 命中的浮层标签为「内容」', () => {
+    const docs = [doc({ id: 't3', filePath: '', extra: '读后感\n第三章要点' })]
+    const hits = matchCards(docs, '要点')
+    expect(describeHits(docs, hits)[0].fieldLabels).toEqual(['内容'])
   })
 })
 

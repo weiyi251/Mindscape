@@ -320,7 +320,7 @@ export function Board() {
     [selectCards],
   )
 
-  const search = useCardSearch({ docs: searchDocs, jumpTo: handleSearchJumpTo })
+  const search = useCardSearch({ cards: searchDocs, jumpTo: handleSearchJumpTo })
 
   /**
    * 拖拽松手（T2.2）：坐标固化进 store + 一条命令入撤销栈 + 触发防抖落盘。
