@@ -385,7 +385,6 @@ function shell(
 
 /** image：图片本体（两层叠放：下层缩略图、上层原图；档位由 lazyOriginal 判定） */
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
-  const name = basename(card.filePath)
   const sourcePath = getCardOriginalPath(card.id)
   const originalUrl = toAssetUrl(sourcePath)
   // 备注 / 标签走顶部外挂层（2026-09-13 用户裁决）：渲染在卡片盒**上方外侧**，
@@ -429,8 +428,11 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     'data-y': card.y,
     'data-w': card.w,
     'data-h': card.h,
-    alt: name,
-    title: name,
+    // ⚠️ alt 必须为空串：src 为空 / 加载中时 Chromium 会把 alt 文本画在图片左上角。
+    //    D3 两档加载后「src 为空」是缩略档的**常态**（不再是一瞬间的加载态），
+    //    alt 写文件名就会常驻压在图上（2026-09-20 用户截图反馈）；文件名另有
+    //    悬停淡入的 fileNameChip（belowCardStack），不需要 alt 兜底。
+    alt: '',
     draggable: false,
     decoding: 'async',
     // 实际分辨率徽章的数据源（2026-09-14 用户要求）：加载完成 / 失败时由

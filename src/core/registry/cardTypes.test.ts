@@ -141,7 +141,12 @@ describe('三种核心类型的渲染可区分', () => {
 
     expect(html).toContain('data-card-type="image"')
     expect(html).toContain('data-card-image')
-    expect(html).toContain('alt="ref-01.jpg"')
+    // alt 必须为空串（2026-09-20 回归）：src 为空 / 加载中时 Chromium 会把 alt
+    // 文本画在图片左上角 —— D3 两档加载后「src 为空」是缩略档常态，alt 写文件名
+    // 就会常驻压在图上。文件名另有悬停淡入的 fileNameChip，alt 不承担显示职责
+    expect(html).not.toContain('alt="ref-01.jpg"')
+    const alt = html.match(/<img[^>]*data-original-url[^>]*>/)?.[0]?.match(/alt="([^"]*)"/)?.[1]
+    expect(alt).toBe('')
     // 图片用 contain 等比缩放不变形；容器负责撑满（flex-1 + min-h-0），两层 img
     // 用 inset-0 拿满容器 —— 否则 img 元素盒会按「宽度 × 原图比例」自行撑高，
     // 被 overflow-hidden 裁掉
