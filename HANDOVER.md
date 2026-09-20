@@ -75,6 +75,9 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 - 全量基线（2026-09-14，色号移至左下角后）：Vitest **1108 passed / 86 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **49 passed**、vite build 通过（440.90 kB / gzip 136.47 kB）
 - 已发布改动（2026-09-14 开发、随 v0.7.0 发布，提交 80759dd）：①**画布右键「新建分区」** —— 输入名称即在该位置建出分区框（以右键点为框中心、8 色板轮换配色），并在对应空间文件夹下**自动生成同名文件夹**；名称四重校验（空 / 非法字符 / 系统保留名 / 重名含硬盘同名目录），`Ctrl+Z` 连文件夹一起回收（**只回收空目录**）；②**便签的连线圆点由右上角移到右缘中点**（与图片卡一致，与连线锚点重合），随之移除便签的「右缘中点」缩放手柄（该位置让给连线手柄，否则连线优先、缩放手柄彻底失效），上 / 下 / 左 / 右下角手柄保留
 
+- **A–D 优化计划（2026-09-20 用户批准，v0.8.0 之后进行中）** —— 按 §9 变更记录逐项落地：已完成的批次为 **B1** 七个生命周期钩子首次进入生产路径（c8c935f）、**B2** 官方示例外部插件 `docs/examples/example.dated-note/` + 真实文件契约测试（6d75e90）、**B3** `plugins.json` 版本迁移管道（acc8439）、**B4** 移除无渲染端的工具栏扩展点（9ac40c2）、**C2** `Ctrl+F` 搜索打通插件卡（cc3b75f）、**C4** 卡片锁定（a09a399）、**C1** 多选批量移动到分区（c3f97fb）；配套前置外抽两次：菜单动作登记整块 → `pages/board/registerBoardActions.ts`（e4616ef）、三个右键菜单弹出入口 → `pages/board/menuEntries.ts`（c3f97fb）。**未完成：C3 卡片对齐 / 分布、A1 空间文件夹外部变动提示、A2 由卡片生成分区**（见 §4）
+- 全量基线（2026-09-20，C1 完成后）：Vitest **1349 passed / 108 文件**、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **50 passed**、vite build 通过；棘轮 **Board 1985/2000（余量 15）**、**Canvas 1184/1190（余量 6）**（阈值与理由见 `src/__guards__/architecture.test.ts` 注释）
+
 ## 4. 待办事项与已知问题
 
 ### 高优先级
@@ -85,11 +88,11 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 
 2. **README 界面截图仍缺**（需真机运行截取；插件「设置 → 插件」页与「新建色卡」面板也需要一张）
 3. **GitHub PAT 轮换**：2026-10-11 到期，且曾在日志泄露 base64 形式
-4. **插件系统的收尾项**（2026-09-14 落地后剩这些）：
-   - 7 个生命周期钩子的**生产埋点**尚未接线（`emitHook` 目前只有测试在调；`HookPayloadMap` 已把载荷定形，埋点处用 `emitHookTyped` 即可）。`Board.tsx` 棘轮余量 31 行正是留给它
-   - `plugins.json` 的**数据迁移位**未实现（有 `version` 字段但无迁移函数）
-   - **外部插件**（`manifest.json` + `index.js` 动态加载）代码链路已通并有单测，但**尚未真机跑过一次**真实外部插件
-   - 真机确认：插件页启停 / 卸载的观感、「新建色卡」面板的取色器与输出目录选择
+4. **A–D 优化计划剩余项**（2026-09-20 会话批准；B1–B4 / C1 / C2 / C4 已完成，见 §3 与 §9）：
+   - **C3 卡片对齐与分布** —— 多选后左 / 水平居中 / 右 / 上 / 垂直居中 / 下对齐 + 等距分布
+   - **A1 空间文件夹外部变动提示** —— 画布打开期间文件夹被外部程序增删改文件时的检测与提示
+   - **A2 由卡片生成分区** —— 选中若干卡片，按其外接矩形生成分区框并在空间文件夹建同名目录
+5. **插件侧遗留（已大部分收口，保留备查）**：7 个生命周期钩子埋点（B1，c8c935f）、`plugins.json` 迁移位（B3，acc8439）、外部插件代码链路（B2 官方示例 6d75e90）均已完成；**仍待真机**：官方示例插件的 7 项验证清单（`docs/examples/example.dated-note/README.md`）、插件页启停 / 卸载观感、「新建色卡」面板取色器与输出目录选择、卡片锁定（C4）虚线描边观感、批量移动（C1）菜单标签与落点
 
 ### 已解决（保留备查）
 
@@ -99,7 +102,7 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 
 ### 已知限制（有意取舍，见 README「已知限制」）
 
-插件系统已落地（管理页 + 内置色卡插件，见 §3 与 `docs/插件系统-结构与实现要点.md`）；**插件侧通道尚未接线**：7 个生命周期钩子无生产埋点（`emitHook` 目前只有测试在调，载荷已由 `HookPayloadMap` 定形）；`plugins.json` 的 `version` 字段有、迁移函数没有；深色模式未做全量视觉走查；图片卡片直接加载原图，大图同屏时解码内存较高；早期卡片 id 撞号会自动重编号（连线端点可能失配，渲染层有兜底）；自动更新依赖 GitHub 可达。
+插件系统已落地（管理页 + 内置色卡 / 待办卡片插件，见 §3 与 `docs/插件系统-结构与实现要点.md`）；**插件侧通道已接线**：7 个生命周期钩子在 B1 完成生产埋点、`plugins.json` 迁移管道在 B3 落地、无渲染端的工具栏扩展点在 B4 删除（现为 4 个扩展点）；深色模式未做全量视觉走查；图片卡片直接加载原图，大图同屏时解码内存较高；早期卡片 id 撞号会自动重编号（连线端点可能失配，渲染层有兜底）；自动更新依赖 GitHub 可达。
 
 ## 5. 重要设计决策与约定（用户裁决，已生效）
 
@@ -275,4 +278,5 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-09-20 | e4616ef | `src/pages/board/registerBoardActions.ts`（新增，+test）、`src/pages/Board.tsx`、`src/__guards__/architecture.test.ts`（棘轮） | **外抽：菜单动作登记整块**（A–D 优化前置工作）。Board 棘轮只剩 11 行，而 C4 锁定 / C1 批量移动 / C3 对齐分布 / A2 生成分区 / A1 外部变动提示都要动 Board，逐项往里加必撞红线。按守卫注释「再不够请继续外抽」的思路，把 T3.9 的 **「动作 id → Board 实现」映射整块**（原 useEffect 主体约 85 行）搬进 `pages/board/registerBoardActions.ts`：依赖（10 个 handler + setPendingConnectFrom + canvasApiRef）以 `BoardActionDeps` 注入，函数体逐字搬移、仅把闭包改注入；Board 侧只剩一个 deps 对象 + 调用（`useEffect` 依赖数组保持原样）。**Board 2055 → 1988 行**（阈值下调 2055 → 2000，锁定收益）；新增 8 例**接线测试**（用假 handler + `runAction` 按 id 驱动 —— 正是真实菜单点击路径，专防「id 漏接/接错」这类无报错的哑故障；含便签加备注走行内编辑、分区粘贴落点=中心/折叠态、未打开空间安全早退）；顺带清掉 Board 里因此变为未使用的 3 个 import。门禁：1330 passed / 106 文件、tsc 0、eslint 0 error（1 固有 warning）、build OK、cargo 50 passed | 用户批准执行 A–D 优化计划（为 C4/C1/C3/A2/A1 腾出行数余量） |
 | 2026-09-20 | a09a399 | `src/core/board/cardMeta.ts(+test)`、`src/core/registry/menus.ts(+test)`、`src/pages/board/{cardLockFlow.ts（新增,+test）,contextMenus.tsx(+test),registerBoardActions.ts(+test)}`、`src/canvas/{Canvas.tsx,Card.tsx}`、`src/pages/Board.tsx`、`src/__guards__/architecture.test.ts` | **C4：卡片锁定**（A–D 优化计划裁决项）。语义**刻意收窄为「位置与尺寸冻结」**（防误拖），不是禁用卡片：选中 / 连线 / 右键菜单 / 打开原图照常，所以无需确认框、无额外权限概念。①数据：`card.meta.locked`（走 4.2 meta 扩展位，随卡片 zod 往返，不加 schema 字段）；`lockedOfMeta` 只认**布尔真值**（脏数据一律当未锁定）、`metaWithLocked(false)` **删键**不留无用字段（与 noteColor 同约定）；②菜单：`CARD_ACTION.toggleLock` 静态项（label 恒为「锁定卡片」），**标签翻转在 contextMenus 做**（配置数组拿不到卡片状态）→ 已锁定显示「解锁卡片」；对所有类型可见；③编排 `cardLockFlow.toggleCardLock`（deps 注入，一次 meta 命令可撤销 + 落盘）；④手势拦截在 Canvas 按下分发：锁定 id 集合**取数据层**（折叠分区内未渲染的卡也判定正确），命中则只选中、不启动缩放/拖动；**多选拖动时锁定的同伴不随动**（它们的位置是用户明确钉住的）；⑤视觉：Card 根加 `data-card-locked` 同款类（cursor-default + 虚线浅描边常态提示），CardView 新增 `locked` prop；⑥棘轮：Canvas 1184 行，**显式上调 1172 → 1190**（余量 6，理由与下次外抽候选写进测试文件注释）。测试 +10（cardMeta 4、cardLockFlow 4、contextMenus 标签翻转 1、registerBoardActions 接线 1、菜单契约同步 2 处）。门禁：**1340 passed / 108 文件**、tsc 0、eslint 0 error（1 固有 warning）、build OK、cargo 50 passed | 用户批准执行 A–D 优化计划（C4：大画布整理后防误拖） |
 | 2026-09-20 | c3f97fb | `src/core/commands/impl/moveCardToFolder.ts`、`src/pages/board/{moveCardFlow.ts(+test),contextMenus.tsx(+test),menuEntries.ts（新增,+test）,renameFileFlow.ts(+test)}`、`src/pages/Board.tsx` | **C1：多选批量移动到分区 + 右键菜单入口外抽**。①命令层新增 `createMoveCardsToFolderCommand`（**组合命令**：do 顺序逐卡、undo **逆序**回滚 —— 同一分区被多次扩框时只有逆序才能还原成最初的矩形），单卡也走它（cards 长度 1），菜单层不必分两条路径；②流程层 `openMoveCardMenu` 改收 `Card[]`：便签（无文件）自动剔除；隐藏「目标已经在的文件夹」的判据改「**全部**目标都在该目录」（否则用户没法把散落卡片归并到其中之一）；③菜单层：右键的卡在选中集合里且选中数 >1 → 顶层标签「移动 N 张到…」、二级项标注「（N 张）」（`buildCardMoveItems.countLabel`），并在 `CardMenuParams` 增 `selectedCards`（批量需要 Card 对象）；④`applyFileRefUpdates` 改收 updates 数组、按 **store 里每张卡各自的类型**重登记资源表（批量里可能混着便签；原实现用「代表卡」的类型判断）——renameFileFlow 签名随之同步；⑤**Board 一度到 2002 行（超阈值 2000）→ 按守卫约定再外抽**：三个右键菜单弹出入口（取上下文 + 组装菜单 + 写浮层 state）整块搬进 `pages/board/menuEntries.ts`（6 例接线测试），Board 侧只剩一个 `menuDeps` useMemo，实际 **1985** 行（阈值保持 2000，余量 15）。测试 +11（moveCardFlow 批量、contextMenus 标签与整批目标、menuEntries 6）。门禁：**1349 passed / 108 文件**、tsc 0、eslint 0 error（1 固有 warning）、build OK、cargo 50 passed | 用户批准执行 A–D 优化计划（C1：整理大画布最高频的动作） |
+| 2026-09-20 | （本次） | `HANDOVER.md` | **接手会话：把 §3 / §4 同步到代码现状**（未改任何代码）。① §3 新增「A–D 优化计划（2026-09-20 用户批准，进行中）」条：列出已完成批次 B1 钩子生产埋点（c8c935f）/ B2 官方示例外部插件（6d75e90）/ B3 plugins.json 迁移管道（acc8439）/ B4 移除工具栏扩展点（9ac40c2）/ C2 搜索打通插件卡（cc3b75f）/ C4 卡片锁定（a09a399）/ C1 多选批量移动（c3f97fb）与两次前置外抽（e4616ef `registerBoardActions.ts`、c3f97fb `menuEntries.ts`），并标注未完成项 C3 / A1 / A2；② §3 补最新全量基线（1349 passed / 108 文件、cargo 50、Board 1985/2000、Canvas 1184/1190）；③ §4 中优先级第 4 条由过时的「插件系统的收尾项（钩子未埋点 / 迁移位未实现 / 外部插件未验）」改写为「A–D 优化计划剩余项（C3 卡片对齐分布 / A1 空间文件夹外部变动提示 / A2 由卡片生成分区）」，新增第 5 条记录插件侧已完成项与仍待真机的清单；④ §4「已知限制」段同步：钩子已埋点、迁移管道已落地、工具栏扩展点已删除（现 4 个扩展点） | 新会话接手项目（用户要求「阅读交接文档接手项目」）；AGENTS.md 要求文档不得留有与代码不符的错误事实 |
 
