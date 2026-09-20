@@ -106,7 +106,14 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 模块级 clipboardSnapshot（跨 Board 重挂存活）+ pasteCards 按源空间取原件，
   // 净 +20 → 实际 **2049** 行。阈值上调到 2055：锁住本轮，余量留给钩子埋点；
   // 再不够请继续外抽（候选：剪贴板快照逻辑搬进 pages/board/clipboardSnapshot.ts）。
-  'src/pages/Board.tsx': 2055,
+  // 钩子埋点 + 搜索打通插件卡（2026-09-20）：spaceOpened / spaceClosed 两处埋点 +3、
+  // 搜索调用点改传 cards（-1）→ 实际 **2044** 行，仍是 2055。随后按「继续外抽」的思路
+  // 做了本轮 A–D 优化的预备工作：**菜单动作登记整块**（T3.9 的 register 映射，约 85 行）
+  // 搬进 pages/board/registerBoardActions.ts（纯映射胶水，8 例接线测试），
+  // Board 侧只剩一个 deps 对象 + 调用，实际 **1988** 行。
+  // 阈值下调到 2000：锁定外抽收益，余量留给后续优化项（C4 卡片锁定 / C1 批量移动 /
+  // C3 对齐分布 / A2 生成分区 / A1 外部变动提示条都要动 Board）。
+  'src/pages/Board.tsx': 2000,
   // P1-3（2026-09-12）：计划要求 Ctrl+F 快捷键分支放在画布侧 + 搜索高亮 props + CardView 状态，
   // 均属「画布交互入口」的固有职责，约 +28 行
   // P1-4（2026-09-12）：Ctrl+Shift+0 快捷键分支 + 状态条「适应内容」按钮，约 +21 行

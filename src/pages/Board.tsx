@@ -69,10 +69,7 @@ import {
   createSetConnectionLabelCommand,
 } from '@/core/commands/impl/connections'
 import { createAddCardsCommand } from '@/core/commands/impl/addCards'
-import { registerAction } from '@/core/registry/actionRegistry'
 import { emitHookTyped } from '@/core/registry/pluginCenter'
-import { CARD_ACTION, PARTITION_ACTION, CONNECTION_ACTION } from '@/core/registry/menus'
-import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { metaWithTags, tagsOfMeta } from '@/core/board/cardMeta'
 import { useCardSearch } from '@/core/hooks/useCardSearch'
 import { resolveShortcut } from '@/core/shortcuts/keys'
@@ -115,6 +112,7 @@ import { copyCardsToSystemClipboard, clonePastedCard } from '@/pages/board/paste
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
+import { registerBoardActions } from '@/pages/board/registerBoardActions'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -1443,79 +1441,22 @@ export function Board() {
 
   // ---- T3.9 菜单动作登记（一次性）：配置中心的动作 id → 本组件的真实实现 ----
   // 菜单项本身来自 menus.ts 配置中心（buildCardMenuFor / buildPartitionMenuFor），
-  // 这里只负责「id → 动作」的登记，杜绝在浮层里硬编码菜单项。
+  // 这里只负责「id → 动作」的登记。整块映射已于 2026-09-20 外抽到
+  // pages/board/registerBoardActions.ts（Board 行数棘轮只剩个位数余量）。
   useEffect(() => {
-    const register = (id: string, run: (ctx: { card?: Card; partition?: import('@/core/types').Partition; connection?: Connection }) => void) => {
-      registerAction(id, (ctx) => run({ card: ctx.card, partition: ctx.partition, connection: ctx.connection }))
-    }
-
-    register(CARD_ACTION.openOriginal, ({ card }) => {
-      if (card) void openCardWithSystem(card)
-    })
-    register(CARD_ACTION.remove, ({ card }) => {
-      if (card) handleRemoveCards([card.id])
-    })
-    register(CARD_ACTION.bringToFront, ({ card }) => {
-      if (card) handleCardZIndex(card.id, 'front')
-    })
-    register(CARD_ACTION.sendToBack, ({ card }) => {
-      if (card) handleCardZIndex(card.id, 'back')
-    })
-    register(CARD_ACTION.addNote, ({ card }) => {
-      if (!card) return
-      // 便签：复用双击的行内编辑态（用户要求：便签编辑不再弹窗）
-      if (card.type === 'note') {
-        canvasApiRef.current?.beginNoteEdit(card.id)
-        return
-      }
-      handleCardNote(card)
-    })
-    register(CARD_ACTION.editLabel, ({ card }) => {
-      if (card) handleCardTags(card)
-    })
-    // 「连线」：进入挂起模式，下一张点中的卡片为目标（配合边缘拖拽，T3.1）
-    register(CARD_ACTION.connect, ({ card }) => {
-      if (card) setPendingConnectFrom(card.id)
-    })
-    // 「复制」（2026-09-11 用户裁决：三种类型全支持）：菜单 / Ctrl+C 同一实现
-    register(CARD_ACTION.copy, ({ card }) => {
-      if (card) void handleCopyCards([card])
-    })
-    // 「粘贴」：粘贴进目标分区（落点 = 分区中心），拷贝原件或克隆便签
-    register(PARTITION_ACTION.paste, ({ partition }) => {
-      if (!partition) return
-      const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
-      if (!spacePath) return
-      const center = {
-        x: partition.x + partition.w / 2,
-        y:
-          partition.y +
-          (partition.collapsed
-            ? PARTITION_TITLE_HEIGHT / 2
-            : PARTITION_TITLE_HEIGHT + (partition.h - PARTITION_TITLE_HEIGHT) / 2),
-      }
-      void pasteCards(center, {
-        destDir: joinPath(spacePath, partition.folderPath),
-        groupName: partition.name,
-        partitionId: partition.id,
-      })
-    })
-    register(PARTITION_ACTION.rename, ({ partition }) => {
-      // 2026-09-14 修复：右键「重命名分区」须进入**改名编辑态**（与双击标题一致），
-      // 而不是直接以「当前名」调 handleRenamePartition —— 后者有 `新名 === 现名` 早退守卫，
-      // 传入当前名会直接 return，导致菜单点击毫无反应。进入编辑态后由用户输入新名，
-      // 提交时 PartitionView 经 onRename 回调走五步保护。
-      if (partition) canvasApiRef.current?.beginPartitionRename(partition.id)
-    })
-    register(PARTITION_ACTION.toggleCollapse, ({ partition }) => {
-      if (partition) handleTogglePartitionCollapsed(partition.id)
-    })
-    // 连线菜单：编辑标签（同双击）/ 删除连线（断开连接，2026-09-11 用户裁决）
-    register(CONNECTION_ACTION.editLabel, ({ connection }) => {
-      if (connection) handleEditConnectionLabel(connection.id)
-    })
-    register(CONNECTION_ACTION.remove, ({ connection }) => {
-      if (connection) handleRemoveConnections([connection.id])
+    registerBoardActions({
+      handleRemoveCards,
+      handleCardZIndex,
+      handleCardNote,
+      handleCardTags,
+      openCardWithSystem,
+      handleTogglePartitionCollapsed,
+      handleEditConnectionLabel,
+      handleRemoveConnections,
+      handleCopyCards,
+      pasteCards,
+      setPendingConnectFrom,
+      canvasApiRef,
     })
   }, [
     handleRemoveCards,
