@@ -45,13 +45,14 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 检查 | 命令 | 结果 |
 |---|---|---|
 | 类型检查 | `pnpm typecheck` | 无错误 |
-| 单元测试 | `pnpm test` | 1312 passed / 105 个测试文件 |
-| Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 50 passed |
+| 单元测试 | `pnpm test` | 1471 passed / 120 个测试文件 |
+| Rust 单元测试 | `cargo test`（于 `src-tauri/`） | 61 passed |
 | 代码检查 | `pnpm lint` | 无错误 |
 | 生产构建 | `pnpm build` | 通过 |
 | 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.94 MB / NSIS 2.65 MB（含自动更新组件） |
 
-> 界面截图待补充。
+> **界面截图待补充**：画布渲染依赖 Tauri 运行时，浏览器里跑不出来，只能真机截取。
+> 截图清单与补图步骤见 [`docs/界面走查与截图清单.md`](docs/界面走查与截图清单.md) §2。
 
 ## 下载安装
 

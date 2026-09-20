@@ -50,15 +50,11 @@ export default {
         note: 'hsl(var(--note))',
         // 待办强调琥珀（2026-09-17）：待办卡插件的虚线框 / 复选框 / 连线点，见 globals.css --todo
         todo: 'hsl(var(--todo))',
-        // 第十二章的原始色值，供画布直接引用
-        canvas: {
-          bg: '#F5F3EF', // 米白，像描图纸
-          card: '#FFFFFF', // 卡片底
-          primary: '#5A7D6A', // 苔绿
-          secondary: '#8B9B8E', // 岩灰绿
-          accent: '#C4703E', // 陶土橙（仅重要操作用）
-          text: '#2C3330', // 近黑
-        },
+        // ⚠️ 这里曾有一组 `canvas` 原始色值（第十二章的 #F5F3EF / #5A7D6A …）。
+        //    2026-09-20 D1 深色走查时删除：全项目零引用，而且这类**写死的色值不随
+        //    主题变化** —— 一旦有人引用，深色模式下就会露出一块米白（D1 要防的正是
+        //    这类陷阱）。画布侧需要原始色值时，请走 globals.css 的语义变量，
+        //    例如 MiniMap.tsx 的 cssColor('--primary', …)：语义变量优先、hex 仅兜底。
       },
       borderRadius: {
         lg: 'var(--radius)',
