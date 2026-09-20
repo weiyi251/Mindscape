@@ -134,7 +134,7 @@ describe('listCardTypes', () => {
 // ---------------------------------------------------------------------------
 
 describe('三种核心类型的渲染可区分', () => {
-  it('image：输出真实图片元素（缩略图未就绪时留空 src）', () => {
+  it('image：输出两层图片元素（缩略图在下、原图在上，src 都留空）', () => {
     const html = renderToStaticMarkup(
       renderCard({ card: makeCard({ type: 'image' }), selected: false }),
     )
@@ -142,13 +142,30 @@ describe('三种核心类型的渲染可区分', () => {
     expect(html).toContain('data-card-type="image"')
     expect(html).toContain('data-card-image')
     expect(html).toContain('alt="ref-01.jpg"')
-    // 图片用 contain 等比缩放不变形；且必须有确定高度（flex-1 + min-h-0），
-    // 否则 img 元素盒会按"宽度 × 原图比例"自行撑高，被 overflow-hidden 裁掉
-    const imgTag = html.match(/<img[^>]*>/)?.[0] ?? ''
-    expect(imgTag).toContain('object-contain')
-    expect(imgTag).toContain('flex-1')
-    expect(imgTag).toContain('min-h-0')
+    // 图片用 contain 等比缩放不变形；容器负责撑满（flex-1 + min-h-0），两层 img
+    // 用 inset-0 拿满容器 —— 否则 img 元素盒会按「宽度 × 原图比例」自行撑高，
+    // 被 overflow-hidden 裁掉
+    const originalTag = html.match(/<img[^>]*data-original-url[^>]*>/)?.[0] ?? ''
+    expect(originalTag).toContain('object-contain')
+    expect(originalTag).toContain('inset-0')
+    expect(html).toContain('flex-1')
+    expect(html).toContain('min-h-0')
     expect(html).not.toContain('（空便签）')
+  })
+
+  it('image：两层带档位标记，缩略图在 DOM 里排在原图之前（D3：换档不跳动）', () => {
+    setCardAsset('card-1', { originalPath: 'D:\\s\\a.jpg' })
+
+    const html = renderToStaticMarkup(
+      renderCard({ card: makeCard({ type: 'image' }), selected: false }),
+    )
+
+    expect(html).toContain('data-card-image-stage="thumb"')
+    expect(html).toContain('data-card-image-stage="original"')
+    expect(html).toContain('data-thumb-url')
+    expect(html).toContain('data-source-path="D:\\s\\a.jpg"')
+    // DOM 顺序 = 层叠顺序：缩略图在前（下层），原图在后（上层，覆盖缩略图）
+    expect(html.indexOf('data-thumb-url')).toBeLessThan(html.indexOf('data-original-url'))
   })
 
   it('image：把坐标与原图地址写进 dataset（供原图懒加载直接判交）', () => {

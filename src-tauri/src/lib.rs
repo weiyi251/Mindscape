@@ -38,6 +38,8 @@ pub fn run() {
             commands::layout::read_layout,
             commands::layout::write_layout,
             commands::thumbnail::make_thumbnail,
+            // D3（2026-09-20）：缓存目录缩略图，卡片显示尺寸很小时用它省解码内存
+            commands::thumbnail::make_cached_thumbnail,
             commands::system::read_image_size,
             commands::system::open_with_default,
             commands::system::reveal_in_explorer,

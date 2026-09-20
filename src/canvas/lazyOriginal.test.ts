@@ -1,27 +1,39 @@
 // ============================================================================
-// 模块说明（中文）
-// 原图懒加载的单元测试。对应 17.7「视口内加载原图、视口外加载缩略图」。
+// 测试说明（中文）
+// 原图 / 缩略图两档加载的单元测试（17.7 + D3 大图内存优化）。
 //
-// 测的是纯逻辑层（可见区反算 / 相交 / 挑选），不依赖 DOM：
-//   —— 判定规则是这段代码唯一容易出错的地方，也是「换掉 IntersectionObserver」的依据。
+// 测的是纯逻辑层（可见区反算 / 相交 / 档位与滞回 / 动作计划），不依赖 DOM：
+//   —— 判定规则是这段代码唯一容易出错的地方，也是「换掉 IntersectionObserver」
+//   与「什么情况下释放原图」两个决策的依据。
 //
-// 实现任务：T1.4（阶段一）。
+// 实现任务：T1.4（阶段一）→ D3 扩展（2026-09-20）。
 // ============================================================================
 
 import { describe, it, expect } from 'vitest'
 
 import {
-  ORIGINAL_IMG_SELECTOR,
-  planUpgrade,
+  ORIGINAL_ENTER_SCREEN_W,
+  ORIGINAL_EXIT_SCREEN_W,
+  planStage,
   readImageMeta,
   rectsIntersect,
+  stageForScreenWidth,
   visibleCanvasRect,
 } from '@/canvas/lazyOriginal'
-import type { CanvasRect, LazyImageMeta } from '@/canvas/lazyOriginal'
+import type { CanvasRect, StageItem } from '@/canvas/lazyOriginal'
 
-/** 造一张图片元信息（默认在可见区内、未升级） */
-function meta(over: Partial<LazyImageMeta> = {}): LazyImageMeta {
-  return { x: 0, y: 0, w: 240, h: 180, originalUrl: 'orig.jpg', upgraded: false, ...over }
+/** 造一份判定输入（默认：未见过的卡、屏幕宽 300、可见、有原图、缩略图已就绪） */
+function item(over: Partial<StageItem> = {}): StageItem {
+  return {
+    stage: '',
+    screenWidth: 300,
+    visible: true,
+    hasOriginalUrl: true,
+    hasThumb: true,
+    thumbLoaded: true,
+    hasSourcePath: true,
+    ...over,
+  }
 }
 
 /** 造一个 dataset（模拟 DOMStringMap） */
@@ -94,78 +106,136 @@ describe('rectsIntersect', () => {
 })
 
 describe('readImageMeta', () => {
-  it('读取坐标、原图地址与升级状态', () => {
+  it('读取坐标、原图地址、原图路径与档位', () => {
     const parsed = readImageMeta(
-      dataset({ x: '10', y: '20', w: '240', h: '180', originalUrl: 'a.jpg', upgraded: '1' }),
+      dataset({
+        x: '10',
+        y: '20',
+        w: '240',
+        h: '180',
+        originalUrl: 'a.jpg',
+        sourcePath: 'D:\\s\\a.jpg',
+        cardImageStage: 'thumb',
+      }),
     )
 
-    expect(parsed).toEqual({ x: 10, y: 20, w: 240, h: 180, originalUrl: 'a.jpg', upgraded: true })
+    expect(parsed).toEqual({
+      x: 10,
+      y: 20,
+      w: 240,
+      h: 180,
+      originalUrl: 'a.jpg',
+      sourcePath: 'D:\\s\\a.jpg',
+      stage: 'thumb',
+    })
   })
 
-  it('缺 upgraded 字段 → upgraded 为 false', () => {
+  it('缺可选字段 → 原图地址 / 路径为空串、档位为「还没定过」', () => {
     const parsed = readImageMeta(dataset({ x: '0', y: '0', w: '1', h: '1' }))
-    expect(parsed?.upgraded).toBe(false)
     expect(parsed?.originalUrl).toBe('')
+    expect(parsed?.sourcePath).toBe('')
+    expect(parsed?.stage).toBe('')
   })
 
-  it('坐标字段缺失或为空串 → 返回 null', () => {
+  it('档位是未知字符串 → 当作「还没定过」（脏数据不该让判定卡死）', () => {
+    expect(readImageMeta(dataset({ x: '0', y: '0', w: '1', h: '1', cardImageStage: '???' }))?.stage)
+      .toBe('')
+  })
+
+  it('坐标字段缺失或为空串 / 非数字 → 返回 null', () => {
     expect(readImageMeta(dataset({}))).toBeNull()
     expect(readImageMeta(dataset({ x: '', y: '0', w: '1', h: '1' }))).toBeNull()
     expect(readImageMeta(dataset({ x: 'NaN', y: '0', w: '1', h: '1' }))).toBeNull()
   })
 })
 
-describe('planUpgrade', () => {
-  const visible: CanvasRect = { x: 0, y: 0, w: 1000, h: 800 }
-
-  it('视口内的未升级图片被挑中', () => {
-    const images = [meta({ x: 100, y: 100 }), meta({ x: 5000, y: 100 })]
-
-    expect(planUpgrade(images, visible)).toEqual([0])
+describe('stageForScreenWidth · 档位与滞回', () => {
+  it('首次判定（还没定过）：达到进入阈值用原图，否则用缩略图', () => {
+    expect(stageForScreenWidth('', ORIGINAL_ENTER_SCREEN_W)).toBe('original')
+    expect(stageForScreenWidth('', ORIGINAL_ENTER_SCREEN_W - 1)).toBe('thumb')
   })
 
-  it('已升级的图片不再被挑中（单向升级）', () => {
-    const images = [meta({ upgraded: true }), meta({ x: 10, y: 10 })]
-
-    expect(planUpgrade(images, visible)).toEqual([1])
+  it('当前是缩略图档：滞回区内**不**升级（避免临界尺寸反复换图）', () => {
+    expect(stageForScreenWidth('thumb', ORIGINAL_ENTER_SCREEN_W - 1)).toBe('thumb')
+    expect(stageForScreenWidth('thumb', ORIGINAL_ENTER_SCREEN_W)).toBe('original')
   })
 
-  it('元信息为 null（dataset 残缺）的图片被安全跳过', () => {
-    expect(planUpgrade([null, meta()], visible)).toEqual([1])
+  it('当前是原图档：滞回区内**不**降级，缩到退出阈值才降', () => {
+    expect(stageForScreenWidth('original', ORIGINAL_EXIT_SCREEN_W + 1)).toBe('original')
+    expect(stageForScreenWidth('original', ORIGINAL_EXIT_SCREEN_W)).toBe('thumb')
   })
 
-  it('空数组 → 空结果', () => {
-    expect(planUpgrade([], visible)).toEqual([])
+  it('两个阈值一进一出，且进入阈值大于退出阈值（否则滞回无意义）', () => {
+    expect(ORIGINAL_ENTER_SCREEN_W).toBeGreaterThan(ORIGINAL_EXIT_SCREEN_W)
   })
 
-  it('平移后原本在视口外的图片变得可见（transform 不影响判定）', () => {
-    const images = [meta({ x: 2000, y: 0 })]
-
-    // 画布向左平移 1800px → 可见范围变为 [1800, 2800]
-    const shifted = visibleCanvasRect({ zoom: 1, offsetX: -1800, offsetY: 0 }, 1000, 800)
-
-    expect(planUpgrade(images, visible)).toEqual([])
-    expect(planUpgrade(images, shifted)).toEqual([0])
-  })
-
-  it('放大到 400% 时只有真正可见的卡片被挑中', () => {
-    const images = [meta({ x: 0, y: 0 }), meta({ x: 400, y: 0 })]
-
-    // 400% 时可见范围只有 250 × 200 画布像素
-    const zoomed = visibleCanvasRect({ zoom: 4, offsetX: 0, offsetY: 0 }, 1000, 800)
-
-    expect(planUpgrade(images, zoomed)).toEqual([0])
-  })
-
-  it('全部可见且都未升级 → 全部挑中，顺序与输入一致', () => {
-    const images = [meta({ x: 0 }), meta({ x: 300 }), meta({ x: 600 })]
-
-    expect(planUpgrade(images, visible)).toEqual([0, 1, 2])
+  it('非有限值 / 负数按 0 处理 → 缩略图档，不抛错', () => {
+    expect(stageForScreenWidth('', Number.NaN)).toBe('thumb')
+    expect(stageForScreenWidth('original', Number.NaN)).toBe('thumb')
+    expect(stageForScreenWidth('', -100)).toBe('thumb')
+    expect(stageForScreenWidth('original', Number.POSITIVE_INFINITY)).toBe('original')
   })
 })
 
-describe('ORIGINAL_IMG_SELECTOR', () => {
-  it('是 img[data-original-url]，与渲染层写入的属性名一致', () => {
-    expect(ORIGINAL_IMG_SELECTOR).toBe('img[data-original-url]')
+describe('planStage · 动作计划', () => {
+  it('该用原图且可见 → 写原图 src', () => {
+    expect(planStage(item({ stage: 'thumb', screenWidth: 400 })).original).toBe('url')
+  })
+
+  it('该用原图但**不可见** → 不预加载（视口外不解码大图）', () => {
+    const plan = planStage(item({ stage: 'thumb', screenWidth: 400, visible: false }))
+    expect(plan.original).toBe('unchanged')
+  })
+
+  it('已经是原图档 → 不重复写 src', () => {
+    const plan = planStage(item({ stage: 'original', screenWidth: 400 }))
+    expect(plan.original).toBe('unchanged')
+    expect(plan.thumb).toBe('unchanged')
+  })
+
+  it('缩小且缩略图就绪 → 释放原图（省解码内存）', () => {
+    const plan = planStage(item({ stage: 'original', screenWidth: 80 }))
+    expect(plan.original).toBe('none')
+    expect(plan.requestThumb).toBe(false)
+  })
+
+  it('缩略图就绪但还没写进 img → 顺手补写 src', () => {
+    const plan = planStage(item({ stage: 'original', screenWidth: 80, thumbLoaded: false }))
+    expect(plan.thumb).toBe('url')
+  })
+
+  it('缩小但没有缩略图 → 请求生成，本帧**保留**原图（不留空白）', () => {
+    const plan = planStage(item({ stage: 'original', screenWidth: 80, hasThumb: false }))
+    expect(plan.original).toBe('unchanged')
+    expect(plan.requestThumb).toBe(true)
+  })
+
+  it('缩小、没有缩略图、也从未加载过原图 → 先用原图顶上，同时请求生成', () => {
+    const plan = planStage(item({ stage: '', screenWidth: 80, hasThumb: false }))
+    expect(plan.original).toBe('url')
+    expect(plan.requestThumb).toBe(true)
+  })
+
+  it('缩小、缩略图已就绪但从未加载过原图 → 直接用缩略图，不加载原图', () => {
+    const plan = planStage(item({ stage: '', screenWidth: 80 }))
+    expect(plan).toEqual({ original: 'unchanged', thumb: 'unchanged', requestThumb: false })
+  })
+
+  it('不知道原图绝对路径 → 无法请求生成，只做能做到的部分', () => {
+    const plan = planStage(item({ stage: 'original', screenWidth: 80, hasSourcePath: false, hasThumb: false }))
+    expect(plan.requestThumb).toBe(false)
+    expect(plan.original).toBe('unchanged')
+  })
+
+  it('没有原图 URL（未登记 / 非桌面）→ 不动任何 src，也不请求', () => {
+    const plan = planStage(
+      item({ stage: '', screenWidth: 80, hasOriginalUrl: false, hasThumb: false, hasSourcePath: false }),
+    )
+    expect(plan).toEqual({ original: 'unchanged', thumb: 'unchanged', requestThumb: false })
+  })
+
+  it('缩略图档且缩略图已写入 → 完全不动 DOM（幂等，避免无谓重解码）', () => {
+    const plan = planStage(item({ stage: 'thumb', screenWidth: 80 }))
+    expect(plan).toEqual({ original: 'unchanged', thumb: 'unchanged', requestThumb: false })
   })
 })

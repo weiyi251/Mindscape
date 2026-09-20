@@ -28,6 +28,7 @@ import { CORE_CARD_TYPES } from '@/core/types'
 import { toAssetUrl } from '@/core/utils/media'
 import { getCardOriginalPath } from '@/core/board/cardAssets'
 import { hoverLabelOfMeta, tagsOfMeta } from '@/core/board/cardMeta'
+import { IMAGE_STAGE_ATTR, SOURCE_PATH_ATTR } from '@/core/board/imageStages'
 import {
   NOTE_BG_ALPHA,
   NOTE_BORDER_ALPHA,
@@ -382,31 +383,48 @@ function shell(
   )
 }
 
-/** image：图片本体（可见时由 lazyOriginal 写入原图 src，见 canvas/lazyOriginal.ts） */
+/** image：图片本体（两层叠放：下层缩略图、上层原图；档位由 lazyOriginal 判定） */
 function renderImage({ card, selected }: CardRenderProps): ReactNode {
   const name = basename(card.filePath)
-  const originalUrl = toAssetUrl(getCardOriginalPath(card.id))
+  const sourcePath = getCardOriginalPath(card.id)
+  const originalUrl = toAssetUrl(sourcePath)
   // 备注 / 标签走顶部外挂层（2026-09-13 用户裁决）：渲染在卡片盒**上方外侧**，
   // 与图片零重叠；卡片盒尺寸比例完全不变，随卡片一同移动（见 imageOverlay 说明）。
   // 悬浮标记（色号）在下方左下角；分辨率徽章在**上方右上角**（2026-09-18 用户裁决）
   const overlay = imageOverlay(card)
 
-  // 图片必须**同时有确定宽和高**（flex-1 + min-h-0）才能让 object-contain 生效：
-  //   · 只给 w-full 时，img 元素盒的高度会按"宽度 × 原图比例"自己撑开；
-  //     卡片比原图更宽更扁（例如 480×135 装 16:9 图）时元素盒会比卡片高，
-  //     多出的部分被外壳的 overflow-hidden 裁掉 —— 表现就是"图片显示不完整"。
-  //   · 给成 flex-1（外挂层在卡片盒之外，不参与布局，图片元素盒恒占满卡片）后
-  //     元素盒被容器约束，object-contain 才真正做"等比缩放 + 居中留白"，
-  //     任何卡片尺寸下都完整不变形。
-  // ⚠️ 卡片缩放本身也已锁定原图比例（cardResizeController），这里是渲染层兜底：
-  //    旧布局里已经失真的卡片都能正确显示。
-  // 坐标写进 dataset，供原图懒加载在**不触发 React 更新**的前提下直接判交（17.3）；
-  // src 初始为空（方案 A：不生成缩略图）——可见时由 lazyOriginal 把原图写进 img.src，
-  // 视口外的卡片完全不加载（17.11 反模式 9）。
-  const body = createElement('img', {
-    key: 'image',
+  // 【两层结构】（D3：2026-09-20 用户计划第 4 步：大图内存优化）
+  //   · 下层 `data-thumb-url`：**缩略图**，只渲染空壳 —— src 由 canvas/lazyOriginal
+  //     在缓存就绪时直写（渲染那一刻读不到「稍后生成好」的结果，而写进 state 会让
+  //     每张图在生成完成时重渲染一次，违背 17.3）；
+  //   · 上层 `data-original-url`：**原图**，初始 src 同样为空，由判定循环按档位写入；
+  //   · 两层都是 absolute inset-0 + object-contain，布局完全一致 —— 换档不跳动，
+  //     释放原图（移除 src）时下层的缩略图直接顶上，视觉无闪。
+  //
+  // 图片必须**同时有确定宽和高**才能让 object-contain 生效：容器用 flex-1 + min-h-0
+  // 撑满卡片盒，两层 img 用 inset-0 拿满容器。若只给宽度不给高度，img 元素盒会按
+  // 「宽度 × 原图比例」自己撑开；卡片比原图更宽更扁（例如 480×135 装 16:9 图）时
+  // 元素盒会比卡片高，多出的部分被外壳的 overflow-hidden 裁掉 —— 表现就是「图片
+  // 显示不完整」。⚠️ 卡片缩放本身也已锁定原图比例（cardResizeController），
+  // 这里是渲染层兜底：旧布局里已经失真的卡片都能正确显示。
+  //
+  // 坐标写进 dataset，供判定循环在**不触发 React 更新**的前提下直接判交（17.3）。
+  const thumbBody = createElement('img', {
+    key: 'thumb',
+    [IMAGE_STAGE_ATTR]: 'thumb',
+    'data-thumb-url': '',
+    alt: '',
+    draggable: false,
+    decoding: 'async',
+    className: 'pointer-events-none absolute inset-0 h-full w-full select-none object-contain',
+  })
+
+  const originalBody = createElement('img', {
+    key: 'original',
+    [IMAGE_STAGE_ATTR]: 'original',
     'data-card-image': '',
     'data-original-url': originalUrl,
+    [SOURCE_PATH_ATTR]: sourcePath,
     'data-x': card.x,
     'data-y': card.y,
     'data-w': card.w,
@@ -419,12 +437,18 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     // imageResolution 直写下方徽章文本（不走 state，见 imageResolution.ts 文件头）
     onLoad: handleImageLoad,
     onError: handleImageError,
-    className: [
-      'pointer-events-none min-h-0 w-full flex-1 select-none object-contain',
-      // 原图 URL 缺失（非 Tauri 环境 / 未登记）时给一块可辨识的底色，不留白
-      originalUrl ? '' : 'bg-muted/60 text-[11px] text-muted-foreground',
-    ].join(' '),
+    className: 'pointer-events-none absolute inset-0 h-full w-full select-none object-contain',
   })
+
+  // 没有原图 URL（非 Tauri 环境 / 未登记）时给容器一块可辨识的底色，不留白
+  const body = createElement(
+    'div',
+    {
+      key: 'image-box',
+      className: `relative min-h-0 w-full flex-1${originalUrl ? '' : ' bg-muted/60'}`,
+    },
+    [thumbBody, originalBody],
+  )
 
   const shellEl = shell(card, selected, `flex-col ${CARD_VISUAL_DEFAULT}`, [body])
 
