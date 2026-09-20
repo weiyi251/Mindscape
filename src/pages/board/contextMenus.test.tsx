@@ -78,6 +78,7 @@ describe('buildCardMenuItems', () => {
     spacePath: 'E:/space',
     removedView: false,
     selectedIds: [] as string[],
+    selectedCards: [] as Card[],
     onMove: vi.fn(),
     onRestore: vi.fn(),
     onSetColor: vi.fn(),
@@ -109,7 +110,36 @@ describe('buildCardMenuItems', () => {
       onMove,
     })
     items.find((item) => item.id === CARD_ACTION.move)?.run()
-    expect(onMove).toHaveBeenCalledWith(card, { x: 10, y: 20 })
+    // 2026-09-20 起支持批量：目标以**数组**交给流程层（单卡即长度 1 的数组）
+    expect(onMove).toHaveBeenCalledWith([card], { x: 10, y: 20 })
+  })
+
+  it('多选批量移动（2026-09-20）：右键的卡在选中集合里时整批移动，标签带张数', () => {
+    const onMove = vi.fn()
+    const card = fileCard({ id: 'c1' })
+    const other = fileCard({ id: 'c2', filePath: 'b.txt', originalPath: 'b.txt' })
+    const items = buildCardMenuItems({
+      ...base,
+      card,
+      selectedIds: ['c1', 'c2'],
+      selectedCards: [card, other],
+      onMove,
+    })
+
+    expect(items.find((item) => item.id === CARD_ACTION.move)?.label).toBe('移动 2 张到…')
+    items.find((item) => item.id === CARD_ACTION.move)?.run()
+    expect(onMove).toHaveBeenCalledWith([card, other], { x: 10, y: 20 })
+  })
+
+  it('选中集合只有右键那张卡（单选）时不显示批量标签', () => {
+    const card = fileCard({ id: 'c1' })
+    const items = buildCardMenuItems({
+      ...base,
+      card,
+      selectedIds: ['c1'],
+      selectedCards: [card],
+    })
+    expect(items.find((item) => item.id === CARD_ACTION.move)?.label).toBe('移动到…')
   })
 
   it('「重命名文件」改写为浮层回调，只带卡片', () => {
@@ -437,6 +467,7 @@ describe('buildCardMenuItems · 锁定卡片（2026-09-20）', () => {
     spacePath: 'E:/space',
     removedView: false,
     selectedIds: [] as string[],
+    selectedCards: [] as Card[],
     onMove: vi.fn(),
     onRestore: vi.fn(),
     onSetColor: vi.fn(),

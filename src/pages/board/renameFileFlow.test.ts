@@ -35,12 +35,12 @@ function makeDeps(overrides: Partial<RenameCardFileDeps> = {}): RenameCardFileDe
   executed: Command[]
   scheduled: number
   errors: string[]
-  fileRefCalls: { card: Card; updates: CardFileRefUpdate[] }[]
+  fileRefCalls: { updates: CardFileRefUpdate[] }[]
 } {
   const executed: Command[] = []
   let scheduled = 0
   const errors: string[] = []
-  const fileRefCalls: { card: Card; updates: CardFileRefUpdate[] }[] = []
+  const fileRefCalls: { updates: CardFileRefUpdate[] }[] = []
   return {
     spacePath: 'D:\\space',
     provider: {
@@ -57,8 +57,8 @@ function makeDeps(overrides: Partial<RenameCardFileDeps> = {}): RenameCardFileDe
     onError: vi.fn((message: string) => {
       errors.push(message)
     }),
-    applyFileRefs: vi.fn((card: Card, updates: CardFileRefUpdate[]) => {
-      fileRefCalls.push({ card, updates })
+    applyFileRefs: vi.fn((updates: CardFileRefUpdate[]) => {
+      fileRefCalls.push({ updates })
     }),
     ...overrides,
     get executed() {
@@ -77,7 +77,7 @@ function makeDeps(overrides: Partial<RenameCardFileDeps> = {}): RenameCardFileDe
     executed: Command[]
     scheduled: number
     errors: string[]
-    fileRefCalls: { card: Card; updates: CardFileRefUpdate[] }[]
+    fileRefCalls: { updates: CardFileRefUpdate[] }[]
   }
 }
 

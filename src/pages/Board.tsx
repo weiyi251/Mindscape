@@ -79,7 +79,7 @@ import { setPluginBoardBridge } from '@/core/plugin/boardBridge'
 import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
 import { zCardSchema } from '@/core/types'
-import type { Card, Connection, Partition } from '@/core/types'
+import type { Card, Connection } from '@/core/types'
 import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
 import { cardSizeForImage } from '@/core/board/cardSize'
 import { cardTypeFor } from '@/core/board/imageTypes'
@@ -98,12 +98,7 @@ import { isValidFolderName } from '@/core/board/partitions'
 import { readClipboardFiles } from '@/core/system/clipboard'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
-import {
-  buildCardMenuItems,
-  buildCanvasMenuItems,
-  buildConnectionMenuItems,
-  buildPartitionMenuItems,
-} from '@/pages/board/contextMenus'
+import { buildCanvasMenuItems } from '@/pages/board/contextMenus'
 import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
@@ -113,6 +108,12 @@ import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
 import { registerBoardActions } from '@/pages/board/registerBoardActions'
+import {
+  openCardContextMenu,
+  openConnectionContextMenu,
+  openPartitionContextMenu,
+} from '@/pages/board/menuEntries'
+import type { MenuEntryDeps } from '@/pages/board/menuEntries'
 
 /** 17.7：卡片数量上限提示阈值 */
 const CARD_COUNT_WARNING = 100
@@ -1386,11 +1387,20 @@ export function Board() {
    * image 卡先重登记资源表（方案 A 裁决 6：资源写入早于 store 更新），
    * undo 复用同一路径把原图绝对路径写回旧值。
    */
-  const applyFileRefUpdates = useCallback((card: Card, updates: CardFileRefUpdate[]) => {
+  /**
+   * 卡片文件归属写回（renameFileFlow / moveCardFlow 共用）。
+   * 2026-09-20 起支持批量（多选移动）：图片卡按**各自的类型**重登记资源表 ——
+   * 类型从 store 现取，不再由调用方传「代表卡」（批量里可能混着便签）。
+   */
+  const applyFileRefUpdates = useCallback((updates: CardFileRefUpdate[]) => {
     const spacePath = useSpacesStore.getState().getCurrentSpace()?.folderPath
-    if (card.type === 'image' && spacePath) {
+    if (spacePath) {
+      const cards = useBoardStore.getState().cards
       for (const update of updates) {
-        setCardAsset(update.id, { originalPath: joinPath(spacePath, update.filePath) })
+        const target = cards.find((item) => item.id === update.id)
+        if (target?.type === 'image') {
+          setCardAsset(update.id, { originalPath: joinPath(spacePath, update.filePath) })
+        }
       }
     }
     useBoardStore.getState().setCardFileRefs(updates)
@@ -1402,9 +1412,9 @@ export function Board() {
    * moveCardFlow.ts（2026-09-15，为「重命名文件」腾 Board 行数预算）。
    */
   const handleCardMove = useCallback(
-    (card: Card, screen: { x: number; y: number }) => {
+    (cards: Card[], screen: { x: number; y: number }) => {
       const snapshot = useBoardStore.getState()
-      openMoveCardMenu(card, screen, {
+      openMoveCardMenu(cards, screen, {
         spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
         provider: localStorageProvider,
         partitions: snapshot.partitions,
@@ -1413,7 +1423,7 @@ export function Board() {
         schedule: () => writer.schedule(),
         showMenu: setContextMenu,
         onError: setActionError,
-        applyUpdate: (updates) => applyFileRefUpdates(card, updates),
+        applyUpdate: applyFileRefUpdates,
         applyPartitionRects: (rects) => useBoardStore.getState().setPartitionRects(rects),
       })
     },
@@ -1492,64 +1502,48 @@ export function Board() {
     })
   }, [history, writer])
 
-  // ---- T3.9 右键菜单的弹出入口：菜单数组由 pages/board/contextMenus 组装 ----
-  // 这里只负责「取上下文 + 放入浮层 state」；菜单项配置与回调映射都在那边。
-
-  const handleCardContextMenu = useCallback(
-    (card: Card, screen: { x: number; y: number }) => {
-      const items = buildCardMenuItems({
-        card,
-        screen,
-        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
-        removedView,
-        selectedIds,
-        onMove: handleCardMove,
-        onRestore: handleRestoreCards,
-        onSetColor: handleNoteColor,
-        onDeleteForever: handlePermanentDelete,
-        // 「重命名文件」（2026-09-15 用户需求）：依赖组就地组装，编排见 renameFileFlow.ts
-        onRenameFile: (target) =>
-          openRenameFilePrompt(target, {
-            spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
-            provider: localStorageProvider,
-            readOnly: useBoardStore.getState().readOnly,
-            history,
-            writer,
-            setPrompt,
-            setActionError,
-            applyFileRefs: applyFileRefUpdates,
-          }),
-      })
-      setContextMenu({ x: screen.x, y: screen.y, items })
-    },
-    [handleCardMove, removedView, selectedIds, handleRestoreCards, handleNoteColor, handlePermanentDelete, history, writer, applyFileRefUpdates],
-  )
-
-  const handlePartitionContextMenu = useCallback(
-    (partition: Partition, screen: { x: number; y: number }) => {
-      const items = buildPartitionMenuItems({
-        partition,
-        screen,
-        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
-        hasCopiedCards: copiedCards.length > 0,
-        onSetColor: handlePartitionColor,
-      })
-      setContextMenu({ x: screen.x, y: screen.y, items })
-    },
-    [handlePartitionColor, copiedCards.length],
-  )
-
-  const handleConnectionContextMenu = useCallback(
-    (connectionId: string, screen: { x: number; y: number }) => {
-      const connection = useBoardStore.getState().connections.find((item) => item.id === connectionId)
-      if (!connection) return
-      const items = buildConnectionMenuItems({
-        connection,
-        spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
-      })
-      setContextMenu({ x: screen.x, y: screen.y, items })
-    },
-    [],
+  // ---- T3.9 右键菜单的弹出入口 ----
+  // 取上下文 / 组装菜单 / 放入浮层 state 的整块已于 2026-09-20 外抽到
+  // pages/board/menuEntries.ts（Board 行数棘轮顶到上限）；这里只留依赖组装。
+  const menuDeps = useMemo<MenuEntryDeps>(
+    () => ({
+      setContextMenu,
+      removedView,
+      selectedIds,
+      cards,
+      onMove: handleCardMove,
+      onRestore: handleRestoreCards,
+      onSetColor: handleNoteColor,
+      onDeleteForever: handlePermanentDelete,
+      onRenameFile: (target) =>
+        openRenameFilePrompt(target, {
+          spacePath: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? '',
+          provider: localStorageProvider,
+          readOnly: useBoardStore.getState().readOnly,
+          history,
+          writer,
+          setPrompt,
+          setActionError,
+          applyFileRefs: applyFileRefUpdates,
+        }),
+      hasCopiedCards: copiedCards.length > 0,
+      onSetPartitionColor: handlePartitionColor,
+    }),
+    [
+      setContextMenu,
+      removedView,
+      selectedIds,
+      cards,
+      handleCardMove,
+      handleRestoreCards,
+      handleNoteColor,
+      handlePermanentDelete,
+      copiedCards.length,
+      handlePartitionColor,
+      history,
+      writer,
+      applyFileRefUpdates,
+    ],
   )
 
   /**
@@ -1895,9 +1889,9 @@ export function Board() {
               onSelectConnections={handleSelectConnections}
               onEditConnectionLabel={handleEditConnectionLabel}
               onCreateConnection={handleCreateConnection}
-              onCardContextMenu={handleCardContextMenu}
-              onConnectionContextMenu={handleConnectionContextMenu}
-              onPartitionContextMenu={handlePartitionContextMenu}
+              onCardContextMenu={(card, screen) => openCardContextMenu(card, screen, menuDeps)}
+              onConnectionContextMenu={(id, screen) => openConnectionContextMenu(id, screen, menuDeps)}
+              onPartitionContextMenu={(partition, screen) => openPartitionContextMenu(partition, screen, menuDeps)}
               onCanvasContextMenu={handleCanvasContextMenu}
               onOpenCard={(card) => void openCardWithSystem(card)}
               onCommitNote={handleCommitNote}

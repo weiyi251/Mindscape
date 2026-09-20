@@ -54,7 +54,7 @@ export interface RenameCardFileDeps {
    * 「资源写入早于 store 更新」），再把 filePath / originalPath 写回 store
    * （setCardFileRefs）。group 由命令保持原值。
    */
-  applyFileRefs: (card: Card, updates: CardFileRefUpdate[]) => void
+  applyFileRefs: (updates: CardFileRefUpdate[]) => void
 }
 
 /**
@@ -109,7 +109,7 @@ export async function runRenameCardFile(
       createRenameCardFileCommand(card, newName, {
         spacePath: deps.spacePath,
         provider: deps.provider,
-        applyUpdate: (updates) => deps.applyFileRefs(card, updates),
+        applyUpdate: deps.applyFileRefs,
       }),
     )
     deps.schedule()
@@ -134,7 +134,7 @@ export interface RenameFileBinding {
   writer: { schedule: () => void }
   setPrompt: (state: PromptDialogState | null) => void
   setActionError: (message: string) => void
-  applyFileRefs: (card: Card, updates: CardFileRefUpdate[]) => void
+  applyFileRefs: (updates: CardFileRefUpdate[]) => void
 }
 
 export function openRenameFilePrompt(card: Card, binding: RenameFileBinding): void {

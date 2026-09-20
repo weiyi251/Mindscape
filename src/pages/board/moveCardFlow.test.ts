@@ -87,12 +87,12 @@ describe('openMoveCardMenu', () => {
   it('早退守卫：无空间 / 只读 / 便签（无文件）不弹菜单', () => {
     const card = makeImageCard('a.jpg')
     expect(
-      openMoveCardMenu(card, { x: 0, y: 0 }, makeDeps({ spacePath: '' })),
+      openMoveCardMenu([card], { x: 0, y: 0 }, makeDeps({ spacePath: '' })),
     ).toBeUndefined()
     expect(makeDeps().showMenu).not.toHaveBeenCalled()
 
     const readOnlyDeps = makeDeps({ readOnly: true })
-    openMoveCardMenu(card, { x: 0, y: 0 }, readOnlyDeps)
+    openMoveCardMenu([card], { x: 0, y: 0 }, readOnlyDeps)
     expect(vi.mocked(readOnlyDeps.showMenu)).not.toHaveBeenCalled()
     expect(readOnlyDeps.errors).toEqual([MOVE_CARD_TEXT.readOnly])
 
@@ -107,13 +107,13 @@ describe('openMoveCardMenu', () => {
       w: 200,
       h: 160,
     })
-    openMoveCardMenu(note, { x: 0, y: 0 }, noteDeps)
+    openMoveCardMenu([note], { x: 0, y: 0 }, noteDeps)
     expect(vi.mocked(noteDeps.showMenu)).not.toHaveBeenCalled()
   })
 
   it('二级菜单列出「未分类」与其他分区；没有目标时报错', () => {
     const deps = makeDeps()
-    openMoveCardMenu(makeImageCard('分区A/a.jpg'), { x: 5, y: 6 }, deps)
+    openMoveCardMenu([makeImageCard('分区A/a.jpg')], { x: 5, y: 6 }, deps)
     const menu = vi.mocked(deps.showMenu).mock.calls[0][0] as {
       x: number
       y: number
@@ -126,13 +126,13 @@ describe('openMoveCardMenu', () => {
 
     // 卡片在空间根目录、也没有任何分区：无「未分类」项、无其他分区 → 无目标
     const emptyDeps = makeDeps({ partitions: [] })
-    openMoveCardMenu(makeImageCard('a.jpg'), { x: 0, y: 0 }, emptyDeps)
+    openMoveCardMenu([makeImageCard('a.jpg')], { x: 0, y: 0 }, emptyDeps)
     expect(emptyDeps.errors).toEqual([MOVE_CARD_TEXT.noTarget])
   })
 
   it('选中「未分类」：执行移动命令（目标 = 空间根目录），随后落盘', async () => {
     const deps = makeDeps()
-    openMoveCardMenu(makeImageCard('分区A/a.jpg'), { x: 0, y: 0 }, deps)
+    openMoveCardMenu([makeImageCard('分区A/a.jpg')], { x: 0, y: 0 }, deps)
     const menu = vi.mocked(deps.showMenu).mock.calls[0][0] as { items: { id: string; run: () => void }[] }
     menu.items[0].run()
     await Promise.resolve()
@@ -152,7 +152,7 @@ describe('openMoveCardMenu', () => {
         throw new Error('磁盘已满')
       }),
     })
-    openMoveCardMenu(makeImageCard('分区A/a.jpg'), { x: 0, y: 0 }, deps)
+    openMoveCardMenu([makeImageCard('分区A/a.jpg')], { x: 0, y: 0 }, deps)
     const menu = vi.mocked(deps.showMenu).mock.calls[0][0] as { items: { run: () => void }[] }
     menu.items[0].run()
     await Promise.resolve()

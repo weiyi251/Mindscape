@@ -60,8 +60,10 @@ export interface CardMenuParams {
   spacePath: string
   removedView: boolean
   selectedIds: string[]
-  /** 「移动到…」：展开二级文件夹选择菜单（2026-09-12 用户裁决） */
-  onMove: (card: Card, screen: ScreenPoint) => void
+  /** 选中集合对应的卡片对象（多选批量移动需要 Card，2026-09-20） */
+  selectedCards: Card[]
+  /** 「移动到…」：展开二级文件夹选择菜单（2026-09-12 用户裁决；2026-09-20 支持批量） */
+  onMove: (cards: Card[], screen: ScreenPoint) => void
   /** 「恢复」：把选中的卡片从「已移除」视图恢复 */
   onRestore: (ids: string[]) => void
   /** 「便签颜色…」：展开二级色板菜单（2026-09-15 用户需求） */
@@ -74,22 +76,30 @@ export interface CardMenuParams {
 
 /** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复 / 彻底删除」项） */
 export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[] {
-  const { card, screen, spacePath, removedView, selectedIds, onMove, onRestore, onSetColor, onRenameFile, onDeleteForever } = params
+  const { card, screen, spacePath, removedView, selectedIds, selectedCards, onMove, onRestore, onSetColor, onRenameFile, onDeleteForever } = params
   const ctx = { spacePath, card }
+  // 右键的卡片若在选中集合里 → 整批操作（2026-09-20 多选批量移动）；
+  // 需要 Card 对象，故按 id 从调用方给的 selectedCards 里取（没有就退回单卡）
+  const moveTargets =
+    selectedIds.includes(card.id) && selectedCards.length > 1
+      ? selectedCards.filter((item) => selectedIds.includes(item.id) || item.id === card.id)
+      : [card]
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
-    // 「锁定卡片」的标签随卡片状态翻转（配置数组是静态的，拿不到卡片状态）
+    // 「锁定卡片」「移动到…」的标签随状态翻转（配置数组是静态的，拿不到卡片状态）
     label:
       item.id === CARD_ACTION.toggleLock
         ? lockedOfMeta(card.meta)
           ? '解锁卡片'
           : '锁定卡片'
-        : item.label,
+        : item.id === CARD_ACTION.move && moveTargets.length > 1
+          ? `移动 ${moveTargets.length} 张到…`
+          : item.label,
     danger: item.id === CARD_ACTION.remove,
     // 「移动到…」「便签颜色…」「重命名文件」不走配置中心的 action，改为展开二级菜单 / 弹浮层
     run:
       item.id === CARD_ACTION.move
-        ? () => onMove(card, screen)
+        ? () => onMove(moveTargets, screen)
         : item.id === CARD_ACTION.setColor
           ? () => onSetColor(card, screen)
           : item.id === CARD_ACTION.renameFile
@@ -206,21 +216,25 @@ export function buildNoteColorItems(onPick: (color: string | null) => void): Con
  */
 export function buildCardMoveItems(params: {
   partitions: Partition[]
-  /** 卡片当前所在的最上层文件夹（相对空间根） */
+  /** 卡片当前所在的最上层文件夹（相对空间根）；多卡时只在「全部同目录」时才给 */
   currentFolder: string
+  /** 多选批量移动时的张数（>1 时菜单项标注「移到 N 张」，2026-09-20） */
+  countLabel?: number
   onMove: (
     targetFolderRel: string,
     groupName: string | undefined,
     partition: Partition | null,
   ) => void
 }): ContextMenuItemData[] {
-  const { partitions, currentFolder, onMove } = params
+  const { partitions, currentFolder, countLabel, onMove } = params
+  // 批量时在名字后标注张数：「移动到『旅行』（3 张）」，避免歧义
+  const withCount = (name: string) => (countLabel ? `${name}（${countLabel} 张）` : name)
   return [
     ...(currentFolder !== ''
       ? [
           {
             id: `${CARD_ACTION.move}:unclassified`,
-            label: UNCLASSIFIED_DIR,
+            label: withCount(UNCLASSIFIED_DIR),
             run: () => onMove('', undefined, null),
           },
         ]
@@ -230,7 +244,7 @@ export function buildCardMoveItems(params: {
       .filter((partition) => partition.folderPath !== currentFolder)
       .map((partition) => ({
         id: `${CARD_ACTION.move}:${partition.id}`,
-        label: partition.name,
+        label: withCount(partition.name),
         run: () => onMove(partition.folderPath, partition.name, partition),
       })),
   ]

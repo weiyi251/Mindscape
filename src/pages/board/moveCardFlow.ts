@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { buildCardMoveItems } from './contextMenus'
-import { createMoveCardToFolderCommand } from '@/core/commands/impl/moveCardToFolder'
+import { createMoveCardsToFolderCommand } from '@/core/commands/impl/moveCardToFolder'
 import type { CardFileRefUpdate } from '@/core/commands/impl/moveCardToFolder'
 import { currentTopFolderOf } from '@/core/commands/impl/moveCardToFolder'
 import type { Command } from '@/core/commands/types'
@@ -56,13 +56,17 @@ export interface MoveCardFlowDeps {
 
 /**
  * 弹出「移动到…」二级文件夹菜单；选定后执行可撤销的移动命令并请求落盘。
- * 早退守卫：无空间 / 只读 / 便签（无文件）/ 没有可移动目标。
+ * 早退守卫：无空间 / 只读 / 全部目标都无文件（便签）/ 没有可移动目标。
  *
- * @param card   目标卡片
+ * 【批量（2026-09-20 用户要求）】cards 可以是多张（框选后右键 → 整批移动）：
+ * 一次动作一条组合命令，`Ctrl+Z` 一步整组还原。无文件的便签自动跳过
+ * （它们在菜单层的 targets 里，但没有可移动的文件）。
+ *
+ * @param cards  目标卡片（至少一张；右键点中的那张 + 选中集合内的其余卡片）
  * @param screen 二级菜单的屏幕坐标（沿用一级菜单的弹出位置）
  */
 export function openMoveCardMenu(
-  card: Card,
+  cards: readonly Card[],
   screen: { x: number; y: number },
   deps: MoveCardFlowDeps,
 ): void {
@@ -71,7 +75,9 @@ export function openMoveCardMenu(
     deps.onError(MOVE_CARD_TEXT.readOnly)
     return
   }
-  if (card.filePath === '') return
+  // 便签（filePath 为空）没有文件可搬，从批次里剔除
+  const movables = cards.filter((card) => card.filePath !== '')
+  if (movables.length === 0) return
 
   const move = (
     targetFolderRel: string,
@@ -80,7 +86,7 @@ export function openMoveCardMenu(
   ) => {
     void deps
       .execute(
-        createMoveCardToFolderCommand(card, targetFolderRel, groupName, partition, {
+        createMoveCardsToFolderCommand(movables, targetFolderRel, groupName, partition, {
           spacePath: deps.spacePath,
           // 资源表写入必须早于 store 更新（渲染时读快照，方案 A 裁决 6）；
           // undo 复用同一路径把原图绝对路径写回旧值 —— 由 deps.applyUpdate 的
@@ -98,9 +104,16 @@ export function openMoveCardMenu(
       })
   }
 
+  // 隐藏「目标已经在的文件夹」：单卡按它自己的所在目录；多卡时**只有全部目标
+  // 都已在该目录**才隐藏（否则用户没法把散落的卡片归并到其中之一）
+  const folders = new Set(movables.map((card) => currentTopFolderOf(card.filePath)))
+  const currentFolder = folders.size === 1 ? [...folders][0] : ''
+
   const items = buildCardMoveItems({
     partitions: deps.partitions,
-    currentFolder: currentTopFolderOf(card.filePath),
+    currentFolder,
+    // 多卡时逐项给出张数，避免「移到哪、移几张」有歧义
+    countLabel: movables.length > 1 ? movables.length : undefined,
     onMove: move,
   })
 

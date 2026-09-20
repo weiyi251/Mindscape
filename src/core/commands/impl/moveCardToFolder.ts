@@ -14,9 +14,12 @@
 // 【分区包围盒】目标分区若未包住卡片位置，按 ingest.expandedBounds 扩大（只扩不缩）；
 // undo 时把分区矩形**原样还原**（记录 do 之前的矩形）。
 //
-// 单卡操作（菜单是逐卡触发的），不做批量；失败抛错 → 命令不入栈、状态不变。
+// 【批量（2026-09-20）】多选批量移动走 `createMoveCardsToFolderCommand`（组合命令：
+// do 顺序、undo 逆序），一次菜单动作 = 一条命令 = 一步撤销。
 //
-// 实现日期：2026-09-12。
+// 失败抛错 → 命令不入栈、状态不变。
+//
+// 实现日期：2026-09-12（批量 2026-09-20）。
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'
@@ -131,6 +134,41 @@ export function createMoveCardToFolderCommand(
           group: card.group,
         },
       ])
+    },
+  }
+}
+
+/**
+ * 批量版：把多张卡片移到同一目标（2026-09-20 用户要求「多选批量移动」）。
+ *
+ * 为何不逐卡 execute：一次菜单动作 = 一次用户意图，撤销时理应一步回退
+ * （先例：多选拖动 11.2「一次拖拽产生一条命令，撤销一步整组还原」）。
+ * 所以这里是**组合命令**：do 按顺序逐卡移动，undo 逆序回滚 ——
+ * 逆序很重要，同一分区被多次扩框时，逆序才能把矩形还原成最初的样子。
+ *
+ * 单卡也走本函数（cards 长度为 1）：菜单层不必分两条路径。
+ */
+export function createMoveCardsToFolderCommand(
+  cards: readonly Card[],
+  targetFolderRel: string,
+  targetGroupName: string | undefined,
+  targetPartition: Partition | null,
+  context: MoveCardToFolderContext,
+): Command {
+  const parts = cards.map((card) =>
+    createMoveCardToFolderCommand(card, targetFolderRel, targetGroupName, targetPartition, context),
+  )
+
+  return {
+    type: 'moveCardsToFolder',
+
+    async do() {
+      for (const part of parts) await part.do()
+    },
+
+    async undo() {
+      // 逆序回滚：目标分区矩形被逐卡扩大过，逆序才能还原到最初值
+      for (const part of [...parts].reverse()) await part.undo()
     },
   }
 }
