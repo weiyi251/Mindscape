@@ -28,6 +28,21 @@ pub struct ImageSize {
 }
 
 /// 读取图片原始宽高（只解析文件头，不解码像素，很快）
+///
+/// 【为什么不用 `image::image_dimensions`】（2026-09-20 修复）
+///   该便捷函数**只按扩展名挑解码器**：文件叫 `.png` 就强制走 PNG 解码器，
+///   而不管文件里装的究竟是什么。于是「内容其实是 JPEG、扩展名却写 .png」的
+///   文件必然报 `format error decoding Png: Invalid PNG signature`。
+///   用户现场：把一张 JPEG 改名成 `粘贴-20260919-1425.png` 放进空间文件夹，
+///   进入空间时弹出「图片尺寸读取失败，已按默认尺寸显示」——
+///   文件本身完全能看（浏览器 / 看图软件都按内容识别），只有我们读不到尺寸。
+///
+///   修复：先自己嗅探**文件真实格式**，再让解码器只读图头取尺寸
+///   （`with_guessed_format().into_dimensions()` 只读头部字段，不解码全图，
+///   与原来一样快）。嗅探不出来时退回扩展名，保持与旧行为一致。
+///
+/// 铁律（17.5）：只做「安全执行 + 明确报错」，不做业务判断 ——
+/// 这里不改名、不搬文件（铁律②③），只是把「读不到」变成「读得到」。
 #[tauri::command]
 pub fn read_image_size(path: String) -> Result<ImageSize, String> {
     let target = Path::new(&path);
@@ -36,10 +51,26 @@ pub fn read_image_size(path: String) -> Result<ImageSize, String> {
         return Err(format!("不是文件：{path}"));
     }
 
-    let (width, height) =
-        image::image_dimensions(target).map_err(|error| format!("读取图片尺寸失败：{error}"))?;
+    let (width, height) = read_image_dimensions(target)
+        .map_err(|error| format!("读取图片尺寸失败：{error}"))?;
 
     Ok(ImageSize { width, height })
+}
+
+/// 按**文件真实内容**（而非扩展名）解析图片尺寸。
+///
+/// 先经 `with_guessed_format()` 让 `image` 按文件头魔数选解码器 ——
+/// 这样「JPEG 内容 + .png 扩展名」的文件也能正确读出尺寸；
+/// 猜不出格式（既非已知魔数、也不是可识别扩展名）时才如实报错。
+fn read_image_dimensions(target: &Path) -> Result<(u32, u32), String> {
+    let reader = image::ImageReader::open(target)
+        .map_err(|error| error.to_string())?
+        .with_guessed_format()
+        .map_err(|error| error.to_string())?;
+
+    reader
+        .into_dimensions()
+        .map_err(|error| error.to_string())
 }
 
 /// 用系统默认程序打开文件（第九章「双击 PSD/PDF 用对应软件打开」）。
@@ -130,6 +161,75 @@ mod tests {
         let dir = temp_dir("text");
         let file = dir.join("a.txt");
         std::fs::write(&file, b"not an image").unwrap();
+
+        let error = read_image_size(file.to_string_lossy().to_string()).unwrap_err();
+        assert!(error.contains("读取图片尺寸失败"), "实际错误：{error}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 回归（2026-09-20）：内容是 JPEG、扩展名却写 `.png` 的文件必须能读出尺寸。
+    ///
+    /// 用户现场：把一张 JPEG 改名成 `粘贴-20260919-1425.png` 放进空间文件夹，
+    /// 进空间时顶部弹「图片尺寸读取失败：format error decoding Png:
+    /// Invalid PNG signature」，卡片退回默认尺寸 —— 但文件本身完全正常。
+    /// 根因是 `image::image_dimensions` 只按扩展名选解码器。
+    #[test]
+    fn reads_dimensions_when_extension_lies() {
+        let dir = temp_dir("lying-ext");
+        let file = dir.join("lying.png"); // ← 关键：名字是 .png
+        image::RgbImage::from_pixel(1200, 40, image::Rgb([10, 20, 30]))
+            .write_to(
+                &mut std::fs::File::create(&file).unwrap(),
+                image::ImageFormat::Jpeg, // ← 关键：内容按 JPEG 写
+            )
+            .unwrap();
+
+        let size = read_image_size(file.to_string_lossy().to_string()).unwrap();
+        assert_eq!((size.width, size.height), (1200, 40));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 反向：内容是 PNG、扩展名写 `.jpg` 也要读得出（同一根因的另一半）。
+    #[test]
+    fn reads_dimensions_when_extension_lies_the_other_way() {
+        let dir = temp_dir("lying-ext-2");
+        let file = dir.join("lying.jpg");
+        image::RgbaImage::from_pixel(30, 90, Rgba([1, 2, 3, 255]))
+            .write_to(
+                &mut std::fs::File::create(&file).unwrap(),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+
+        let size = read_image_size(file.to_string_lossy().to_string()).unwrap();
+        assert_eq!((size.width, size.height), (30, 90));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 扩展名完全无法识别（如 `.webp` 被启用特性排除、或无扩展名）时仍按内容识别。
+    #[test]
+    fn reads_dimensions_for_unknown_extension() {
+        let dir = temp_dir("no-ext");
+        let file = dir.join("no-extension");
+        image::RgbImage::from_pixel(7, 5, image::Rgb([9, 9, 9]))
+            .write_to(
+                &mut std::fs::File::create(&file).unwrap(),
+                image::ImageFormat::Jpeg,
+            )
+            .unwrap();
+
+        let size = read_image_size(file.to_string_lossy().to_string()).unwrap();
+        assert_eq!((size.width, size.height), (7, 5));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 真正损坏的文件仍如实报错（不能因为改了读取路径就把错误吞掉）。
+    #[test]
+    fn corrupt_image_still_reports_error() {
+        let dir = temp_dir("corrupt");
+        let file = dir.join("broken.png");
+        // PNG 魔数正确、但后面全是垃圾 → 必须报错，不能返回假尺寸
+        std::fs::write(&file, b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRgarbage").unwrap();
 
         let error = read_image_size(file.to_string_lossy().to_string()).unwrap_err();
         assert!(error.contains("读取图片尺寸失败"), "实际错误：{error}");
