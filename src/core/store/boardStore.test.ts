@@ -6,7 +6,21 @@
 // 实现任务：T1.3（阶段一）。
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+// A1（2026-09-20）：签名读取走 invoke。默认把运行环境设为「非桌面」，
+// 既有用例因此依旧拿到 null（等同于「本环境读不到签名」），行为不变。
+const invokeMock = vi.fn()
+
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: (...args: unknown[]) => invokeMock(...args),
+}))
+
+vi.mock('@/core/utils/runtime', () => ({
+  isDesktopRuntime: () => desktopRuntime,
+}))
+
+let desktopRuntime = false
 
 import { createBoardStore } from '@/core/store/boardStore'
 import { clearCardAssets, getCardOriginalPath } from '@/core/board/cardAssets'
@@ -362,6 +376,118 @@ describe('boardStore · A2 未建框的文件夹', () => {
     store.getState().reset()
     expect(store.getState().unframedFolders).toEqual([])
     expect(store.getState().partitions).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A1（2026-09-20 用户计划第 3 步）：文件夹外部变动
+// ---------------------------------------------------------------------------
+
+describe('boardStore · A1 外部变动（签名基线与消失的卡片）', () => {
+  afterEach(() => {
+    desktopRuntime = false
+    invokeMock.mockReset()
+  })
+
+  it('桌面环境：加载成功后记录文件夹签名作为比对基线', async () => {
+    desktopRuntime = true
+    invokeMock.mockResolvedValue({ hash: 'h1', files: 2, dirs: 0 })
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(invokeMock).toHaveBeenCalledWith('dir_signature', { path: SPACE.folderPath })
+    expect(store.getState().dirSignature).toEqual({ hash: 'h1', files: 2, dirs: 0 })
+  })
+
+  it('读签名失败 → 基线为 null（宁可漏报也不误报），加载本身照常成功', async () => {
+    desktopRuntime = true
+    invokeMock.mockRejectedValue('路径不存在')
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
+
+    await store.getState().loadSpace(SPACE)
+
+    expect(store.getState().status).toBe('ready')
+    expect(store.getState().dirSignature).toBeNull()
+  })
+
+  it('layout 有记录、磁盘上已找不到的文件 → 移出画布并记入「已移除」（不静默删除）', async () => {
+    const saved = createEmptyLayout()
+    saved.cards = [
+      zCardSchema.parse({
+        id: 'c_001',
+        type: 'image',
+        filePath: '旧图.jpg',
+        originalPath: '旧图.jpg',
+        x: 10,
+        y: 20,
+        w: 100,
+        h: 80,
+      }),
+    ]
+    const store = createStore({
+      async listDir() {
+        return [entry('还在.jpg')]
+      },
+      async readLayout() {
+        return JSON.stringify(saved)
+      },
+    } as unknown as StorageProvider)
+
+    await store.getState().loadSpace(SPACE)
+
+    const state = store.getState()
+    expect(state.cards.map((card) => card.filePath)).toEqual(['还在.jpg'])
+    expect(state.removed).toEqual([
+      { id: 'c_001', originalPath: '旧图.jpg', movedTo: '_已移除/旧图.jpg' },
+    ])
+    expect(state.notices.some((notice) => notice.includes('已移除'))).toBe(true)
+    expect(state.needsMigration).toBe(true) // 新记入的「已移除」条目要落盘
+  })
+
+  it('同路径已有「已移除」记录 → 不重复追加、不重复提示（幂等）', async () => {
+    const saved = createEmptyLayout()
+    saved.cards = [
+      zCardSchema.parse({
+        id: 'c_001',
+        type: 'image',
+        filePath: '旧图.jpg',
+        originalPath: '旧图.jpg',
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 80,
+      }),
+    ]
+    saved.removed = [{ id: 'c_001', originalPath: '旧图.jpg', movedTo: '_已移除/旧图.jpg' }]
+    const store = createStore({
+      async listDir() {
+        return [entry('还在.jpg')]
+      },
+      async readLayout() {
+        return JSON.stringify(saved)
+      },
+    } as unknown as StorageProvider)
+
+    await store.getState().loadSpace(SPACE)
+
+    const state = store.getState()
+    expect(state.removed).toHaveLength(1)
+    expect(state.notices.some((notice) => notice.includes('已移除'))).toBe(false)
+    expect(state.needsMigration).toBe(false)
+  })
+
+  it('reset 清空签名基线与变动标记（切换空间不残留上一个空间的比对状态）', async () => {
+    desktopRuntime = true
+    invokeMock.mockResolvedValue({ hash: 'h1', files: 1, dirs: 0 })
+    const store = createStore(createFakeProvider([entry('a.jpg')]))
+    await store.getState().loadSpace(SPACE)
+    expect(store.getState().dirSignature).not.toBeNull()
+
+    store.getState().reset()
+
+    expect(store.getState().dirSignature).toBeNull()
+    expect(store.getState().externalChange).toBeNull()
   })
 })
 

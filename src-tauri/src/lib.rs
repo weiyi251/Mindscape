@@ -45,6 +45,8 @@ pub fn run() {
             commands::clipboard::write_clipboard_files_and_text,
             commands::clipboard::write_clipboard_text,
             commands::clipboard::read_clipboard_files,
+            // A1（2026-09-20）：空间文件夹内容签名，用于「外部变动」比对
+            commands::dir_signature::dir_signature,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

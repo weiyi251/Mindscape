@@ -51,6 +51,9 @@ import type { DirEntry, StorageProvider } from '@/core/storage/StorageProvider'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
 import { localLayoutStore } from '@/core/storage/appLayoutStore'
 import type { AppLayoutStore } from '@/core/storage/appLayoutStore'
+import { readDirSignature } from '@/core/storage/dirSignature'
+import type { DirSignature, ExternalChange } from '@/core/storage/dirSignature'
+import { removedPathFor } from '@/core/commands/impl/removeCards'
 import { CORE_CARD_TYPE_DEFAULT_SIZE } from '@/core/registry/cardTypes'
 import { emitHookTyped } from '@/core/registry/pluginCenter'
 import { createCardsFromEntries } from '@/core/board/buildCards'
@@ -120,6 +123,20 @@ export interface BoardState {
    * 补完框或用户选择「暂不生成」后清空（重进空间会重新算一遍）。
    */
   unframedFolders: string[]
+  /**
+   * 本次加载后的空间文件夹内容签名（A1，2026-09-20 用户计划第 3 步）。
+   *
+   * 用途：窗口重新聚焦时重新读一次签名与它比对，不同即视为「文件夹被外部改动」。
+   * 基线在三个时机刷新：loadSpace 成功后、每次布局落盘成功后（应用自己的操作
+   * 同样会改文件夹，不刷新就会误报）、用户重新扫描后。
+   * 为 null 表示本环境读不到（浏览器 dev）→ 前端不做比对，不误报。
+   */
+  dirSignature: DirSignature | null
+  /**
+   * 检测到的外部变动（A1）。null = 没有变动 / 未检测。
+   * 只做「提示」，是否把磁盘现状拉回画布由用户点「重新扫描」决定（用户裁决）。
+   */
+  externalChange: ExternalChange | null
   /**
    * 选中集合（17.3：选中集合属于「需要触发重渲染的低频数据」，进 Zustand）。
    * T2.2 单击选中 / 取消选中；T2.3 框选与多选拖动复用。
@@ -208,6 +225,10 @@ export interface BoardState {
    * 写入「待补框的文件夹名」（A2）。一键补框成功后、或用户点了「暂不生成」时传空数组。
    */
   setUnframedFolders: (names: string[]) => void
+  /** 写入文件夹签名基线（A1）：loadSpace 成功、落盘成功、重新扫描后各写一次 */
+  setDirSignature: (signature: DirSignature | null) => void
+  /** 写入 / 清空「外部变动」标记（A1）。传 null 表示已同步 / 已处理 */
+  setExternalChange: (change: ExternalChange | null) => void
   /**
    * 移除分区框（新建分区的 undo 走它）。只动 partitions，**不碰硬盘**；
    * 目录回收由命令的 undo 负责。被移除的分区若正选中则一并清掉选中态。
@@ -365,6 +386,8 @@ export function createBoardStore(
     error: null,
     notices: [],
     unframedFolders: [],
+    dirSignature: null,
+    externalChange: null,
     selectedIds: [],
     selectedConnectionIds: [],
     selectedPartitionId: null,
@@ -573,6 +596,14 @@ export function createBoardStore(
       set({ unframedFolders: [...names] })
     },
 
+    setDirSignature(signature) {
+      set({ dirSignature: signature })
+    },
+
+    setExternalChange(change) {
+      set({ externalChange: change })
+    },
+
     removePartitions(ids) {
       if (ids.length === 0) return
       const idSet = new Set(ids)
@@ -697,6 +728,8 @@ export function createBoardStore(
         error: null,
         notices: [],
         unframedFolders: [],
+        dirSignature: null,
+        externalChange: null,
         cards: [],
         partitions: [],
         connections: [],
@@ -805,6 +838,24 @@ export function createBoardStore(
         const mergedRemoved = deduped.slice(normalizedCards.length) as RemovedEntry[]
         const idsPatched = deduped.some((item, index) => item.id !== before[index].id)
 
+        // 6.9) A1（2026-09-20 用户计划第 3 步）：layout 有记录、磁盘上已找不到的文件
+        //      （被外部删除 / 改名 / 移走）。按 7.3「不静默删除」记入「已移除」记录 ——
+        //      文件都没了，卡片自然不再上画布，但记录在案：用户能在「已移除」视图看到
+        //      它并彻底删除，而不是无声消失。movedTo 用 removedPathFor 的规范落点
+        //      （文件已不存在，这里只是让记录形状与「移除卡片」一致）。
+        const recordedPaths = new Set(mergedRemoved.map((entry) => entry.originalPath))
+        const recordedIds = new Set(mergedRemoved.map((entry) => entry.id))
+        const vanishedEntries: RemovedEntry[] = []
+        for (const card of merged.missing) {
+          if (recordedPaths.has(card.filePath) || recordedIds.has(card.id)) continue
+          vanishedEntries.push({
+            id: card.id,
+            originalPath: card.filePath,
+            movedTo: removedPathFor(card.filePath),
+          })
+        }
+        const finalRemoved = [...mergedRemoved, ...vanishedEntries]
+
         // 7) 分区框：已有记录沿用；新子文件夹按合并后的卡片包围盒建框（第六章）
         const partitions = createPartitions(partitionNames, mergedCards, layout.partitions)
 
@@ -819,18 +870,40 @@ export function createBoardStore(
         // ⚠️ 顺序要求：资源必须先于 cards 写入，卡片渲染时才能读到原图路径
         registerCardAssets(mergedCards, space.folderPath)
 
+        // 8) A1：记录本次的文件夹签名，作为「外部变动」比对的基线。
+        //    读不到（非桌面环境 / 路径异常）→ null，前端据此不做比对，不误报。
+        let dirSignature: DirSignature | null = null
+        try {
+          dirSignature = await readDirSignature(space.folderPath)
+        } catch {
+          dirSignature = null
+        }
+        if (token !== loadToken) return
+
         set({
           cards: mergedCards,
           partitions,
           connections: layout.connections,
-          removed: mergedRemoved,
+          removed: finalRemoved,
           canvas: layout.canvas,
           readOnly,
-          // 修过历史数据就要求上层补一次落盘，否则修复只停留在内存
-          needsMigration: idsPatched || patchedOriginalPath,
+          // 修过历史数据（含 A1 新记入的「已移除」条目）就要求上层补一次落盘，
+          // 否则修复只停留在内存
+          needsMigration: idsPatched || patchedOriginalPath || vanishedEntries.length > 0,
           status: 'ready',
-          notices: [...notices, ...partitionNotices, ...imageSizeNotice(sizes)],
+          notices: [
+            ...notices,
+            ...partitionNotices,
+            ...imageSizeNotice(sizes),
+            ...(vanishedEntries.length > 0
+              ? [
+                  `${vanishedEntries.length} 张卡片对应的文件已不在文件夹里（可能被外部删除或改名），` +
+                    '已记入「已移除」视图',
+                ]
+              : []),
+          ],
           unframedFolders,
+          dirSignature,
         })
       } catch (error) {
         if (token !== loadToken) return
@@ -857,6 +930,8 @@ export function createBoardStore(
         error: null,
         notices: [],
         unframedFolders: [],
+        dirSignature: null,
+        externalChange: null,
         selectedIds: [],
         selectedConnectionIds: [],
         selectedPartitionId: null,
