@@ -90,6 +90,11 @@ function makeDeps() {
       calls.push(`paste:${Math.round(point.x)},${Math.round(point.y)}:${dest?.partitionId ?? '-'}`)
     },
     setPendingConnectFrom: (cardId) => calls.push(`connect:${cardId}`),
+    execute: async (command) => {
+      calls.push(`exec:${command.type}`)
+      await command.do()
+    },
+    schedule: () => calls.push('schedule'),
     canvasApiRef: {
       current: {
         beginNoteEdit: (id: string) => calls.push(`noteEdit:${id}`),
@@ -145,6 +150,20 @@ describe('registerBoardActions · 卡片菜单映射', () => {
     runAction(CARD_ACTION.copy, '复制', ctx({ card: makeCard() }))
 
     expect(calls).toEqual(['copy:c_1'])
+  })
+
+  it('「锁定卡片」（2026-09-20）：走 meta 命令翻转并落盘', async () => {
+    const { deps, calls } = makeDeps()
+    registerBoardActions(deps)
+
+    runAction(CARD_ACTION.toggleLock, '锁定卡片', ctx({ card: makeCard() }))
+    // 编排是异步的（execute → then 落盘），等一次微任务队列排空
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // exec:meta = setCardMeta 命令入栈执行；schedule = 请求落盘
+    expect(calls).toContain('exec:meta')
+    expect(calls).toContain('schedule')
   })
 
   it('缺少卡片上下文时不调用任何 handler（空白处误触不发散）', () => {

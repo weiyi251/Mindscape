@@ -18,6 +18,9 @@ import {
   metaWithItemAnchors,
   metaWithTags,
   tagsOfMeta,
+  LOCKED_META_KEY,
+  lockedOfMeta,
+  metaWithLocked,
 } from './cardMeta'
 
 describe('cardMeta：标签读写', () => {
@@ -116,5 +119,40 @@ describe('cardMeta：条目锚点表', () => {
     expect(itemAnchorsOfMeta({ itemAnchors: { good: 24, bad: 'x', nan: Number.NaN, inf: Infinity } })).toEqual({
       good: 24,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 卡片锁定（2026-09-20）
+// ---------------------------------------------------------------------------
+
+describe('cardMeta：锁定标记', () => {
+  it('只有布尔真值算锁定（脏数据一律当未锁定）', () => {
+    expect(lockedOfMeta({})).toBe(false)
+    expect(lockedOfMeta({ [LOCKED_META_KEY]: true })).toBe(true)
+    for (const dirty of [false, 'true', 1, null, undefined, {}]) {
+      expect(lockedOfMeta({ [LOCKED_META_KEY]: dirty })).toBe(false)
+    }
+  })
+
+  it('metaWithLocked 往返一致，且其余字段保留', () => {
+    const meta = metaWithLocked({ tags: ['参考'], noteColor: '#E7C873' }, true)
+    expect(meta).toEqual({ tags: ['参考'], noteColor: '#E7C873', locked: true })
+    expect(lockedOfMeta(meta)).toBe(true)
+  })
+
+  it('解锁时删键（不留 false 脏字段）', () => {
+    const locked = metaWithLocked({ tags: ['x'] }, true)
+    const unlocked = metaWithLocked(locked, false)
+    expect(LOCKED_META_KEY in unlocked).toBe(false)
+    expect(unlocked).toEqual({ tags: ['x'] })
+    expect(lockedOfMeta(unlocked)).toBe(false)
+  })
+
+  it('不改动入参（返回新对象）', () => {
+    const original = { tags: ['a'] }
+    const next = metaWithLocked(original, true)
+    expect(next).not.toBe(original)
+    expect(original).toEqual({ tags: ['a'] })
   })
 })

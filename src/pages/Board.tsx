@@ -1456,6 +1456,8 @@ export function Board() {
       handleCopyCards,
       pasteCards,
       setPendingConnectFrom,
+      execute: history.execute,
+      schedule: writer.schedule,
       canvasApiRef,
     })
   }, [
@@ -1469,6 +1471,10 @@ export function Board() {
     handleRemoveConnections,
     handleCopyCards,
     pasteCards,
+    // history 是 ref 常量、writer 是 useMemo（依赖稳定），列入只为满足 lint 的
+    // exhaustive-deps；两者不变时本 effect 不会重跑
+    history,
+    writer,
   ])
 
   /** 撤销 / 重做（T2.9 / 7.4）：命令的 undo/redo 已含文件回滚，成功后同步落盘。

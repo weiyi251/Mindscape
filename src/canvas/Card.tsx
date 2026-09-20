@@ -43,6 +43,8 @@ export interface CardViewProps {
    * Canvas 收到后清编辑状态并转发持久化（命令 + 防抖落盘在 Board）。
    */
   onNoteEditFinish?: (cardId: string, value: string) => void
+  /** 锁定卡片（2026-09-20）：位置与尺寸已冻结，光标与描边给出常态提示 */
+  locked?: boolean
 }
 
 /** 卡片外层容器的定位样式（GPU 图层，见文件顶部说明） */
@@ -66,6 +68,7 @@ export function CardView({
   searchState,
   noteEditing = false,
   onNoteEditFinish,
+  locked = false,
 }: CardViewProps) {
   // ---- 便签行内编辑（见 props 注释）。草稿放本组件：打字只重渲染这一张卡，
   //      不经过 Canvas / Board 的 state（画布其余部分零感知，17.3 反模式不沾边） ----
@@ -113,6 +116,9 @@ export function CardView({
         selected && searchState !== 'active' && 'outline outline-2 outline-primary',
         searchState === 'hit' && 'outline-dashed outline-2 outline-primary/70',
         searchState === 'active' && 'outline outline-4 outline-primary',
+        // 锁定卡片（2026-09-20）：位置与尺寸已冻结 —— 光标不再显示「可抓」，
+        // 并加一圈浅色虚边作为「已钉住」的常态提示（选择器在 Canvas 侧拦截手势）
+        locked && 'cursor-default outline-dashed outline-1 outline-muted-foreground/40',
       )}
     >
       <div

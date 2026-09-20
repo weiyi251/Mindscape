@@ -70,7 +70,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('核心菜单配置', () => {
-  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制 + 移动到 + 便签颜色 + 重命名文件）', () => {
+  it('卡片菜单配置与 5.2 的菜单清单一致（打开原图/移除/置顶/置底/加备注/编辑标签 + 连线 + 复制 + 移动到 + 便签颜色 + 重命名文件 + 锁定卡片）', () => {
     expect(idsOf(CORE_CARD_MENU_ITEMS)).toEqual([
       CARD_ACTION.openOriginal,
       CARD_ACTION.remove,
@@ -83,6 +83,7 @@ describe('核心菜单配置', () => {
       CARD_ACTION.move,
       CARD_ACTION.setColor,
       CARD_ACTION.renameFile,
+      CARD_ACTION.toggleLock,
     ])
   })
 
@@ -129,6 +130,7 @@ describe('buildCardMenuFor', () => {
       CARD_ACTION.connect,
       CARD_ACTION.copy,
       CARD_ACTION.setColor,
+      CARD_ACTION.toggleLock,
     ])
 
     // 文件卡片有硬盘文件 → 显示「移动到…」（2026-09-12 用户裁决）与
@@ -148,6 +150,7 @@ describe('buildCardMenuFor', () => {
       CARD_ACTION.copy,
       CARD_ACTION.move,
       CARD_ACTION.renameFile,
+      CARD_ACTION.toggleLock,
     ])
   })
 

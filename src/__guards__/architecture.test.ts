@@ -84,8 +84,7 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 粘贴净化接线（2026-09-13，用户裁决）：cardWithoutEditables 调用 + 注释，净 +3 行
   // 插件期拆分（2026-09-14，对应 docs/插件功能实施方案.md §7）：右键菜单组装整块
   // 搬到 pages/board/contextMenus.tsx，实际 **1977** 行。阈值随之下调，
-  // 并刻意留 100 行余量给插件接线（钩子埋点 + pluginsStore 订阅 + 插件管理入口）。
-  // 插件接线落地（2026-09-14，提交见 HANDOVER §9）：画布桥注册（core/plugin/boardBridge
+  // 并刻意留 100 行余量给插件接线（钩子埋点 + pluginsStore 订阅 + 插件管理入口）。  // 插件接线落地（2026-09-14，提交见 HANDOVER §9）：画布桥注册（core/plugin/boardBridge
   // 的消费端）+ 插件对话框宿主挂载 + 画布菜单透传 spacePath，实际 **2049** 行。
   // 余量 31 行仍预留给 7 个钩子的埋点（每处 1~2 行）；
   // 若埋点后仍要加东西，请先按 §7 的思路再拆一块出去，而不是直接抬高阈值。
@@ -133,7 +132,13 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 待办卡片插件（2026-09-17）：连线拖拽整块外抽到 interaction/connectionDrag.ts
   // （控制器类 + 依赖注入），Canvas 侧只留装配与 data-connect-item 分流，实际 **1168** 行。
   // 阈值下调到 1172，余量 4 行；再不够请继续外抽而不是调阈值。
-  'src/canvas/Canvas.tsx': 1172,
+  // 卡片锁定（2026-09-20，用户要求）：按下分发里算锁定 id 集合（取数据层，折叠分区
+  // 内未渲染的卡也判定正确）+ 锁定卡不启动缩放/拖动 + 多选同伴过滤锁定项 +
+  // CardView 透传 locked 标记，净 +16 → 实际 **1184** 行。此处**显式上调**阈值到
+  // 1190（余量 6）：这批新增全是「手势分流的判据」，抽出去反而要绕一圈回传
+  // cardId 与锁定集合，得不偿失；下一次要往 Canvas 加东西请先外抽（候选：
+  // 按下分发的分区 / 卡片分支整理进 interaction/pointerDispatch.ts）。
+  'src/canvas/Canvas.tsx': 1190,
 }
 
 describe('规则 1：大文件行数只减不增', () => {

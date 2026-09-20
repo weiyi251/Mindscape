@@ -52,7 +52,7 @@ import { contentRects } from './interaction/fitToContent'
 import type { Point } from './interaction/connectionAnchor'
 import { ConnectionDragController } from './interaction/connectionDrag'
 import type { ConnectionEndpoint } from './interaction/connectionDrag'
-import { itemAnchorsOfMeta } from '@/core/board/cardMeta'
+import { itemAnchorsOfMeta, lockedOfMeta } from '@/core/board/cardMeta'
 import { visibleCanvasRect } from './lazyOriginal'
 import { SnapGuide } from './SnapGuide'
 import type { SnapGuideHandle } from './SnapGuide'
@@ -760,6 +760,18 @@ export function Canvas({
         return
       }
 
+      // 锁定卡片（2026-09-20 用户要求）：位置与尺寸冻结 —— 缩放手柄与拖动都不启动，
+      // 选中 / 连线（上一分支）/ 右键菜单照常。判据取数据层（未渲染的折叠分区卡片
+      // 也能正确判定），与 companions 过滤共用同一个集合
+      const lockedIds = new Set(
+        cardsRef.current.filter((card) => lockedOfMeta(card.meta)).map((card) => card.id),
+      )
+      if (lockedIds.has(cardId)) {
+        // 选中照常（锁的是位置，不是交互）；不做多选整组随动之外的任何手势
+        onSelectCardsRef.current?.([cardId])
+        return
+      }
+
       // 缩放手柄（2026-09-13 起按 edge 分流：se=右下角，n/s/e/w=便签四边中点）
       if (target?.closest('[data-resize-edge]')) {
         const edgeHandle = target?.closest('[data-resize-edge]') as HTMLElement | null
@@ -768,9 +780,13 @@ export function Canvas({
         return
       }
 
-      // 多选拖动：按下的卡在选中集合内且选中数 > 1 时，整组随动（11.2）
+      // 多选拖动：按下的卡在选中集合内且选中数 > 1 时，整组随动（11.2）。
+      // 锁定的同伴不随动 —— 它们的位置是用户明确钉住的
       const ids = selectedIdsRef.current
-      const companions = ids.length > 1 && ids.includes(cardId) ? ids.filter((id) => id !== cardId) : []
+      const companions =
+        ids.length > 1 && ids.includes(cardId)
+          ? ids.filter((id) => id !== cardId && !lockedIds.has(id))
+          : []
       dragController.begin(event, cardId, cardElement, companions)
     },
     [
@@ -1124,6 +1140,7 @@ export function Canvas({
             }
             noteEditing={card.id === editingNoteId}
             onNoteEditFinish={handleNoteEditFinish}
+            locked={lockedOfMeta(card.meta)}
           />
         ))}
       </Viewport>

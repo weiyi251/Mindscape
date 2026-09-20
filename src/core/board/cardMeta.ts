@@ -28,7 +28,6 @@
 // ============================================================================
 
 import type { Meta } from '@/core/types'
-
 /** 读某张卡片的标签（meta.tags）。不是数组时返回空数组（脏数据兜底） */
 export function tagsOfMeta(meta: Meta): string[] {
   const tags = meta.tags
@@ -87,4 +86,39 @@ export function itemAnchorsOfMeta(meta: Meta): Record<string, number> {
 /** 生成带条目锚点表的 meta 快照（不改动原对象） */
 export function metaWithItemAnchors(meta: Meta, anchors: Record<string, number>): Meta {
   return { ...meta, [ITEM_ANCHORS_META_KEY]: anchors }
+}
+
+// ---------------------------------------------------------------------------
+// 卡片锁定（2026-09-20，A–D 优化计划 C4）
+// ---------------------------------------------------------------------------
+
+/**
+ * 锁定标记在 meta 里的键名（`card.meta.locked`）。
+ *
+ * 语义（用户裁决范围）：**位置与尺寸冻结** —— 画布上拖不动、拖不小，避免
+ * 摆好版面后被误拖；选中、连线、右键菜单、打开原图照常。锁定不是「禁用卡片」，
+ * 更不是权限控制，所以也不需要额外的确认流程。
+ *
+ * 存放走 4.2 的 meta 扩展位（与 tags / noteColor / hoverLabel 同一约定），
+ * 不新增 schema 字段、随卡片 zod 往返落盘。
+ */
+export const LOCKED_META_KEY = 'locked'
+
+/** 这张卡片是否被锁定。只有**布尔真值**算锁定（脏数据一律当未锁定） */
+export function lockedOfMeta(meta: Meta): boolean {
+  return meta[LOCKED_META_KEY] === true
+}
+
+/**
+ * 生成带锁定标记的 meta 快照（不改动原对象）。
+ * `locked` 为 false 时**删键**而不是写入 false —— 与 noteColor 同一约定：
+ * 不留无用字段，布局文件干净（脏数据兜底也更简单）。
+ */
+export function metaWithLocked(meta: Meta, locked: boolean): Meta {
+  if (!locked) {
+    const next = { ...meta }
+    delete next[LOCKED_META_KEY]
+    return next
+  }
+  return { ...meta, [LOCKED_META_KEY]: true }
 }

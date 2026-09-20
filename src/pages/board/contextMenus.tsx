@@ -18,6 +18,7 @@ import type { ContextMenuItemData } from '@/components/ui/context-menu'
 import { FolderAddIcon, NoteAddIcon, RedoIcon, RestoreIcon, UndoIcon } from '@/components/ui/icons'
 import { PARTITION_PALETTE } from '@/core/board/partitions'
 import { NOTE_PALETTE } from '@/core/board/noteColors'
+import { lockedOfMeta } from '@/core/board/cardMeta'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
 import {
   buildCardMenuFor,
@@ -77,7 +78,13 @@ export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[
   const ctx = { spacePath, card }
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
-    label: item.label,
+    // 「锁定卡片」的标签随卡片状态翻转（配置数组是静态的，拿不到卡片状态）
+    label:
+      item.id === CARD_ACTION.toggleLock
+        ? lockedOfMeta(card.meta)
+          ? '解锁卡片'
+          : '锁定卡片'
+        : item.label,
     danger: item.id === CARD_ACTION.remove,
     // 「移动到…」「便签颜色…」「重命名文件」不走配置中心的 action，改为展开二级菜单 / 弹浮层
     run:

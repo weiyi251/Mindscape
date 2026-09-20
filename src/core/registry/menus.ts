@@ -45,6 +45,8 @@ export const CARD_ACTION = {
   setColor: 'card.setColor',
   /** 重命名文件（2026-09-15 用户需求：画布内直接重命名卡片对应的硬盘文件） */
   renameFile: 'card.renameFile',
+  /** 锁定 / 解锁卡片（2026-09-20 用户要求：摆好版面后防误拖，位置与尺寸冻结） */
+  toggleLock: 'card.toggleLock',
 } as const
 
 /**
@@ -124,6 +126,14 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
     label: '重命名文件',
     appliesTo: (card) => card.filePath !== '',
     action: (ctx) => runAction(CARD_ACTION.renameFile, '重命名文件', ctx),
+  },
+  {
+    // 2026-09-20 用户要求：锁定卡片（位置与尺寸冻结，防误拖）。
+    // 标签随卡片状态翻转（「锁定卡片」/「解锁卡片」），翻转在 contextMenus 里做 ——
+    // 配置数组是静态的，拿不到卡片当前状态；appliesTo 恒真（所有类型都能锁）。
+    id: CARD_ACTION.toggleLock,
+    label: '锁定卡片',
+    action: (ctx) => runAction(CARD_ACTION.toggleLock, '锁定卡片', ctx),
   },
 ]
 

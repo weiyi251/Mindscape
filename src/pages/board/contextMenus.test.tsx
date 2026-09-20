@@ -430,3 +430,27 @@ describe('buildCanvasMenuItems', () => {
     expect(items).toHaveLength(4)
   })
 })
+
+describe('buildCardMenuItems · 锁定卡片（2026-09-20）', () => {
+  const base = {
+    screen: { x: 10, y: 20 },
+    spacePath: 'E:/space',
+    removedView: false,
+    selectedIds: [] as string[],
+    onMove: vi.fn(),
+    onRestore: vi.fn(),
+    onSetColor: vi.fn(),
+    onRenameFile: vi.fn(),
+    onDeleteForever: vi.fn(),
+  }
+
+  it('未锁定显示「锁定卡片」，已锁定显示「解锁卡片」', () => {
+    const unlocked = buildCardMenuItems({ ...base, card: fileCard() })
+    expect(unlocked.find((item) => item.id === CARD_ACTION.toggleLock)?.label).toBe('锁定卡片')
+
+    const lockedCard = fileCard()
+    lockedCard.meta = { locked: true }
+    const locked = buildCardMenuItems({ ...base, card: lockedCard })
+    expect(locked.find((item) => item.id === CARD_ACTION.toggleLock)?.label).toBe('解锁卡片')
+  })
+})

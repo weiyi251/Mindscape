@@ -21,9 +21,12 @@ import type { Point } from '@/canvas/interaction/coordinates'
 import { PARTITION_TITLE_HEIGHT } from '@/core/board/partitions'
 import { registerAction } from '@/core/registry/actionRegistry'
 import { CARD_ACTION, CONNECTION_ACTION, PARTITION_ACTION } from '@/core/registry/menus'
+import { useBoardStore } from '@/core/store/boardStore'
 import { useSpacesStore } from '@/core/store/spacesStore'
 import type { Card, Connection, Partition } from '@/core/types'
+import type { Command } from '@/core/commands/types'
 import { joinPath } from '@/core/utils/paths'
+import { toggleCardLock } from './cardLockFlow'
 
 /** 分区粘贴的目标描述（与 Board 的 pasteCards 第二参一致） */
 interface PasteDestination {
@@ -46,6 +49,10 @@ export interface BoardActionDeps {
   pasteCards: (point: Point, destOverride?: PasteDestination) => Promise<void>
   /** 「连线」菜单项：设置挂起中的连线起点卡片（Board 的 setPendingConnectFrom） */
   setPendingConnectFrom: (cardId: string) => void
+  /** 命令执行（Board 传 history.execute，成功后自动入撤销栈） */
+  execute: (command: Command) => Promise<void>
+  /** 请求落盘（Board 传 writer.schedule） */
+  schedule: () => void
   /** 画布命令式 API（便签行内编辑 / 分区行内改名） */
   canvasApiRef: MutableRefObject<CanvasApi | null>
 }
@@ -99,6 +106,16 @@ export function registerBoardActions(deps: BoardActionDeps): void {
   // 「复制」（2026-09-11 用户裁决：三种类型全支持）：菜单 / Ctrl+C 同一实现
   register(CARD_ACTION.copy, ({ card }) => {
     if (card) void deps.handleCopyCards([card])
+  })
+  // 「锁定 / 解锁卡片」（2026-09-20 用户要求：摆好版面后防误拖）：
+  // 一次 meta 翻转（可撤销），编排见 cardLockFlow.ts
+  register(CARD_ACTION.toggleLock, ({ card }) => {
+    if (!card) return
+    void toggleCardLock(card, {
+      execute: deps.execute,
+      schedule: deps.schedule,
+      applyMeta: (id, meta) => useBoardStore.getState().setCardMeta(id, meta),
+    })
   })
   // 「粘贴」：粘贴进目标分区（落点 = 分区中心），拷贝原件或克隆便签
   register(PARTITION_ACTION.paste, ({ partition }) => {
