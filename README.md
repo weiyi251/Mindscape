@@ -52,8 +52,22 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 | 生产构建 | `pnpm build` | 通过 |
 | 安装包打包 | `pnpm tauri build` | 通过 · MSI 3.94 MB / NSIS 2.65 MB（含自动更新组件） |
 
-> **界面截图待补充**：画布渲染依赖 Tauri 运行时，浏览器里跑不出来，只能真机截取。
-> 截图清单与补图步骤见 [`docs/界面走查与截图清单.md`](docs/界面走查与截图清单.md) §2。
+## 界面预览
+
+| 画布 · 浅色 | 画布 · 深色 |
+|---|---|
+| ![画布 · 浅色](docs/images/02-canvas-light.png) | ![画布 · 深色](docs/images/03-canvas-dark.png) |
+
+| 空间列表 | 设置 · 插件 |
+|---|---|
+| ![空间列表](docs/images/01-spaces.png) | ![设置 · 插件](docs/images/06-settings-plugins.png) |
+
+| 新建色卡 |
+|---|
+| ![新建色卡](docs/images/08-color-card.png) |
+
+> 更多截图（搜索浮层 / 快捷键页 / 待办卡条目级连线 / 已移除视图 / 外部变动提示条）
+> 待补，清单与拍摄规范见 [`docs/界面走查与截图清单.md`](docs/界面走查与截图清单.md) §2。
 
 ## 下载安装
 
