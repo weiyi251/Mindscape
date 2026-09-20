@@ -79,6 +79,7 @@ function makeDeps(over: Partial<MenuEntryDeps> = {}) {
     onRenameFile: vi.fn(),
     hasCopiedCards: false,
     onSetPartitionColor: vi.fn(),
+    onAlignOperation: vi.fn(),
     ...over,
   }
   return { deps, menus }
@@ -115,6 +116,31 @@ describe('openCardContextMenu', () => {
     menus[0].items.find((item) => item.id === CARD_ACTION.move)?.run()
 
     expect(onMove).toHaveBeenCalledWith([first, second], { x: 0, y: 0 })
+  })
+
+  it('「对齐与分布…」把浮层换成二级菜单，并把整批目标透传给动作', () => {
+    // 三张卡：分布要求至少 3 张未锁定卡，二级菜单才凑齐 8 项
+    const first = card({ id: 'c1' })
+    const second = card({ id: 'c2', filePath: 'b.png', originalPath: 'b.png', x: 300 })
+    const third = card({ id: 'c3', filePath: 'c.png', originalPath: 'c.png', x: 600 })
+    const onAlignOperation = vi.fn()
+    const { deps, menus } = makeDeps({
+      cards: [first, second, third],
+      selectedIds: ['c1', 'c2', 'c3'],
+      onAlignOperation,
+    })
+
+    openCardContextMenu(first, { x: 0, y: 0 }, deps)
+    menus[0].items.find((item) => item.id === CARD_ACTION.align)?.run()
+
+    // 二级菜单写回同一个浮层 state（第 2 次 setContextMenu）
+    expect(menus).toHaveLength(2)
+    const alignIds = menus[1].items.map((item) => item.id)
+    expect(alignIds).toContain(`${CARD_ACTION.align}:left`)
+    expect(alignIds).toContain(`${CARD_ACTION.align}:distribute-h`)
+
+    menus[1].items.find((item) => item.id === `${CARD_ACTION.align}:right`)?.run()
+    expect(onAlignOperation).toHaveBeenCalledWith('right', [first, second, third])
   })
 
   it('未打开空间时空间路径为空串（各 flow 会静默早退）', () => {

@@ -21,6 +21,7 @@
 // ============================================================================
 
 import type { Card, Partition } from '@/core/types'
+import type { AlignOperation } from '@/core/geometry/align'
 import type { MenuContext, MenuItem } from './pluginCenter'
 import { getPluginMenuItemsForCard } from './pluginCenter'
 import { runAction } from './actionRegistry'
@@ -47,6 +48,8 @@ export const CARD_ACTION = {
   renameFile: 'card.renameFile',
   /** 锁定 / 解锁卡片（2026-09-20 用户要求：摆好版面后防误拖，位置与尺寸冻结） */
   toggleLock: 'card.toggleLock',
+  /** 对齐与分布…（2026-09-20 用户计划 C3：多选后六向对齐 + 等距分布，二级菜单） */
+  align: 'card.align',
 } as const
 
 /**
@@ -135,7 +138,32 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
     label: '锁定卡片',
     action: (ctx) => runAction(CARD_ACTION.toggleLock, '锁定卡片', ctx),
   },
+  {
+    // 2026-09-20 用户计划 C3：多选对齐与分布。
+    // 「选中 ≥2 张才显示」与二级菜单展开都在 contextMenus / menuEntries 里做 ——
+    // 配置数组只能按单张卡过滤（appliesTo 收 Card），拿不到选中集合大小。
+    id: CARD_ACTION.align,
+    label: '对齐与分布…',
+    action: (ctx) => runAction(CARD_ACTION.align, '对齐与分布…', ctx),
+  },
 ]
+
+/**
+ * 对齐与分布的 8 个操作及其中文标签（2026-09-20 用户计划 C3）。
+ *
+ * 顺序即「对齐与分布…」二级菜单里的显示顺序：横向三项 → 纵向三项 → 分布两项。
+ * 文案属于菜单文案，故与卡片菜单配置同住本文件（「改文案只改配置中心一处」）。
+ */
+export const ALIGN_OPERATION_LABELS: Record<AlignOperation, string> = {
+  left: '左对齐',
+  hcenter: '水平居中',
+  right: '右对齐',
+  top: '上对齐',
+  vcenter: '垂直居中',
+  bottom: '下对齐',
+  'distribute-h': '水平等距分布',
+  'distribute-v': '垂直等距分布',
+}
 
 // ---------------------------------------------------------------------------
 // 核心分区框菜单（第六章）

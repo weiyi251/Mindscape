@@ -106,6 +106,7 @@ import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
 import { copyCardsToSystemClipboard, clonePastedCard } from '@/pages/board/pasteCardsFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
+import { runAlignCards } from '@/pages/board/alignCardsFlow'
 import { createPluginBoardBridge, usedCardIds } from '@/pages/board/pluginBridgeImpl'
 import { registerBoardActions } from '@/pages/board/registerBoardActions'
 import {
@@ -1528,6 +1529,14 @@ export function Board() {
         }),
       hasCopiedCards: copiedCards.length > 0,
       onSetPartitionColor: handlePartitionColor,
+      // 对齐与分布（C3）：几何见 core/geometry/align.ts、编排见 alignCardsFlow.ts；
+      // 复用现成的 moveCards 命令 → 撤销 / 重做 / cardMoved 钩子 / 落盘全走既有链路
+      onAlignOperation: (operation, targets) =>
+        runAlignCards(targets, operation, {
+          execute: history.execute,
+          schedule: writer.schedule,
+          applyPositions: useBoardStore.getState().setCardPositions,
+        }),
     }),
     [
       setContextMenu,

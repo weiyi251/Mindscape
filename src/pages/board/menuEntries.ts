@@ -11,8 +11,15 @@
 // 依赖以参数注入（不开 React hooks、不 import 页面层），可在 node 环境单测。
 // ============================================================================
 
-import { buildCardMenuItems, buildConnectionMenuItems, buildPartitionMenuItems } from './contextMenus'
+import {
+  buildAlignItems,
+  buildCardMenuItems,
+  buildConnectionMenuItems,
+  buildPartitionMenuItems,
+} from './contextMenus'
+import { alignItemsOf } from './alignCardsFlow'
 import type { ContextMenuState } from '@/components/ui/context-menu'
+import type { AlignOperation } from '@/core/geometry/align'
 import { useBoardStore } from '@/core/store/boardStore'
 import { useSpacesStore } from '@/core/store/spacesStore'
 import type { Card, Partition } from '@/core/types'
@@ -43,6 +50,12 @@ export interface MenuEntryDeps {
   hasCopiedCards: boolean
   /** 「分区颜色…」：Board 侧以 partitionId 为入参（见 partitionColorFlow） */
   onSetPartitionColor: (partitionId: string, screen: ScreenPoint) => void
+  /**
+   * 「对齐与分布…」二级菜单选中后执行（2026-09-20 用户计划 C3）。
+   * targets 由本文件按「右键卡 + 当前选中集合」解析后一并回传，
+   * 实际计算与执行见 pages/board/alignCardsFlow.ts。
+   */
+  onAlignOperation: (operation: AlignOperation, targets: Card[]) => void
 }
 
 /** 当前空间路径（未打开空间时为空串 —— 与各 flow 的「静默早退」约定一致） */
@@ -64,6 +77,18 @@ export function openCardContextMenu(card: Card, screen: ScreenPoint, deps: MenuE
     onSetColor: deps.onSetColor,
     onDeleteForever: deps.onDeleteForever,
     onRenameFile: deps.onRenameFile,
+    // 「对齐与分布…」：把当前浮层替换成二级菜单（几何输入在这里翻译好，
+    // 判定「分布是否可用」需要它，见 contextMenus.buildAlignItems）
+    onAlign: (targets, point) => {
+      deps.setContextMenu({
+        x: point.x,
+        y: point.y,
+        items: buildAlignItems({
+          items: alignItemsOf(targets),
+          onPick: (operation) => deps.onAlignOperation(operation, targets),
+        }),
+      })
+    },
   })
   deps.setContextMenu({ x: screen.x, y: screen.y, items })
 }

@@ -20,7 +20,10 @@ import { PARTITION_PALETTE } from '@/core/board/partitions'
 import { NOTE_PALETTE } from '@/core/board/noteColors'
 import { lockedOfMeta } from '@/core/board/cardMeta'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
+import { ALIGN_MODES, canDistribute, DISTRIBUTE_MODES } from '@/core/geometry/align'
+import type { AlignItem, AlignOperation } from '@/core/geometry/align'
 import {
+  ALIGN_OPERATION_LABELS,
   buildCardMenuFor,
   buildConnectionMenuFor,
   buildPartitionMenuFor,
@@ -72,11 +75,16 @@ export interface CardMenuParams {
   onRenameFile: (card: Card) => void
   /** 「彻底删除」：真删硬盘文件（仅已移除视图，2026-09-15 用户需求） */
   onDeleteForever: (ids: string[]) => void
+  /**
+   * 「对齐与分布…」：展开二级菜单（2026-09-20 用户计划 C3）。
+   * targets 是本动作应作用的卡片集合（右键卡不在选中集合、或选中不足 2 张时该项不显示）。
+   */
+  onAlign: (targets: Card[], screen: ScreenPoint) => void
 }
 
 /** 组装卡片右键菜单（配置中心项 + 已移除视图下的「恢复 / 彻底删除」项） */
 export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[] {
-  const { card, screen, spacePath, removedView, selectedIds, selectedCards, onMove, onRestore, onSetColor, onRenameFile, onDeleteForever } = params
+  const { card, screen, spacePath, removedView, selectedIds, selectedCards, onMove, onRestore, onSetColor, onRenameFile, onDeleteForever, onAlign } = params
   const ctx = { spacePath, card }
   // 右键的卡片若在选中集合里 → 整批操作（2026-09-20 多选批量移动）；
   // 需要 Card 对象，故按 id 从调用方给的 selectedCards 里取（没有就退回单卡）
@@ -84,6 +92,9 @@ export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[
     selectedIds.includes(card.id) && selectedCards.length > 1
       ? selectedCards.filter((item) => selectedIds.includes(item.id) || item.id === card.id)
       : [card]
+  // 对齐与分布（2026-09-20 用户计划 C3）作用范围与批量移动同源，但至少 2 张才有意义；
+  // 不足 2 张时该项直接从菜单里消失 —— 配置数组的 appliesTo 只收单张 Card，拿不到选中数
+  const alignTargets = moveTargets.length > 1 ? moveTargets : []
   const items: ContextMenuItemData[] = buildCardMenuFor(card).map((item) => ({
     id: item.id,
     // 「锁定卡片」「移动到…」的标签随状态翻转（配置数组是静态的，拿不到卡片状态）
@@ -96,7 +107,8 @@ export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[
           ? `移动 ${moveTargets.length} 张到…`
           : item.label,
     danger: item.id === CARD_ACTION.remove,
-    // 「移动到…」「便签颜色…」「重命名文件」不走配置中心的 action，改为展开二级菜单 / 弹浮层
+    // 「移动到…」「便签颜色…」「重命名文件」「对齐与分布…」不走配置中心的 action，
+    // 改为展开二级菜单 / 弹浮层
     run:
       item.id === CARD_ACTION.move
         ? () => onMove(moveTargets, screen)
@@ -104,11 +116,16 @@ export function buildCardMenuItems(params: CardMenuParams): ContextMenuItemData[
           ? () => onSetColor(card, screen)
           : item.id === CARD_ACTION.renameFile
             ? () => onRenameFile(card)
-            : () => item.action(ctx),
+            : item.id === CARD_ACTION.align
+              ? () => onAlign(alignTargets, screen)
+              : () => item.action(ctx),
   })).filter(
     // 已移除视图下不显示「重命名文件」：恢复入口才是主操作，改名容易与
-    // 「恢复后再整理」的正常动线混淆（remove / move 不受此限，沿用既有行为）
-    (item) => !(removedView && item.id === CARD_ACTION.renameFile),
+    // 「恢复后再整理」的正常动线混淆（remove / move 不受此限，沿用既有行为）；
+    // 「对齐与分布…」只对多选有意义（见上）
+    (item) =>
+      !(removedView && item.id === CARD_ACTION.renameFile) &&
+      !(item.id === CARD_ACTION.align && alignTargets.length < 2),
   )
 
   // 「恢复」（2026-09-13 用户裁决）与「彻底删除」（2026-09-15 用户需求）：
@@ -206,6 +223,38 @@ export function buildNoteColorItems(onPick: (color: string | null) => void): Con
       run: () => onPick(color),
     })),
   ]
+}
+
+/**
+ * 组装「对齐与分布」二级菜单（2026-09-20 用户计划 C3）。
+ *
+ * 8 个操作分三组：横向对齐（左 / 水平居中 / 右）→ 纵向对齐（上 / 垂直居中 / 下）→
+ * 等距分布（水平 / 垂直），组间画分隔线。文案统一来自配置中心的 ALIGN_OPERATION_LABELS。
+ *
+ * 分布需要至少 3 张**未锁定**卡（锁定卡不参与分布，理由见 core/geometry/align.ts），
+ * 不满足时整组隐藏 —— 与「粘贴仅在有剪贴板内容时出现」同一处理，不摆灰项。
+ * 几何计算与实际执行都不在这里（见 core/geometry/align.ts 与 alignCardsFlow.ts），
+ * 本函数只负责「把操作翻成可点的菜单项」。
+ */
+export function buildAlignItems(params: {
+  items: AlignItem[]
+  onPick: (operation: AlignOperation) => void
+}): ContextMenuItemData[] {
+  const { items, onPick } = params
+  const operations: AlignOperation[] = [
+    ...ALIGN_MODES.slice(0, 3),
+    ...ALIGN_MODES.slice(3),
+    ...(canDistribute(items) ? DISTRIBUTE_MODES : []),
+  ]
+  // 纵向组首项与分布组首项之前各画一条分隔线
+  const separatorIds = new Set<AlignOperation>([ALIGN_MODES[3], DISTRIBUTE_MODES[0]])
+
+  return operations.map((operation) => ({
+    id: `${CARD_ACTION.align}:${operation}`,
+    label: ALIGN_OPERATION_LABELS[operation],
+    separatorBefore: separatorIds.has(operation),
+    run: () => onPick(operation),
+  }))
 }
 
 /**

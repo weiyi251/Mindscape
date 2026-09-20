@@ -10,11 +10,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { PARTITION_PALETTE } from '@/core/board/partitions'
 import { NOTE_PALETTE } from '@/core/board/noteColors'
 import { UNCLASSIFIED_DIR } from '@/core/board/ingest'
-import { CARD_ACTION, CONNECTION_ACTION, PARTITION_ACTION } from '@/core/registry/menus'
+import { ALIGN_OPERATION_LABELS, CARD_ACTION, CONNECTION_ACTION, PARTITION_ACTION } from '@/core/registry/menus'
 import { registerCanvasMenuItem, resetPluginCenter } from '@/core/registry/pluginCenter'
 import type { Card, Connection, Partition } from '@/core/types'
 
 import {
+  buildAlignItems,
   buildCardMenuItems,
   buildCardMoveItems,
   buildCanvasMenuItems,
@@ -84,6 +85,7 @@ describe('buildCardMenuItems', () => {
     onSetColor: vi.fn(),
     onRenameFile: vi.fn(),
     onDeleteForever: vi.fn(),
+    onAlign: vi.fn(),
   }
 
   it('普通卡片：菜单项来自配置中心，「移除」标红', () => {
@@ -473,6 +475,7 @@ describe('buildCardMenuItems · 锁定卡片（2026-09-20）', () => {
     onSetColor: vi.fn(),
     onRenameFile: vi.fn(),
     onDeleteForever: vi.fn(),
+    onAlign: vi.fn(),
   }
 
   it('未锁定显示「锁定卡片」，已锁定显示「解锁卡片」', () => {
@@ -483,5 +486,102 @@ describe('buildCardMenuItems · 锁定卡片（2026-09-20）', () => {
     lockedCard.meta = { locked: true }
     const locked = buildCardMenuItems({ ...base, card: lockedCard })
     expect(locked.find((item) => item.id === CARD_ACTION.toggleLock)?.label).toBe('解锁卡片')
+  })
+})
+
+describe('对齐与分布（2026-09-20 用户计划 C3）', () => {
+  /** 与上面两处同构的 CardMenuParams 假数据；默认「两张卡都被选中」 */
+  const params = (
+    over: Partial<Parameters<typeof buildCardMenuItems>[0]> = {},
+  ): Parameters<typeof buildCardMenuItems>[0] => ({
+    card: fileCard({ id: 'c1' }),
+    screen: { x: 10, y: 20 },
+    spacePath: 'E:/space',
+    removedView: false,
+    selectedIds: ['c1', 'c2'],
+    selectedCards: [fileCard({ id: 'c1' }), fileCard({ id: 'c2' })],
+    onMove: vi.fn(),
+    onRestore: vi.fn(),
+    onSetColor: vi.fn(),
+    onRenameFile: vi.fn(),
+    onDeleteForever: vi.fn(),
+    onAlign: vi.fn(),
+    ...over,
+  })
+
+  it('选中 ≥2 张：出现「对齐与分布…」，点击后回传整批目标', () => {
+    const onAlign = vi.fn()
+    const items = buildCardMenuItems(params({ onAlign }))
+    const align = items.find((item) => item.id === CARD_ACTION.align)
+
+    expect(align?.label).toBe('对齐与分布…')
+    align?.run()
+    expect(onAlign).toHaveBeenCalledTimes(1)
+    const [targets, screen] = onAlign.mock.calls[0] as [Card[], { x: number; y: number }]
+    expect(targets.map((card) => card.id)).toEqual(['c1', 'c2'])
+    expect(screen).toEqual({ x: 10, y: 20 })
+  })
+
+  it('未选中 / 单选：不显示该项（对齐对单选没有意义）', () => {
+    const single = buildCardMenuItems(params({ selectedIds: ['c1'], selectedCards: [fileCard({ id: 'c1' })] }))
+    expect(single.map((item) => item.id)).not.toContain(CARD_ACTION.align)
+
+    const none = buildCardMenuItems(params({ selectedIds: [], selectedCards: [] }))
+    expect(none.map((item) => item.id)).not.toContain(CARD_ACTION.align)
+  })
+
+  it('buildAlignItems：8 项、文案来自配置中心、分三组', () => {
+    const items = buildAlignItems({
+      items: [
+        { id: 'a', rect: { x: 0, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'b', rect: { x: 50, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'c', rect: { x: 100, y: 0, w: 10, h: 10 }, locked: false },
+      ],
+      onPick: vi.fn(),
+    })
+
+    expect(items.map((item) => item.label)).toEqual([
+      ALIGN_OPERATION_LABELS.left,
+      ALIGN_OPERATION_LABELS.hcenter,
+      ALIGN_OPERATION_LABELS.right,
+      ALIGN_OPERATION_LABELS.top,
+      ALIGN_OPERATION_LABELS.vcenter,
+      ALIGN_OPERATION_LABELS.bottom,
+      ALIGN_OPERATION_LABELS['distribute-h'],
+      ALIGN_OPERATION_LABELS['distribute-v'],
+    ])
+    // 纵向组首项与分布组首项之前各一条分隔线
+    expect(items.filter((item) => item.separatorBefore).map((item) => item.label)).toEqual([
+      ALIGN_OPERATION_LABELS.top,
+      ALIGN_OPERATION_LABELS['distribute-h'],
+    ])
+  })
+
+  it('buildAlignItems：分布项按操作回传', () => {
+    const onPick = vi.fn()
+    const items = buildAlignItems({
+      items: [
+        { id: 'a', rect: { x: 0, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'b', rect: { x: 50, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'c', rect: { x: 100, y: 0, w: 10, h: 10 }, locked: false },
+      ],
+      onPick,
+    })
+
+    items.find((item) => item.id === `${CARD_ACTION.align}:distribute-v`)?.run()
+    expect(onPick).toHaveBeenCalledWith('distribute-v')
+  })
+
+  it('buildAlignItems：未锁定卡不足 3 张时隐藏分布两项', () => {
+    const twoMovable = buildAlignItems({
+      items: [
+        { id: 'a', rect: { x: 0, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'b', rect: { x: 50, y: 0, w: 10, h: 10 }, locked: false },
+        { id: 'pinned', rect: { x: 200, y: 0, w: 10, h: 10 }, locked: true },
+      ],
+      onPick: vi.fn(),
+    })
+    expect(twoMovable).toHaveLength(6)
+    expect(twoMovable.some((item) => item.id.includes('distribute'))).toBe(false)
   })
 })
