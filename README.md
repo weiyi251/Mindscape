@@ -58,16 +58,27 @@ Mindscape 是一个本地桌面画布。它不新建白板，而是**把一个�
 |---|---|
 | ![画布 · 浅色](docs/images/02-canvas-light.png) | ![画布 · 深色](docs/images/03-canvas-dark.png) |
 
-| 空间列表 | 设置 · 插件 |
+| 空间列表 | 待办卡与条目级连线 |
 |---|---|
-| ![空间列表](docs/images/01-spaces.png) | ![设置 · 插件](docs/images/06-settings-plugins.png) |
+| ![空间列表](docs/images/01-spaces.png) | ![待办卡](docs/images/07-todo-card.png) |
 
-| 新建色卡 |
+| 搜索定位 | 设置 · 快捷键 |
+|---|---|
+| ![搜索定位](docs/images/04-search.png) | ![设置 · 快捷键](docs/images/05-settings-shortcuts.png) |
+
+| 设置 · 插件 | 新建色卡 |
+|---|---|
+| ![设置 · 插件](docs/images/06-settings-plugins.png) | ![新建色卡](docs/images/08-color-card.png) |
+
+| 已移除视图 | 外部变动提示条 |
+|---|---|
+| ![已移除视图](docs/images/09-removed-view.png) | ![外部变动提示条](docs/images/10-external-change.png) |
+
+| 一键补框提示条 |
 |---|
-| ![新建色卡](docs/images/08-color-card.png) |
+| ![一键补框提示条](docs/images/11-unframed-folders.png) |
 
-> 更多截图（搜索浮层 / 快捷键页 / 待办卡条目级连线 / 已移除视图 / 外部变动提示条）
-> 待补，清单与拍摄规范见 [`docs/界面走查与截图清单.md`](docs/界面走查与截图清单.md) §2。
+> 拍摄规范与完整清单见 [`docs/界面走查与截图清单.md`](docs/界面走查与截图清单.md) §2。
 
 ## 下载安装
 
