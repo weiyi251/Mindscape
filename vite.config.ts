@@ -69,6 +69,8 @@ export default defineConfig(() => ({
   // 单元测试（Vitest）：仅覆盖纯逻辑模块，不需要 DOM 环境
   test: {
     environment: 'node',
-    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // scripts/ 那一份是构建脚本里的纯逻辑（安卓架构映射、任务名、版本号）——
+    // 真跑一次几十分钟，能在编译期判的字符串就别交给机器等
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.mjs'],
   },
 }))
