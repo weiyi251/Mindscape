@@ -10,6 +10,8 @@
 //     归一化成可展示的信息；
 //   · 非桌面环境（浏览器直接打开 dev 地址）没有 Rust 后端，短路为 unsupported，
 //     与 App.tsx 中 isDesktopRuntime 的处理保持一致；
+//   · **移动端同样短路**（2026-09-21 M1）：APK 走侧载分发，没有 updater 渠道，
+//     且移动端 `isDesktopRuntime()` 为 true，只能靠平台能力表拦（见 core/system/platformCapabilities.ts）；
 //   · 检查失败一律不向上抛 —— 更新检查出问题绝不该影响应用正常使用。
 //
 // 本模块只做「调用 + 结果归一化」，不含任何 UI（UI 见 pages/SpaceList.tsx 与
@@ -19,6 +21,7 @@
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { isDesktopRuntime } from '@/core/utils/runtime'
 import { toErrorMessage } from '@/core/utils/errorMessage'
 
@@ -61,7 +64,8 @@ export function progressRatio(progress: UpdateProgress): number | null {
  * 任何异常都归一化为 { kind: 'error' }，不向上抛。
  */
 export async function checkForUpdate(): Promise<UpdateCheckResult> {
-  if (!isDesktopRuntime()) return { kind: 'unsupported' }
+  // 两条短路理由不同：非桌面 = 没有 Rust 后端；移动端 = APK 侧载渠道没有 updater 机制
+  if (!isDesktopRuntime() || !supportsCapability('autoUpdate')) return { kind: 'unsupported' }
 
   try {
     const update = await check()

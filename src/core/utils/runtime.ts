@@ -11,6 +11,9 @@
 // 对使用者毫无意义。因此统一在这里判定环境，并给出一句能照做的中文说明。
 //
 // 实现任务：T1.1 修复（阶段一）。
+//
+// 2026-09-21 移动端适配（M1）追加 `isMobileRuntime()`：Tauri 安卓/iOS 窗口里
+// `__TAURI_INTERNALS__` 同样存在，故本模块的桌面判定**不能**用来表达「非移动端」。
 // ============================================================================
 
 /** 非桌面环境时展示的说明（中文，可直接显示给用户） */
@@ -37,6 +40,11 @@ export function assertDesktopRuntime(): void {
   throw new Error(DESKTOP_ONLY_MESSAGE)
 }
 
+/** 取当前 UserAgent；node（含单元测试）没有 navigator，返回空串 */
+export function currentUserAgent(): string {
+  return typeof navigator === 'undefined' ? '' : navigator.userAgent
+}
+
 /**
  * 当前是否运行在移动端（Android / iOS 的 Tauri 窗口，2026-09-21 移动端适配 M1）。
  *
@@ -45,6 +53,6 @@ export function assertDesktopRuntime(): void {
  * UserAgent —— Android WebView / iOS WKWebView 的 UA 都含平台标识，桌面 WebView2
  * 不含。注入 userAgent 参数便于单测（node 环境没有 navigator）。
  */
-export function isMobileRuntime(userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+export function isMobileRuntime(userAgent: string = currentUserAgent()): boolean {
   return /Android|iPhone|iPad|Mobile/i.test(userAgent)
 }

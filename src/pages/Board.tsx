@@ -97,10 +97,12 @@ import type { AddCardsSource } from '@/core/commands/impl/addCards'
 import type { Point } from '@/canvas/interaction/connectionAnchor'
 import { isValidFolderName } from '@/core/board/partitions'
 import { readClipboardFiles } from '@/core/system/clipboard'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { DATA_VERSION } from '@/core/types'
 import type { Layout } from '@/core/types'
 import { buildCanvasMenuItems } from '@/pages/board/contextMenus'
 import { openCreatePartitionPrompt } from '@/pages/board/createPartitionFlow'
+import { openCardExternally } from '@/pages/board/openCardFlow'
 import { refreshDirSignatureBaseline, reloadSpace } from '@/pages/board/spaceLoadFlow'
 import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
@@ -1093,37 +1095,19 @@ export function Board() {
   handlePasteImageRef.current = handlePasteImage
 
   /**
-   * 双击 / 菜单「打开原图」（T3.5 / 第九章）：
-   * image 卡打开原图；file 卡用系统默认程序打开。
-   * 打开失败（未关联程序等）降级为「在资源管理器中定位」并提示。
+   * 双击 / 菜单「打开原图」（T3.5 / 第九章）：编排层见 pages/board/openCardFlow.ts。
+   * 打开失败时是否降级为「在资源管理器中定位」由平台能力表决定（移动端无此能力）。
    */
   const openCardWithSystem = useCallback(
-    async (card: Card) => {
-      const space = useSpacesStore.getState().getCurrentSpace()
-      if (!space) return
-      // 便签没有文件；图片打开原图（未升级前 originalPath 也已登记）
-      const absolutePath =
-        card.type === 'note'
-          ? ''
-          : card.type === 'image'
-            ? getCardOriginalPath(card.id)
-            : joinPath(space.folderPath, card.filePath)
-      if (absolutePath === '') {
-        setActionError('便签没有关联的文件')
-        return
-      }
-
-      try {
-        await localStorageProvider.openWithDefault(absolutePath)
-      } catch {
-        try {
-          await localStorageProvider.revealInExplorer(absolutePath)
-          setActionError('系统未关联该文件类型的打开方式，已在资源管理器中定位')
-        } catch (error) {
-          setActionError(error instanceof Error ? error.message : String(error))
-        }
-      }
-    },
+    (card: Card) =>
+      openCardExternally(card, {
+        spaceFolder: useSpacesStore.getState().getCurrentSpace()?.folderPath ?? null,
+        originalPathOf: getCardOriginalPath,
+        openWithDefault: (path) => localStorageProvider.openWithDefault(path),
+        revealInExplorer: (path) => localStorageProvider.revealInExplorer(path),
+        canRevealInExplorer: supportsCapability('revealInExplorer'),
+        onError: setActionError,
+      }),
     [],
   )
 

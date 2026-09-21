@@ -25,6 +25,7 @@ import { DesktopRequired } from '@/pages/DesktopRequired'
 import { SpaceList } from '@/pages/SpaceList'
 import { UpdateDialog } from '@/components/ui/update-dialog'
 import { isDesktopRuntime } from '@/core/utils/runtime'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { useSpacesStore } from '@/core/store/spacesStore'
 import { useUpdaterStore } from '@/core/store/updaterStore'
 
@@ -46,9 +47,10 @@ export default function App() {
     void load()
   }, [load, desktop])
 
-  // 启动静默检查更新。走 getState() 而非订阅，避免把更新状态引进本组件的渲染依赖
+  // 启动静默检查更新。走 getState() 而非订阅，避免把更新状态引进本组件的渲染依赖。
+  // 移动端不发起：APK 侧载渠道没有 updater 机制（平台能力表 autoUpdate = false）
   useEffect(() => {
-    if (!desktop) return
+    if (!desktop || !supportsCapability('autoUpdate')) return
     const timer = window.setTimeout(() => {
       void useUpdaterStore.getState().check({ silent: true })
     }, STARTUP_UPDATE_CHECK_DELAY_MS)

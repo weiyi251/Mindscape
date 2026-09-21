@@ -15,12 +15,17 @@ type PluginEvent = { event: string; data: { contentLength?: number; chunkLength?
 const { checkMock, relaunchMock, state } = vi.hoisted(() => ({
   checkMock: vi.fn(),
   relaunchMock: vi.fn(),
-  state: { desktop: true },
+  state: { desktop: true, mobile: false },
 }))
 
 vi.mock('@tauri-apps/plugin-updater', () => ({ check: checkMock }))
 vi.mock('@tauri-apps/plugin-process', () => ({ relaunch: relaunchMock }))
-vi.mock('@/core/utils/runtime', () => ({ isDesktopRuntime: () => state.desktop }))
+vi.mock('@/core/utils/runtime', () => ({
+  isDesktopRuntime: () => state.desktop,
+  // 平台能力表最终落到这两个函数上（移动端 isDesktopRuntime 仍为 true，只能靠 UA 判）
+  isMobileRuntime: () => state.mobile,
+  currentUserAgent: () => (state.mobile ? 'Android' : ''),
+}))
 
 const { checkForUpdate, downloadAndInstall, restartApp, progressRatio } = await import('./updater')
 
@@ -28,11 +33,18 @@ beforeEach(() => {
   checkMock.mockReset()
   relaunchMock.mockReset()
   state.desktop = true
+  state.mobile = false
 })
 
 describe('checkForUpdate', () => {
   it('非桌面环境直接短路，且不触碰插件', async () => {
     state.desktop = false
+    await expect(checkForUpdate()).resolves.toEqual({ kind: 'unsupported' })
+    expect(checkMock).not.toHaveBeenCalled()
+  })
+
+  it('移动端（桌面判定仍为 true，但能力表关掉 autoUpdate）同样短路', async () => {
+    state.mobile = true
     await expect(checkForUpdate()).resolves.toEqual({ kind: 'unsupported' })
     expect(checkMock).not.toHaveBeenCalled()
   })
