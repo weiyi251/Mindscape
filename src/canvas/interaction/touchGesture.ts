@@ -43,6 +43,13 @@ export interface TouchPointerDown {
   onItem?: boolean
   /** 「选择模式」下拖框选：既不平移也不长按，整根手指交给框选控制器 */
   marquee?: boolean
+  /**
+   * `PointerEvent.isPrimary`。**触摸会话里只有第一根手指是 primary**，
+   * 第二根及以后一律 false —— 状态机靠它识别「这是一轮新的触摸」，
+   * 从而清掉上一轮没收到抬起事件的残留指针（见 pointerDown 里的自净分支）。
+   * 缺省 false = 保守，不触发清理。
+   */
+  isPrimary?: boolean
 }
 
 export interface TouchGestureCommands {
@@ -132,8 +139,22 @@ export class TouchGestureRecognizer {
   // 事件入口（Viewport 直接把原生 PointerEvent 的关键字段喂进来）
   // -------------------------------------------------------------------------
 
-  pointerDown({ pointerId, point, onItem = false, marquee = false }: TouchPointerDown): void {
+  pointerDown({
+    pointerId,
+    point,
+    onItem = false,
+    marquee = false,
+    isPrimary = false,
+  }: TouchPointerDown): void {
     if (this.pointers.has(pointerId)) return
+
+    // 幽灵指针自净。进 pinch 的唯一条件是 `pointers.size >= 2`，而清理只发生在
+    // 收到该指针的 up / cancel 时 —— 手指在 Viewport 之外抬起（右下角工具条是它的
+    // 兄弟节点、卡片拖拽自己 setPointerCapture）就永远收不到，Map 里留下一根
+    // 「从未抬起」的手指。此后每一次单指拖动都被判成捏合，位移喂进 zoom，
+    // 而且**永不自愈**（真机第一轮用户报的「单指拖动变缩放」就是这条）。
+    // 判据：触摸会话里只有第一根手指 isPrimary，所以 primary 落下时还有货 = 残留。
+    if (isPrimary && this.pointers.size > 0) this.reset()
 
     this.pointers.set(pointerId, { point: { ...point }, canPan: !onItem && !marquee })
 

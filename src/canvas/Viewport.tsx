@@ -204,6 +204,7 @@ export function Viewport({
           point: { x: event.clientX, y: event.clientY },
           onItem,
           marquee,
+          isPrimary: event.isPrimary,
         })
         // 空白起拖才捕获到 root：卡片上的触摸留给卡片自己的 setPointerCapture
         if (!onItem && !marquee) root.setPointerCapture(event.pointerId)
@@ -260,7 +261,8 @@ export function Viewport({
         if (root.hasPointerCapture(event.pointerId)) {
           root.releasePointerCapture(event.pointerId)
         }
-        touchDown.current = null
+        // 现在这是 window 级监听：别一根不相干的手指抬起来就把长按的落点清掉
+        if (touchDown.current?.pointerId === event.pointerId) touchDown.current = null
         return
       }
       if (!gesture.isActivePointer(event.pointerId)) return
@@ -280,7 +282,7 @@ export function Viewport({
         if (root.hasPointerCapture(event.pointerId)) {
           root.releasePointerCapture(event.pointerId)
         }
-        touchDown.current = null
+        if (touchDown.current?.pointerId === event.pointerId) touchDown.current = null
         return
       }
       if (!gesture.isActivePointer(event.pointerId)) return
@@ -292,15 +294,20 @@ export function Viewport({
 
     root.addEventListener('pointerdown', handlePointerDown)
     root.addEventListener('pointermove', handlePointerMove)
-    root.addEventListener('pointerup', handlePointerUp)
-    root.addEventListener('pointercancel', handlePointerCancel)
+    // 抬起 / 取消听 window，不听 root：只有被 root 捕获过的手指才**保证**回到 root，
+    // 按在卡片上（卡片自己 setPointerCapture）或在 Viewport 的兄弟节点上松开
+    //（右下角工具条、小地图）时 root 收不到，状态机里就留下一根永不抬起的幽灵手指，
+    // 之后每次单指拖动都被当成捏合。事件无论如何都会冒泡到 window，
+    // 未登记的 pointerId 由 `pointers.has()` 在状态机里挡掉，不会重复计数。
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerCancel)
 
     return () => {
       root.removeEventListener('wheel', handleWheel)
       root.removeEventListener('pointerdown', handlePointerDown)
       root.removeEventListener('pointermove', handlePointerMove)
-      root.removeEventListener('pointerup', handlePointerUp)
-      root.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
       controller.detach()
     }
   }, [controller, panWithPointer])

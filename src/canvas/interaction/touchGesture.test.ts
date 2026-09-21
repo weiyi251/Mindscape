@@ -303,3 +303,45 @@ describe('TouchGestureRecognizer：取消与复位', () => {
     expect(recognizer.mode).toBe('idle')
   })
 })
+
+// 真机第一轮（2026-09-21 用户反馈「单指拖动会变成缩放」）。
+// 抬起事件只有在指针被 root 捕获过时才保证回到 root；按在卡片上（卡片自己
+// setPointerCapture）或在 Viewport 的兄弟节点（右下角工具条、小地图）上松开时收不到，
+// Map 里便留下一根「从未抬起」的幽灵手指 —— 之后每一次单指按下都立刻进 pinch。
+describe('TouchGestureRecognizer：幽灵指针自净', () => {
+  it('primary 手指落下时若还有残留指针，先丢弃残留，单指拖动仍是平移', () => {
+    const { recognizer, panBy, pinchStart } = createHarness()
+
+    // 手指 7 按下后从 Viewport 之外抬起：状态机没收到 up，7 留在表里
+    recognizer.pointerDown({ pointerId: 7, point: point(0, 0), isPrimary: true })
+    expect(recognizer.trackedPointerCount).toBe(1)
+
+    // 新一轮触摸（primary）→ 7 被判为残留并清掉
+    recognizer.pointerDown({ pointerId: 9, point: point(10, 10), isPrimary: true })
+    expect(recognizer.trackedPointerCount).toBe(1)
+    expect(recognizer.mode).toBe('single')
+
+    recognizer.pointerMove(9, point(120, 40))
+    expect(pinchStart).not.toHaveBeenCalled()
+    expect(panBy).toHaveBeenCalled()
+  })
+
+  it('第二指落下不是 primary → 照常转捏合，自净不许把它误清', () => {
+    const { recognizer, pinchStart } = createHarness()
+
+    recognizer.pointerDown({ pointerId: 1, point: point(0, 0), isPrimary: true })
+    recognizer.pointerDown({ pointerId: 2, point: point(0, 100), isPrimary: false })
+    expect(recognizer.mode).toBe('pinch')
+    expect(recognizer.trackedPointerCount).toBe(2)
+    expect(pinchStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('不传 isPrimary 时保守不清（旧调用方与既有测试的语义不变）', () => {
+    const { recognizer } = createHarness()
+
+    recognizer.pointerDown({ pointerId: 1, point: point(0, 0) })
+    recognizer.pointerDown({ pointerId: 2, point: point(0, 0) })
+    expect(recognizer.trackedPointerCount).toBe(2)
+    expect(recognizer.mode).toBe('pinch')
+  })
+})
