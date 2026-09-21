@@ -15,7 +15,8 @@
 // ============================================================================
 
 import { cloneFilelessCard } from '@/core/board/ingest'
-import { writeClipboardFilesAndText, writeClipboardText } from '@/core/system/clipboard'
+import { supportsCapability } from '@/core/system/platformCapabilities'
+import { writeClipboardFilesAndText, writeSystemClipboardText } from '@/core/system/clipboard'
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
 import { basenameOf, joinPath } from '@/core/utils/paths'
@@ -86,11 +87,14 @@ export function cardsToClipboardText(cards: Card[]): string {
 }
 
 /**
- * 把选区写入系统剪贴板的**全部外部格式**（2026-09-18 回归修复后归口于此）：
- *   · 选区里有文件卡 → `writeClipboardFilesAndText` 一次写入 CF_HDROP + 文本
- *     两种格式（资源管理器粘贴出文件、记事本粘贴出文字）。⚠️ 不能分两次写：
- *     writeClipboardText 会清空剪贴板把文件格式冲掉 —— 这正是「复制文件变成
- *     粘贴文件名」回归的根因。双写失败（含路径全部失效）降级为只写文本；
+ * 把选区写入系统剪贴板的**全部外部格式**（2026-09-18 回归修复后归口于此；
+ * 2026-09-21 M4 补移动端通道）：
+ *   · 选区里有文件卡**且本平台能写文件** → `writeClipboardFilesAndText` 一次写入
+ *     CF_HDROP + 文本两种格式（资源管理器粘贴出文件、记事本粘贴出文字）。
+ *     ⚠️ 不能分两次写：writeClipboardText 会清空剪贴板把文件格式冲掉 —— 这正是
+ *     「复制文件变成粘贴文件名」回归的根因。双写失败（含路径全部失效）降级为只写文本；
+ *   · 移动端（`systemClipboardFiles` 为 false）→ 直接只写文本，且文本走 WebView 的
+ *     `navigator.clipboard`（安卓上原生命令注定失败，不必先撞一次错误）；
  *   · 纯无文件选区（spacePath 为空视为拿不到原件，同此）→ 只写文本。
  * 返回给 Board 的错误信息（降级成功时为 null）由调用方直接展示。
  */
@@ -99,8 +103,9 @@ export async function copyCardsToSystemClipboard(
   spacePath: string,
 ): Promise<string | null> {
   const text = cardsToClipboardText(cards)
+  const canWriteFiles = supportsCapability('systemClipboardFiles')
   const filePaths =
-    spacePath === ''
+    !canWriteFiles || spacePath === ''
       ? []
       : cards.filter((card) => card.filePath !== '').map((card) => joinPath(spacePath, card.originalPath || card.filePath))
 
@@ -109,10 +114,10 @@ export async function copyCardsToSystemClipboard(
       try {
         await writeClipboardFilesAndText(filePaths, text)
       } catch {
-        await writeClipboardText(text)
+        await writeSystemClipboardText(text)
       }
     } else if (text) {
-      await writeClipboardText(text)
+      await writeSystemClipboardText(text)
     }
     return null
   } catch (error) {

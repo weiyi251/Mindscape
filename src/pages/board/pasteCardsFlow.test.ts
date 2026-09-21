@@ -5,20 +5,26 @@
 // 以及「源卡不被改动」的复制语义。
 // ============================================================================
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { zCardSchema } from '@/core/types'
 import type { Card } from '@/core/types'
 
 import { cardToClipboardText, cardsToClipboardText, clonePastedCard, copyCardsToSystemClipboard } from './pasteCardsFlow'
 
-// 剪贴板写入是 Tauri 命令（vitest 无桌面环境）：mock 成 spy 观察调用契约
+// 剪贴板写入是 Tauri 命令（vitest 无桌面环境）：mock 成 spy 观察调用契约。
+// writeSystemClipboardText 是 M4 起的「按平台选通道」出口（桌面原生命令 / 移动端
+// navigator.clipboard），本文件只验「调了它、传了什么」，通道选择在 clipboard.test.ts。
 const writeFilesAndText = vi.fn(async () => 1)
 const writeText = vi.fn(async () => undefined)
 vi.mock('@/core/system/clipboard', () => ({
   writeClipboardFilesAndText: (...args: unknown[]) => writeFilesAndText(...(args as [])),
-  writeClipboardText: (...args: unknown[]) => writeText(...(args as [])),
+  writeSystemClipboardText: (...args: unknown[]) => writeText(...(args as [])),
 }))
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 function makeCard(overrides: Partial<Card> = {}): Card {
   return zCardSchema.parse({
@@ -153,5 +159,21 @@ describe('copyCardsToSystemClipboard（2026-09-18：文件/文本双格式归口
     )
     expect(failure2).toContain('写入系统剪贴板失败')
     expect(failure2).toContain('无法打开剪贴板')
+  })
+
+  it('移动端（M4）：文件卡也不碰原生双写命令，只走文本通道（安卓写文件注定失败）', async () => {
+    vi.stubGlobal('navigator', {
+      userAgent:
+        'Mozilla/5.0 (Linux; Android 14; M2012K11AC Build/UKQ1) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36',
+    })
+
+    const failure = await copyCardsToSystemClipboard(
+      [makeCard({ type: 'image', filePath: '图片/海报.png', meta: {} })],
+      'E:\\Mindscape\\空间A',
+    )
+
+    expect(writeFilesAndText).not.toHaveBeenCalled()
+    expect(writeText).toHaveBeenCalledWith('海报.png')
+    expect(failure).toBeNull()
   })
 })
