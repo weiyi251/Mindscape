@@ -143,7 +143,13 @@ const FILE_SIZE_BUDGET: Record<string, number> = {
   // 1190（余量 6）：这批新增全是「手势分流的判据」，抽出去反而要绕一圈回传
   // cardId 与锁定集合，得不偿失；下一次要往 Canvas 加东西请先外抽（候选：
   // 按下分发的分区 / 卡片分支整理进 interaction/pointerDispatch.ts）。
-  'src/canvas/Canvas.tsx': 1190,
+  // 移动端 M2（2026-09-21）：长按复用右键判定 + 选择模式 + 软键盘让位接线，
+  // 按约定先做两次外抽 —— 右键命中判定/分派 → interaction/contextMenuHitTest.ts +
+  // useCanvasContextMenu.ts（Canvas −52 行），状态条与右下角按钮 → CanvasOverlay.tsx
+  // （含移动端 CanvasTouchToolbar）。实际 **1176** 行，阈值下调到 1180（余量 4）
+  // 锁定收益；触屏判定本身只剩模块级一个常量 TOUCH（能力表口径），后续 M3/M4
+  // 要往 Canvas 加东西请继续外抽，候选仍是按下分发的那批手势判据。
+  'src/canvas/Canvas.tsx': 1180,
 }
 
 describe('规则 1：大文件行数只减不增', () => {
@@ -498,6 +504,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/core/commands/types.ts': '待补测试（存量，纯类型）',
   'src/core/hooks/useTheme.ts': '待补测试（存量）',
   'src/core/hooks/useCardSearch.ts': 'React 胶水（纯逻辑在 core/board/search.ts 已测）',
+  'src/canvas/useCanvasContextMenu.ts':
+    'React 胶水（M2 从 Canvas.tsx 拆出：命中判定与分派在 interaction/contextMenuHitTest.ts 已测，本文件只挂 contextmenu 监听）',
   'src/core/registry/actionRegistry.ts': '待补测试（存量）',
   'src/core/storage/StorageProvider.ts': '待补测试（存量，接口声明为主）',
   'src/core/utils/media.ts': '待补测试（存量）',

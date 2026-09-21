@@ -42,6 +42,8 @@ import {
 import type { CardRenderProps, CardTypeDef } from './pluginCenter'
 import { getRegisteredCardType, listRegisteredCardTypes } from './pluginCenter'
 import { CORE_CARD_MENU_ITEMS } from './menus'
+import { currentUserAgent } from '@/core/utils/runtime'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 
 // ---------------------------------------------------------------------------
 // 展示用元数据
@@ -228,6 +230,23 @@ function tagBar(card: Card, floating = false): ReactNode {
 }
 
 /**
+ * 「悬停才显示」这类外挂信息的显示条件类名（2026-09-18 桌面用 hover；
+ * 2026-09-21 移动端适配 M2 补上选中态通道）。
+ *
+ * 桌面维持 `group-hover:opacity-100` 不变（计划 §6：桌面端外观零改动）。
+ * 触屏上 hover 态只在手指按住的那几十毫秒里存在，抬指即消失，等于永远看不到 ——
+ * 因此改看卡片的选中态：Card.tsx 在卡片根元素上写 `data-selected="true"`，
+ * 点一下卡片就把文件名 / 色号 / 分辨率显示出来，看到的是同一批信息、同一个位置。
+ *
+ * 两套类名互斥出现（按平台能力表选），因此 Tailwind 仍能从源码里扫到字面量。
+ */
+export function hoverRevealClass(userAgent: string = currentUserAgent()): string {
+  return supportsCapability('pointerHover', userAgent)
+    ? 'group-hover:opacity-100'
+    : 'group-data-[selected=true]:opacity-100'
+}
+
+/**
  * 悬浮标记 chip（2026-09-14；位置 2026-09-14 第二次裁决改为**下方左下角**；
  * 2026-09-15 起改为由 belowCardStack 容器承载 —— chip 自身改为容器内的
  * 流内元素，不再自带定位类）：
@@ -252,7 +271,8 @@ function hoverLabelChip(card: Card): ReactNode {
       className:
         'max-w-full truncate rounded-md border border-border/70 ' +
         'bg-background/80 px-1.5 py-0.5 font-mono text-[11px] leading-snug text-foreground ' +
-        'shadow-sm backdrop-blur-sm select-none pointer-events-none opacity-0 transition-opacity group-hover:opacity-100',
+        'shadow-sm backdrop-blur-sm select-none pointer-events-none opacity-0 transition-opacity ' +
+        hoverRevealClass(),
     },
     label,
   )
@@ -277,7 +297,8 @@ function fileNameChip(card: Card): ReactNode {
         'max-w-full truncate rounded-md border border-border/60 ' +
         'bg-background/80 px-1.5 py-0.5 text-[11px] leading-snug text-muted-foreground ' +
         'shadow-sm backdrop-blur-sm select-none pointer-events-none ' +
-        'opacity-0 transition-opacity group-hover:opacity-100',
+        'opacity-0 transition-opacity ' +
+        hoverRevealClass(),
     },
     basename(card.filePath),
   )
@@ -468,7 +489,8 @@ function renderImage({ card, selected }: CardRenderProps): ReactNode {
     className:
       'absolute bottom-full right-0 z-20 mb-1.5 hidden rounded-md border border-border/70 ' +
       'bg-background/80 px-1.5 py-0.5 font-mono text-[11px] leading-snug text-foreground ' +
-      'shadow-sm backdrop-blur-sm pointer-events-none select-none opacity-0 transition-opacity group-hover:opacity-100',
+      'shadow-sm backdrop-blur-sm pointer-events-none select-none opacity-0 transition-opacity ' +
+      hoverRevealClass(),
   })
 
   // 卡片盒下方外侧的外挂容器（2026-09-18 起只承载悬停淡入的文件名 chip 与

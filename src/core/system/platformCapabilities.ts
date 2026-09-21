@@ -19,19 +19,38 @@ import { currentUserAgent, isMobileRuntime } from '@/core/utils/runtime'
 /**
  * 需要按平台裁剪的能力。
  * M1 先收口三项（快捷键页 / 自动更新 / 文件管理器定位）；
- * M2（手势、悬停）与 M4（文件夹选择器、拖入、跨应用文件剪贴板）再往里加。
+ * M2 补上 hover（悬停改「选中即显示」）与 touchGestures（手势优先 + 兜底按钮，D4）；
+ * M4（文件夹选择器、拖入、跨应用文件剪贴板）再往里加。
  */
-export type PlatformCapability = 'keyboardShortcuts' | 'autoUpdate' | 'revealInExplorer'
+export type PlatformCapability =
+  | 'keyboardShortcuts'
+  | 'autoUpdate'
+  | 'revealInExplorer'
+  | 'pointerHover'
+  | 'touchGestures'
 
 const CAPABILITY_TABLE: Record<'desktop' | 'mobile', Record<PlatformCapability, boolean>> = {
-  desktop: { keyboardShortcuts: true, autoUpdate: true, revealInExplorer: true },
+  desktop: {
+    keyboardShortcuts: true,
+    autoUpdate: true,
+    revealInExplorer: true,
+    pointerHover: true,
+    // 鼠标 + 快捷键足够，画布走原有的滚轮 / Ctrl+拖路径，不渲染触屏那套手势与按钮
+    touchGestures: false,
+  },
   mobile: {
     // 触屏没有物理键盘，自定义快捷键页在移动端没有意义
     keyboardShortcuts: false,
-    // APK 侧载分发渠道没有 updater 机制（计划 §0.2 第 3 项、§6 第一版不做清单）
+    // APK 侧载分发渠道没有 updater 机制（计划 §0.2 第 3 项、§6 不做清单）
     autoUpdate: false,
     // Android 没有「在资源管理器中选中该文件」这一概念（opener 的 reveal_item_in_dir 无移动端实现）
     revealInExplorer: false,
+    // 手指按下即 hover 态、抬起即消失 —— 悬停才显示的信息在触屏上永远看不到，
+    // 必须换成「选中即显示」（M2，见 core/registry/cardTypes.ts 的 hoverRevealClass）
+    pointerHover: false,
+    // 触屏上的画布手势（捏合缩放 / 单指平移 / 长按出菜单）与 44px 兜底按钮，
+    // 桌面用不上：桌面既没有第三根手指，也没有理由藏起快捷键提示
+    touchGestures: true,
   },
 }
 

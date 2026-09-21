@@ -28,10 +28,10 @@ import { CardView, CARD_ID_ATTR } from './Card'
 import { PartitionView, PARTITION_ID_ATTR } from './Partition'
 import { ConnectionLayer } from './Connection'
 import type { ConnectionLayerHandle } from './Connection'
-import { CONNECTION_ID_ATTR, CONNECTION_SVG_MARGIN, CONNECTION_SVG_TOTAL } from './Connection'
+import { CONNECTION_SVG_MARGIN, CONNECTION_SVG_TOTAL } from './Connection'
 import { SelectionBox } from './Selection'
 import type { SelectionBoxHandle } from './Selection'
-import { FpsMeter } from './FpsMeter'
+import { CanvasOverlay } from './CanvasOverlay'
 import { upgradeVisibleImages } from './lazyOriginal'
 import { CardDragController, DRAG_OPACITY, DRAG_THRESHOLD_PX } from './interaction/cardDragController'
 import type { CardDragDelegate, CardDragSource } from './interaction/cardDragController'
@@ -57,6 +57,7 @@ import { visibleCanvasRect } from './lazyOriginal'
 import { SnapGuide } from './SnapGuide'
 import type { SnapGuideHandle } from './SnapGuide'
 import { useCanvasShortcuts } from './useCanvasShortcuts'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import {
   computePartitionResizeLimits,
   PARTITION_TITLE_HEIGHT,
@@ -66,6 +67,23 @@ import type { ViewportState } from './interaction/coordinates'
 import type { CardMoveDelta } from '@/core/commands/impl/moveCards'
 import type { CardResizeDelta } from '@/core/commands/impl/resizeCards'
 import type { ViewportController } from './interaction/viewportController'
+import { useCanvasContextMenu } from './useCanvasContextMenu'
+import { onVisualViewportResize, revealCard } from './interaction/revealCard'
+
+/**
+ * 触屏口径总闸（M2 / 决策 D4「手势优先 + 兜底按钮」）：打开后画布走捏合 / 单指平移 /
+ * 长按菜单这一套，右下角换成 44px 紧凑按钮并多一个「框选」模式开关（触屏没有 Ctrl）。
+ * 桌面恒为 false —— 该判定在整个组件生命周期里不会变，故在模块级算一次。
+ */
+const TOUCH = supportsCapability('touchGestures')
+
+/**
+ * 「这根手指交给元素自己处理」的选择器（M2）：与 handleItemPointerDown 的早退条件
+ * 同一批标记（便签编辑态 textarea、插件卡交互件、按钮），再加输入类元素兜底。
+ * 触屏上命中它们就不进手势状态机，否则长按会盖掉选字、拖拽会盖掉点击。
+ */
+const INTERACTIVE_TOUCH_SELECTOR =
+  '[data-note-editing], [data-card-interactive], button, input, textarea, [contenteditable]'
 
 export interface CanvasProps {
   /** 要渲染的卡片；x / y / w / h 均为画布坐标 */
@@ -271,6 +289,14 @@ export function Canvas({
    *  单一数据源：双击标题与右键菜单「重命名分区」都经此处置位，PartitionView 只据 `editing`
    *  推导是否显示输入框，杜绝两个入口各维护一份状态导致错位 */
   const [editingPartitionId, setEditingPartitionId] = useState<string | null>(null)
+
+  // ---- M2 触摸手势接线（2026-09-21）----
+  // 「选择模式」：触屏没有 Ctrl，框选必须由按钮进入（D4 兜底按钮）。桌面不渲染按钮，
+  // 该状态永远是 false，因此桌面侧框选行为零变化。
+  const [selectMode, setSelectMode] = useState(false)
+  /** 在途单指手势的作废入口：由 window 监听那个 effect 赋值（见 abortPointerGesturesRef） */
+  const abortPointerGesturesRef = useRef<(() => void) | null>(null)
+  const abortPointerGestures = useCallback(() => abortPointerGesturesRef.current?.(), [])
   /** 双击标题 / 菜单「重命名分区」→ 置位本分区为编辑态 */
   const handlePartitionBeginEdit = useCallback((id: string) => {
     setEditingPartitionId(id)
@@ -833,6 +859,8 @@ export function Canvas({
       // 连线拖出被取消：隐藏临时线
       connectionDragController.cancel()
     }
+    // M2：触摸转捏合 / 长按弹菜单时，Viewport 用同一个入口作废在途手势
+    abortPointerGesturesRef.current = handleCancel
 
     window.addEventListener('pointermove', handleMove)
     window.addEventListener('pointerup', handleUp)
@@ -841,6 +869,7 @@ export function Canvas({
       window.removeEventListener('pointermove', handleMove)
       window.removeEventListener('pointerup', handleUp)
       window.removeEventListener('pointercancel', handleCancel)
+      abortPointerGesturesRef.current = null
     }
   }, [
     dragController,
@@ -858,6 +887,19 @@ export function Canvas({
     onSelectCardsRef.current?.([])
     onSelectPartitionRef.current?.(null)
   }, [])
+
+  // ---- M2 软键盘：进入便签编辑时把卡片让到键盘上方（触屏专属，桌面不触发）----
+  useEffect(() => {
+    if (!TOUCH || !editingNoteId) return
+    const reveal = () =>
+      revealCard(
+        controllerRef.current,
+        cardsRef.current.find((item) => item.id === editingNoteId),
+      )
+    reveal()
+    // 键盘滞后约一两百毫秒才真正缩掉可视视口，弹出来之后再让一次位
+    return onVisualViewportResize(window.visualViewport, reveal)
+  }, [editingNoteId])
 
   /** 折叠 / 展开分区框（T2.5）：低频 UI 操作，走 React 状态 */
   const handleTogglePartitionCollapsed = useCallback((id: string) => {
@@ -965,59 +1007,19 @@ export function Canvas({
     upgradeOriginals()
   }, [cards, upgradeOriginals])
 
-  // ---- T3.9 右键菜单：事件在画布根上统一拦截，命中对象交给上层生成菜单 ----
-  useEffect(() => {
-    const root = wrapperRef.current?.querySelector<HTMLElement>(`[${CANVAS_ROOT_ATTR}]`)
-    if (!root) return
-
-    const handleContextMenu = (event: MouseEvent) => {
-      event.preventDefault()
-
-      const target = event.target as HTMLElement | null
-      const screen = { x: event.clientX, y: event.clientY }
-
-      // 连线右键（断开连接 / 编辑标签）：先于卡片判断（连线画在卡片之下，
-      // 命中线是独立的 SVG path，closest 到 data-connection-id 即命中）
-      const connectionElement = target?.closest(`[${CONNECTION_ID_ATTR}]`) as SVGPathElement | null
-      if (connectionElement) {
-        const connectionId = connectionElement.getAttribute(CONNECTION_ID_ATTR)
-        if (connectionId) {
-          onConnectionContextMenuRef.current?.(connectionId, screen)
-          return
-        }
-      }
-
-      const cardElement = target?.closest(`[${CARD_ID_ATTR}]`) as HTMLElement | null
-      if (cardElement) {
-        const card = cardsRef.current.find(
-          (item) => item.id === cardElement.getAttribute(CARD_ID_ATTR),
-        )
-        if (card) {
-          onCardContextMenuRef.current?.(card, screen)
-          return
-        }
-      }
-
-      const partitionElement = target?.closest(`[${PARTITION_ID_ATTR}]`) as HTMLElement | null
-      if (partitionElement) {
-        const partition = partitionsRef.current.find(
-          (item) => item.id === partitionElement.getAttribute(PARTITION_ID_ATTR),
-        )
-        if (partition) {
-          onPartitionContextMenuRef.current?.(partition, screen)
-          return
-        }
-      }
-
-      // 空白：给上层画布坐标（新建便签落点用）+ 屏幕坐标（浮层定位用）。
-      // 已移除视图到此为止：灰卡右键上面已分发（恢复 / 彻底删除），空白不弹画布菜单
-      if (removedModeRef.current) return
-      onCanvasContextMenuRef.current?.(getCanvasPoint(event as unknown as PointerEvent), screen)
-    }
-
-    root.addEventListener('contextmenu', handleContextMenu)
-    return () => root.removeEventListener('contextmenu', handleContextMenu)
-  }, [getCanvasPoint])
+  // ---- T3.9 右键菜单：命中判定与分派见 interaction/contextMenuHitTest.ts，
+  // 挂监听与长按复用同一个入口见 useCanvasContextMenu.ts（M2 拆出）----
+  const dispatchContextMenu = useCanvasContextMenu({
+    wrapper: wrapperRef,
+    cards: cardsRef,
+    partitions: partitionsRef,
+    removedMode: removedModeRef,
+    getCanvasPoint: getCanvasPointRef,
+    onCard: onCardContextMenuRef,
+    onConnection: onConnectionContextMenuRef,
+    onPartition: onPartitionContextMenuRef,
+    onCanvas: onCanvasContextMenuRef,
+  })
 
   // ---- T3.5 / T3.4 双击卡片：note 进编辑，image / file 用系统程序打开 ----
   useEffect(() => {
@@ -1067,6 +1069,18 @@ export function Canvas({
         onItemPointerDown={handleItemPointerDown}
         onMarqueePointerDown={handleMarqueePointerDown}
         onBackgroundClick={handleBackgroundClick}
+        selectMode={selectMode}
+        touchGestures={TOUCH}
+        onAbortPointerGestures={abortPointerGestures}
+        // 便签正文 / 输入框 / 按钮上的触摸不进入手势状态机（M2）
+        interactiveTouch={(element) => Boolean(element.closest(INTERACTIVE_TOUCH_SELECTOR))}
+        // 长按 = 移动端的右键：命中判定与分派走同一个 dispatchContextMenu（M2）
+        onLongPress={(event) =>
+          dispatchContextMenu(event.target as HTMLElement | null, {
+            x: event.clientX,
+            y: event.clientY,
+          })
+        }
       >
         {/* 框选矩形放在卡片之下：半透明填充不遮内容，边框仍可见 */}
         <SelectionBox ref={selectionBoxRef} />
@@ -1145,40 +1159,18 @@ export function Canvas({
         ))}
       </Viewport>
 
-      {/* 状态条：卡片数 / 缩放百分比 / 帧率 / 操作提示（对应 Ctrl+0） */}
-      <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-3 rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm">
-        <span>{cards.length} 张</span>
-        <span className="text-border">|</span>
-        <span ref={zoomLabelRef}>100%</span>
-        {/* 帧率表只服务于开发期手感验收（11.2 ~ 11.4），正式构建不渲染 */}
-        {import.meta.env.DEV ? (
-          <>
-            <span className="text-border">|</span>
-            <FpsMeter />
-          </>
-        ) : null}
-        <span className="text-border">|</span>
-        <span>滚轮缩放 · 拖空白平移 · 拖卡片移动 · Ctrl+拖框选</span>
-      </div>
-
-      <div className="absolute bottom-3 right-3 flex items-center gap-2">
-        <button
-          type="button"
-          className="rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
-          onClick={() =>
-            controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
-          }
-        >
-          适应内容（Ctrl+Alt+0）
-        </button>
-        <button
-          type="button"
-          className="rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground"
-          onClick={() => controllerRef.current?.reset()}
-        >
-          复原视图（Ctrl+0）
-        </button>
-      </div>
+      {/* 状态条 + 右下角视图按钮（含移动端「框选」模式开关）：见 CanvasOverlay.tsx */}
+      <CanvasOverlay
+        cardCount={cards.length}
+        zoomLabelRef={zoomLabelRef}
+        touch={TOUCH}
+        selectMode={selectMode}
+        onSelectModeChange={setSelectMode}
+        onFit={() =>
+          controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
+        }
+        onReset={() => controllerRef.current?.reset()}
+      />
     </div>
   )
 }

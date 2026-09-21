@@ -40,6 +40,8 @@ import {
 } from './coordinates'
 import type { ContainerOrigin, Point, ViewportState } from './coordinates'
 import { fitViewportState } from './fitToContent'
+import { pinchViewportState } from './pinchZoom'
+import type { PinchFrame } from './pinchZoom'
 import type { Rect } from '@/core/geometry/rect'
 
 /** 判断「是否越界」时留的浮点余量，避免合法值被误判成越界而触发无谓回弹 */
@@ -219,6 +221,22 @@ export class ViewportController {
     const target = dampZoom(wheelZoomTarget(this.zoom, normalizeWheelDelta(event)))
     this.applyZoom(target, { x: event.clientX, y: event.clientY }, this.getContainerOrigin(), false)
     this.scheduleSettle()
+  }
+
+  /**
+   * 双指捏合的一帧（2026-09-21 移动端适配 M2）。
+   *
+   * 与滚轮路径的两点不同（理由见 pinchZoom.ts 模块头）：
+   *   · 锚点是**两指中点**而不是鼠标位置；
+   *   · 不带越界阻尼与回弹 —— 手指捏到 10% / 400% 就停住，触屏上弹一下只会让人觉得画面失控。
+   */
+  applyPinch(frame: PinchFrame): void {
+    this.cancelSettle()
+    const next = pinchViewportState(this.getState(), this.getContainerOrigin(), frame)
+    this.zoom = next.zoom
+    this.offsetX = next.offsetX
+    this.offsetY = next.offsetY
+    this.applyTransform()
   }
 
   /** 复原视图：缩放 100%、回到原点（对应 Ctrl+0） */

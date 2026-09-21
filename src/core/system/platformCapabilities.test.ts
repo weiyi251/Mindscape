@@ -21,19 +21,23 @@ afterEach(() => {
 })
 
 describe('platformCapabilities', () => {
-  it('桌面 UA：三项能力全开（现状零回归）', () => {
+  it('桌面 UA：原有四项开着、触屏手势关闭（现状零回归，画布仍走鼠标 + 快捷键）', () => {
     expect(platformCapabilities(WINDOWS_UA)).toEqual({
       keyboardShortcuts: true,
       autoUpdate: true,
       revealInExplorer: true,
+      pointerHover: true,
+      touchGestures: false,
     })
   })
 
-  it('Android UA：快捷键页 / 自动更新 / 文件管理器定位全部关闭', () => {
+  it('Android UA：桌面专属能力全关，只剩触屏手势开着', () => {
     expect(platformCapabilities(ANDROID_UA)).toEqual({
       keyboardShortcuts: false,
       autoUpdate: false,
       revealInExplorer: false,
+      pointerHover: false,
+      touchGestures: true,
     })
   })
 
@@ -43,6 +47,8 @@ describe('platformCapabilities', () => {
 
   it('空 UA（node 单测 / 浏览器直接打开 dev 地址）按桌面取值', () => {
     expect(platformCapabilities('').keyboardShortcuts).toBe(true)
+    // ⚠️ 这条尤其重要：拿不到 UA 时必须是桌面，否则浏览器里调试会误开触屏手势
+    expect(platformCapabilities('').touchGestures).toBe(false)
   })
 
   it('不传参数时读 navigator.userAgent', () => {

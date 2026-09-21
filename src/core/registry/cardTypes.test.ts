@@ -21,6 +21,7 @@ import {
   CORE_CARD_TYPE_LABELS,
   CORE_CARD_TYPE_DEFAULT_SIZE,
   getCardTypeDef,
+  hoverRevealClass,
   isCoreCardType,
   listCardTypes,
   renderCard,
@@ -618,5 +619,23 @@ describe('图片卡实际分辨率徽章', () => {
     )
     expect(fileHtml).not.toContain('data-image-resolution')
     expect(noteHtml).not.toContain('data-image-resolution')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// hoverRevealClass：悬停信息的显示条件（2026-09-21 移动端适配 M2）
+// ---------------------------------------------------------------------------
+
+describe('hoverRevealClass：桌面 hover / 移动端选中', () => {
+  const ANDROID_UA =
+    'Mozilla/5.0 (Linux; Android 14; M2012K11AC) AppleWebKit/537.36 Mobile Safari/537.36'
+
+  it('桌面（含 node 无 navigator）仍用 group-hover，桌面外观零改动', () => {
+    expect(hoverRevealClass('')).toBe('group-hover:opacity-100')
+    expect(hoverRevealClass()).toBe('group-hover:opacity-100')
+  })
+
+  it('移动端改用选中态通道：点一下卡片就看到文件名 / 色号 / 分辨率', () => {
+    expect(hoverRevealClass(ANDROID_UA)).toBe('group-data-[selected=true]:opacity-100')
   })
 })

@@ -12,6 +12,12 @@
 //   · 平移前先过 4px 判定（5.1）：位移 ≤ 4px 视为单击，否则才平移。
 //
 // 实现任务：T0.11（视口底座）+ T0.12（4px 判定接入）。
+//
+// 移动端（2026-09-21 M2，决策 D4）：本组件是**触摸与鼠标分流的唯一路口**。
+// 总闸 `touchGestures` 打开时（由调用方按平台能力表传入），`pointerType === 'touch'`
+// 的整套手势（单指平移 / 双指捏合 / 长按 / 点按）交给 TouchGestureRecognizer；
+// 鼠标、触控笔、以及总闸关着时的桌面触屏，**原样走老链路**，桌面行为零改动（红线 R2）。
+// 分流放在这里而不是各控制器内部，因为「第二根手指落下」这种信息只有这里看得到。
 // ============================================================================
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -20,6 +26,7 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { ViewportController } from './interaction/viewportController'
 import { PointerGesture } from './interaction/pointerGesture'
+import { TouchGestureRecognizer } from './interaction/touchGesture'
 import type { ViewportState } from './interaction/coordinates'
 
 /** 标记「画布内容」的属性名：带此属性的元素上按下鼠标不会触发画布平移 */
@@ -54,6 +61,33 @@ export interface ViewportProps {
    * 未提供该回调时 Ctrl + 拖空白仍为平移。
    */
   onMarqueePointerDown?: (event: PointerEvent) => void
+  /**
+   * 移动端「选择模式」（M2 / 决策 D4 的兜底按钮）：触屏没有 Ctrl，
+   * 打开后单指拖空白变成框选而不是平移。仅作用于触摸，鼠标路径不受影响。
+   */
+  selectMode?: boolean
+  /**
+   * 总闸（M2）：是否由手势状态机接管 `pointerType === 'touch'` 的事件。
+   * 由调用方按平台能力表（touchGestures）传入 —— 桌面触屏笔记本因此保持改动前
+   * 的行为（红线 R2），安卓上才走捏合 / 长按 / 选择模式这一套。
+   */
+  touchGestures?: boolean
+  /**
+   * 长按成立（M2）：参数是**按下时**的原始事件，上层据此做与右键完全相同的命中判定。
+   * 触屏在 `touch-action: none` 下不保证派发 contextmenu，所以必须自己判。
+   */
+  onLongPress?: (event: PointerEvent) => void
+  /**
+   * 需要作废在途单指手势时回调（M2）：第二根手指落下转捏合、长按弹菜单，
+   * 两种情况都不该让卡片拖拽 / 缩放 / 框选继续跟着这根手指跑。
+   */
+  onAbortPointerGestures?: () => void
+  /**
+   * 「这根手指交给元素自己处理」（M2）：便签正文里选字、输入框、卡片内按钮 ——
+   * 返回 true 时触摸**不进入**手势状态机，于是不平移、不捏合、也不弹长按菜单。
+   * 判定留在调用方（只有 Canvas 知道 data-note-editing / data-card-interactive 这些标记）。
+   */
+  interactiveTouch?: (element: HTMLElement) => boolean
 }
 
 export function Viewport({
@@ -65,6 +99,11 @@ export function Viewport({
   onBackgroundClick,
   onItemPointerDown,
   onMarqueePointerDown,
+  selectMode,
+  touchGestures = false,
+  onLongPress,
+  onAbortPointerGestures,
+  interactiveTouch,
 }: ViewportProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -75,11 +114,22 @@ export function Viewport({
   const onBackgroundClickRef = useRef(onBackgroundClick)
   const onItemPointerDownRef = useRef(onItemPointerDown)
   const onMarqueePointerDownRef = useRef(onMarqueePointerDown)
+  const onLongPressRef = useRef(onLongPress)
+  const onAbortPointerGesturesRef = useRef(onAbortPointerGestures)
+  const interactiveTouchRef = useRef(interactiveTouch)
+  // selectMode 也走 ref：它是 React state，若进依赖数组会让整套监听重挂
+  const selectModeRef = useRef(Boolean(selectMode))
+  const touchGesturesRef = useRef(touchGestures)
   onReadyRef.current = onReady
   onChangeRef.current = onChange
   onBackgroundClickRef.current = onBackgroundClick
   onItemPointerDownRef.current = onItemPointerDown
   onMarqueePointerDownRef.current = onMarqueePointerDown
+  onLongPressRef.current = onLongPress
+  onAbortPointerGesturesRef.current = onAbortPointerGestures
+  interactiveTouchRef.current = interactiveTouch
+  selectModeRef.current = Boolean(selectMode)
+  touchGesturesRef.current = touchGestures
 
   const controller = useMemo(
     () => new ViewportController({ onChange: (state) => onChangeRef.current?.(state) }),
@@ -108,15 +158,59 @@ export function Viewport({
     let lastX = 0
     let lastY = 0
 
+    // ---- M2 触摸手势：整套状态机在 touchGesture.ts，这里只负责喂事件、执行指令 ----
+    // 总闸关着时（桌面）触摸一律走下面的鼠标老链路，行为与 M2 之前完全一致（红线 R2）
+    const isTouch = (event: PointerEvent) =>
+      touchGesturesRef.current && event.pointerType === 'touch'
+    // 按下时的原始事件要留一份：长按在几十毫秒后才成立，届时拿得到命中元素与坐标
+    const touchDown = { current: null as PointerEvent | null }
+    const touch = new TouchGestureRecognizer({
+      onPanBy: (dx, dy) => controller.panBy(dx, dy),
+      onPinchStart: () => {
+        // 第二根手指落下：在途的拖卡 / 缩放 / 框选必须立刻作废，
+        // 否则捏合会拖着一张卡片一起缩放（触屏上没有 Ctrl 可以放弃拖拽）。
+        // 注意不能 reset() 自己 —— 那会连刚建立的捏合基准一起清掉。
+        onAbortPointerGesturesRef.current?.()
+      },
+      onPinchFrame: (frame) => controller.applyPinch(frame),
+      onLongPress: () => {
+        const event = touchDown.current
+        if (!event) return
+        onAbortPointerGesturesRef.current?.()
+        onLongPressRef.current?.(event)
+      },
+      onTap: () => onBackgroundClickRef.current?.(),
+    })
+
     const handlePointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
       const target = event.target as HTMLElement | null
 
       // 卡片上的按下：交给卡片拖拽控制器（T2.2），无论是否消费都不启动平移（5.1）
-      if (target?.closest(`[${CANVAS_ITEM_ATTR}]`)) {
-        onItemPointerDownRef.current?.(event)
+      const onItem = Boolean(target?.closest(`[${CANVAS_ITEM_ATTR}]`))
+      if (onItem) onItemPointerDownRef.current?.(event)
+
+      if (isTouch(event)) {
+        // 元素自己处理这根手指（便签正文选字 / 输入框 / 卡片内按钮）：
+        // 不进手势状态机 —— 于是不平移、不捏合、也不弹长按菜单（M2）
+        if (target && interactiveTouchRef.current?.(target)) return
+        // 「选择模式」下的空白触摸交给框选（D4：触屏没有 Ctrl + 拖）
+        const marquee =
+          !onItem && selectModeRef.current && Boolean(onMarqueePointerDownRef.current)
+        if (marquee) onMarqueePointerDownRef.current?.(event)
+        touchDown.current = event
+        touch.pointerDown({
+          pointerId: event.pointerId,
+          point: { x: event.clientX, y: event.clientY },
+          onItem,
+          marquee,
+        })
+        // 空白起拖才捕获到 root：卡片上的触摸留给卡片自己的 setPointerCapture
+        if (!onItem && !marquee) root.setPointerCapture(event.pointerId)
         return
       }
+
+      if (onItem) return
 
       // Ctrl + 空白拖 = 框选（T2.3 / 5.1），优先于平移
       if ((event.ctrlKey || event.metaKey) && onMarqueePointerDownRef.current) {
@@ -133,6 +227,10 @@ export function Viewport({
     }
 
     const handlePointerMove = (event: PointerEvent) => {
+      if (isTouch(event)) {
+        touch.pointerMove(event.pointerId, { x: event.clientX, y: event.clientY })
+        return
+      }
       if (!gesture.isActivePointer(event.pointerId)) return
 
       const wasDragging = gesture.isDragging
@@ -157,6 +255,14 @@ export function Viewport({
     }
 
     const handlePointerUp = (event: PointerEvent) => {
+      if (isTouch(event)) {
+        touch.pointerUp(event.pointerId, { x: event.clientX, y: event.clientY })
+        if (root.hasPointerCapture(event.pointerId)) {
+          root.releasePointerCapture(event.pointerId)
+        }
+        touchDown.current = null
+        return
+      }
       if (!gesture.isActivePointer(event.pointerId)) return
 
       const result = gesture.end(event.pointerId, { x: event.clientX, y: event.clientY })
@@ -169,6 +275,14 @@ export function Viewport({
     }
 
     const handlePointerCancel = (event: PointerEvent) => {
+      if (isTouch(event)) {
+        touch.pointerCancel(event.pointerId)
+        if (root.hasPointerCapture(event.pointerId)) {
+          root.releasePointerCapture(event.pointerId)
+        }
+        touchDown.current = null
+        return
+      }
       if (!gesture.isActivePointer(event.pointerId)) return
       gesture.cancel()
       if (root.hasPointerCapture(event.pointerId)) {
