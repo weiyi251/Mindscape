@@ -461,7 +461,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/canvas/Card.tsx': '渲染层',
   'src/canvas/Connection.tsx': '渲染层',
   'src/canvas/FpsMeter.tsx': '渲染层',
-  'src/canvas/MiniMap.tsx': '渲染层',
+  // 注：MiniMap.tsx 曾有本条豁免（渲染层），2026-09-21 真机第一轮补了 MiniMap.test.tsx
+  // （锁「触屏要把面板抬到 bottom-28，否则被画布浮层压住」），条目随之删除。
   'src/canvas/Selection.tsx': '渲染层',
   'src/canvas/SnapGuide.tsx': '渲染层',
   'src/canvas/Viewport.tsx': '渲染层',

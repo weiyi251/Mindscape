@@ -28,6 +28,11 @@ import {
 import type { MinimapTransform } from './minimapGeometry'
 import { unionRects } from '@/core/geometry/rect'
 import type { Rect } from '@/core/geometry/rect'
+import { cn } from '@/lib/utils'
+import { supportsCapability } from '@/core/system/platformCapabilities'
+
+/** 触屏那套画布浮层是通栏竖排的（见 CanvasOverlay），小地图要让开整摞 */
+const TOUCH = supportsCapability('touchGestures')
 
 /** 小地图显示偏好在 localStorage 的键（'visible' / 'hidden'） */
 export const MINIMAP_PREF_KEY = 'mindscape.minimap'
@@ -159,7 +164,11 @@ export function MiniMap({ cards, partitions, onJump, registerRedraw, onCollapse 
 
   return (
     <div
-      className="absolute bottom-12 right-3 z-20 overflow-hidden rounded-lg border border-border bg-background/90 shadow-md backdrop-blur-sm"
+      className={cn(
+        'absolute right-3 z-20 overflow-hidden rounded-lg border border-border bg-background/90 shadow-md backdrop-blur-sm',
+        // 触屏底部是「状态条 + 工具条」竖排两行（约 100px 高），bottom-12 会被压在下面
+        TOUCH ? 'bottom-28' : 'bottom-12',
+      )}
       data-minimap=""
     >
       <div className="flex h-7 items-center justify-between border-b border-border/60 px-2">

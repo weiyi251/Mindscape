@@ -46,3 +46,31 @@ describe('CanvasOverlay（桌面 / 触屏两套浮层）', () => {
     expect(html).toContain('100%')
   })
 })
+
+// 真机第一轮反馈「有的 ui 重叠了」：状态条与按钮条原本各挂各的
+// `absolute bottom-3`（一左一右），手机上四五个 44px 按钮吃掉大半屏宽，
+// 状态条被压住又在窄屏上换行，两层直接叠在一起。
+describe('CanvasOverlay 布局（真机第一轮：底部浮层重叠）', () => {
+  it('桌面：左下角状态条 + 右下角按钮条，两个独立 absolute 定位（红线 R2）', () => {
+    const html = renderToStaticMarkup(<Harness touch={false} />)
+    expect(html).toContain('absolute bottom-3 left-3')
+    expect(html).toContain('absolute bottom-3 right-3')
+    expect(html).not.toContain('flex-col')
+  })
+
+  it('触屏：两块改成同一个竖排容器，不再各自 absolute', () => {
+    const html = renderToStaticMarkup(<Harness touch />)
+    expect(html).toContain('flex flex-col')
+    // 桌面有 2 个 absolute（状态条 + 按钮条），触屏只剩通栏容器这 1 个
+    expect(html.match(/absolute/g)).toHaveLength(1)
+    expect(html).toContain('bottom-3 left-3 right-3')
+  })
+
+  it('触屏：通栏容器不吃指针，按钮那一行单独放开', () => {
+    const html = renderToStaticMarkup(<Harness touch />)
+    // 外层若可命中，两行之间与行旁的空白就拖不动画布了
+    const wrapper = html.slice(0, html.indexOf('>', html.indexOf('flex flex-col')) + 1)
+    expect(wrapper).toContain('pointer-events-none')
+    expect(html).toContain('pointer-events-auto')
+  })
+})
