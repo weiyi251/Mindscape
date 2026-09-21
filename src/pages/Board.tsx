@@ -81,9 +81,7 @@ import { nextCardId, nextConnectionId } from '@/core/utils/id'
 import { useTheme } from '@/core/hooks/useTheme'
 import { zCardSchema } from '@/core/types'
 import type { Card, Connection } from '@/core/types'
-import { basenameOf, joinPath, relativePathOf } from '@/core/utils/paths'
-import { cardSizeForImage } from '@/core/board/cardSize'
-import { cardTypeFor } from '@/core/board/imageTypes'
+import { basenameOf, joinPath } from '@/core/utils/paths'
 import { setCardAsset } from '@/core/board/cardAssets'
 import {
   cardWithoutEditables,
@@ -108,6 +106,10 @@ import { openPartitionColorMenu } from '@/pages/board/partitionColorFlow'
 import { openNoteColorMenu } from '@/pages/board/noteColorFlow'
 import { openMoveCardMenu } from '@/pages/board/moveCardFlow'
 import { copyCardsToSystemClipboard, clonePastedCard } from '@/pages/board/pasteCardsFlow'
+import { buildIngestedCard, ingestExternalItems } from '@/pages/board/ingestFlow'
+import type { IngestSourceLabel, PickedFile } from '@/pages/board/ingestFlow'
+import { ImportFilesButton } from '@/pages/board/importFilesButton'
+import { importPickedFiles } from '@/pages/board/importFilesFlow'
 import { openRenameFilePrompt } from '@/pages/board/renameFileFlow'
 import { runPermanentDelete } from '@/pages/board/permanentDeleteFlow'
 import { runAlignCards } from '@/pages/board/alignCardsFlow'
@@ -614,49 +616,6 @@ export function Board() {
   // 阶段三（T3）：打开 / 连线 / 备注 / 便签 / 右键菜单
   // -------------------------------------------------------------------------
 
-  /**
-   * 拖入 / 粘贴共用的「新卡片」生成：
-   * 尺寸（图片按原始宽高比）、filePath 归一、资源表登记（必须先于 addCards 渲染）。
-   * 方案 A（2026-09-12）：资源表只登记原图绝对路径，不生成缩略图。
-   */
-  const buildIngestedCard = useCallback(
-    async (params: {
-      id: string
-      actualAbs: string
-      spacePath: string
-      point: Point
-      offset: number
-    }): Promise<Card> => {
-      const { id, actualAbs, spacePath, point, offset } = params
-      const name = basenameOf(actualAbs)
-      const type = cardTypeFor(name)
-
-      let size = { w: 180, h: 96 }
-      if (type === 'image') {
-        try {
-          const original = await localStorageProvider.readImageSize(actualAbs)
-          size = cardSizeForImage(original.width, original.height)
-        } catch {
-          // 尺寸读不到就按默认
-        }
-        setCardAsset(id, { originalPath: actualAbs })
-      }
-
-      const filePath = relativePathOf(actualAbs, spacePath)
-      return zCardSchema.parse({
-        id,
-        type,
-        filePath,
-        originalPath: filePath,
-        x: Math.round(point.x + offset),
-        y: Math.round(point.y + offset),
-        w: size.w,
-        h: size.h,
-      })
-    },
-    [],
-  )
-
   /** 拖入落盘后统一走这条：addCards 命令（undo 删副本）+ 扩框 + 落盘 */
   const commitIngestedCards = useCallback(
     async (cards: Card[], createdFiles: string[], sources: AddCardsSource[], dest: ReturnType<typeof resolveDropDestination>) => {
@@ -697,8 +656,9 @@ export function Board() {
   )
 
   /**
-   * 外部文件导入的公共执行端（2026-09-13 自拖入链路抽出，拖入与系统剪贴板粘贴共用）：
-   * 逐个 copy 进空间（铁律②：原件不动）→ 建卡 → 汇总失败 → 撤销栈。
+   * 外部文件导入的公共执行端（2026-09-21 起只剩装配：循环在 pages/board/ingestFlow.ts）：
+   * 桌面两条入口（拖入 / 粘贴）拿到的都是**真实路径**，复制走 `copy_file`；
+   * 移动端的导入入口拿的是**字节**，由 ingestExternalItems 的另一处调用方处理。
    * dest（落盘目标 + 分区归属）与 point（首卡落点）由调用方按各自规则决定——
    * 拖入看落点命中、粘贴看确定性规则（2026-09-12 用户裁决：不靠落点猜测）。
    */
@@ -708,51 +668,25 @@ export function Board() {
       spacePath: string,
       dest: DropDestination,
       point: Point,
-      failLabel: '拖入' | '粘贴',
+      failLabel: IngestSourceLabel,
     ): Promise<void> => {
-      const cards: Card[] = []
-      const createdFiles: string[] = []
-      const sources: AddCardsSource[] = []
-      const usedIds = usedCardIds()
-      let offset = 0
-      const failures: string[] = []
-
-      for (const src of paths) {
-        const name = basenameOf(src)
-        try {
-          // 图片与非图片统一走 copy_file（方案 A：复制时不再生成缩略图）
-          const actualAbs = await localStorageProvider.copyFile(src, dest.destDir)
-
-          const id = nextCardId([...usedIds, ...cards.map((card) => card.id)])
-          const card = await buildIngestedCard({
-            id,
-            actualAbs,
-            spacePath,
-            point,
-            offset,
-          })
-          // 拖入 / 粘贴到分区的卡归入该分区（T3.7）
-          if (dest.groupName) card.group = dest.groupName
-
-          usedIds.push(id)
-          cards.push(card)
-          createdFiles.push(actualAbs)
-          sources.push({ src, destDir: dest.destDir })
-          offset += 24
-        } catch (error) {
-          failures.push(`${name}（${error instanceof Error ? error.message : String(error)}）`)
-        }
-      }
-
-      if (failures.length > 0) {
-        setActionError(`以下文件${failLabel}失败：${failures.join('；')}`)
-      }
-      if (cards.length === 0) return
-
-      setActionError(null)
-      await commitIngestedCards(cards, createdFiles, sources, dest)
+      await ingestExternalItems(
+        {
+          copyIn: (item, destDir) => localStorageProvider.copyFile(item.path ?? '', destDir),
+          buildCard: buildIngestedCard,
+          usedCardIds,
+          nextCardId,
+          commit: commitIngestedCards,
+          reportError: setActionError,
+        },
+        paths.map((path) => ({ name: basenameOf(path), path })),
+        spacePath,
+        dest,
+        point,
+        failLabel,
+      )
     },
-    [buildIngestedCard, commitIngestedCards],
+    [commitIngestedCards],
   )
 
   /**
@@ -809,7 +743,7 @@ export function Board() {
     )
 
     return () => setPluginBoardBridge(null)
-  }, [buildIngestedCard, commitIngestedCards, viewportCenterCanvasPoint, history, writer])
+  }, [commitIngestedCards, viewportCenterCanvasPoint, history, writer])
 
   /**
    * Ctrl+V 粘贴的确定性落盘目标（2026-09-12 用户裁决「行为一致且可预期」；
@@ -883,7 +817,7 @@ export function Board() {
         setActionError(`粘贴失败：${error instanceof Error ? error.message : String(error)}`)
       }
     },
-    [buildIngestedCard, commitIngestedCards, resolvePasteDestination, viewportCenterCanvasPoint],
+    [commitIngestedCards, resolvePasteDestination, viewportCenterCanvasPoint],
   )
 
   // ---- 复制 / 粘贴卡片（2026-09-11 三类型全支持；2026-09-18 起支持跨画布粘贴）----
@@ -1003,7 +937,7 @@ export function Board() {
         partitionId: dest.partitionId,
       })
     },
-    [copiedCards, buildIngestedCard, commitIngestedCards, resolvePasteDestination],
+    [copiedCards, commitIngestedCards, resolvePasteDestination],
   )
 
   /**
@@ -1027,6 +961,33 @@ export function Board() {
 
     await ingestExternalFiles(paths, space.folderPath, dest, point, '粘贴')
   }, [ingestExternalFiles, resolvePasteDestination, viewportCenterCanvasPoint])
+
+  /**
+   * M4 移动端「导入文件」：选择器只交回**字节**（Android SAF 给不出真路径，
+   * 而 copy_file 是纯 std::fs 读不了 content://），所以落盘走 write_file_bytes，
+   * 其余链路与拖入/粘贴同构（同一张卡片构建、同一条撤销命令、同一套扩框）。
+   * 编排与前置判断在 pages/board/importFilesFlow.ts（可单测），这里只装配依赖。
+   */
+  const handleImportPickedFiles = useCallback(
+    (files: PickedFile[]) =>
+      importPickedFiles(
+        {
+          spaceFolder: () => useSpacesStore.getState().getCurrentSpace()?.folderPath ?? null,
+          readOnly: () => useBoardStore.getState().readOnly,
+          destination: resolvePasteDestination,
+          dropPoint: viewportCenterCanvasPoint,
+          writeFile: (destDir, fileName, bytes) =>
+            localStorageProvider.writeFileBytes(destDir, fileName, bytes),
+          buildCard: buildIngestedCard,
+          usedCardIds,
+          nextCardId,
+          commit: commitIngestedCards,
+          reportError: setActionError,
+        },
+        files,
+      ),
+    [commitIngestedCards, resolvePasteDestination, viewportCenterCanvasPoint],
+  )
 
   // 快捷键（Ctrl+C / Ctrl+V / Ctrl+Z / Ctrl+Shift+Z / Ctrl+S / Delete / Esc）统一在
   // 下方「快捷键派发」一处处理 —— 2026-09-13 起键位由快捷键注册中心决定，用户可改绑。
@@ -1770,6 +1731,12 @@ export function Board() {
           <span className="shrink-0 rounded bg-secondary/15 px-1.5 py-0.5 text-[11px] text-secondary">
             {space?.type}
           </span>
+
+          {/* 导入文件（M4，2026-09-21 移动端）：只有拿不到拖入的平台才出现 ——
+              桌面上拖拽比「点按钮 → 系统选择器 → 找文件」快得多，按钮反而占位 */}
+          {supportsCapability('dragAndDropImport') ? null : (
+            <ImportFilesButton onFiles={handleImportPickedFiles} />
+          )}
 
           {/* 显示已移除（仅空间内有意义）：数量用计数徽标承载，不写成文字 */}
           <Button

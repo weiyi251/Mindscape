@@ -21,13 +21,16 @@ afterEach(() => {
 })
 
 describe('platformCapabilities', () => {
-  it('桌面 UA：原有四项开着、触屏手势关闭（现状零回归，画布仍走鼠标 + 快捷键）', () => {
+  it('桌面 UA：八项里只有触屏手势关闭（现状零回归，画布仍走鼠标 + 快捷键）', () => {
     expect(platformCapabilities(WINDOWS_UA)).toEqual({
       keyboardShortcuts: true,
       autoUpdate: true,
       revealInExplorer: true,
       pointerHover: true,
       touchGestures: false,
+      dragAndDropImport: true,
+      systemClipboardFiles: true,
+      folderPicker: true,
     })
   })
 
@@ -38,7 +41,16 @@ describe('platformCapabilities', () => {
       revealInExplorer: false,
       pointerHover: false,
       touchGestures: true,
+      dragAndDropImport: false,
+      systemClipboardFiles: false,
+      folderPicker: false,
     })
+  })
+
+  it('M4 三项：关闭的正是移动端的三条替代入口（选择器 / 应用内剪贴板 / 数据目录）', () => {
+    expect(supportsCapability('dragAndDropImport', ANDROID_UA)).toBe(false)
+    expect(supportsCapability('systemClipboardFiles', ANDROID_UA)).toBe(false)
+    expect(supportsCapability('folderPicker', ANDROID_UA)).toBe(false)
   })
 
   it('iOS UA 同样按移动端取值（iOS 后置，但表先按平台而非按系统版本分）', () => {
