@@ -25,6 +25,7 @@ import {
   parseArgs,
   parseCargoLibName,
   pickBuildTools,
+  quoteForShell,
   resolveSigning,
   soFileName,
   versionCodeOf,
@@ -280,5 +281,22 @@ describe('落盘的两件小事', () => {
     const written = copySoToJniLibs({ targets: ['arm64'], profile: 'debug', libName: 'mindscape_canvas_lib', srcTauri, appDir })
     expect(written).toEqual([path.join(appDir, 'src', 'main', 'jniLibs', 'arm64-v8a', 'libmindscape_canvas_lib.so')])
     expect(fs.readFileSync(written[0], 'utf8')).toBe('fake')
+  })
+})
+
+describe('quoteForShell（Windows shell:true 下的参数转义）', () => {
+  it('含空格的路径整块加引号（SDK 装 Program Files 时不被拆成两截）', () => {
+    const zipalign = String.raw`C:\Program Files\Android\sdk\build-tools\35.0.0\zipalign.exe`
+    expect(quoteForShell(zipalign)).toBe(`"${zipalign}"`)
+  })
+
+  it('无空白的普通参数原样不动，shell 元字符一律罩进引号', () => {
+    expect(quoteForShell('pnpm')).toBe('pnpm')
+    expect(quoteForShell('--ks-pass')).toBe('--ks-pass')
+    expect(quoteForShell('env:MINDSCAPE_APK_STOREPASS')).toBe('env:MINDSCAPE_APK_STOREPASS')
+    expect(quoteForShell('a>b')).toBe('"a>b"')
+    // 仓库本身放在带空格的目录里时，产物路径也是参数
+    const apk = String.raw`E:\My Projects\Mindscape\app-arm64-debug.apk`
+    expect(quoteForShell(apk)).toBe(`"${apk}"`)
   })
 })

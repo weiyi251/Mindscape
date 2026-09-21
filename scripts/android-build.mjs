@@ -364,12 +364,25 @@ function missingEnv(names) {
   return names.filter((name) => !process.env[name])
 }
 
+/**
+ * Windows 上要 `shell: true` 才起得来 `.bat`/`.cmd`（gradlew、apksigner），
+ * 而那种模式下 Node 只把参数**拼**进命令串、不做转义 —— 路径里带一个空格
+ * （SDK 装在 `C:\Program Files\...` 的机器）命令就被拆成两截。这里自己补引号。
+ * 顺带把 shell 元字符一起罩进引号，免得参数被当成重定向。
+ */
+export function quoteForShell(token) {
+  return /[\s&<>|^]/.test(token) ? `"${token}"` : token
+}
+
 function runStep(step) {
-  const result = spawnSync(step.cmd, step.args, {
+  const useShell = process.platform === 'win32'
+  const args = (step.args || []).map((arg) => (useShell ? quoteForShell(arg) : arg))
+  const cmd = useShell ? quoteForShell(step.cmd) : step.cmd
+  const result = spawnSync(cmd, args, {
     cwd: step.cwd || ROOT,
     stdio: 'inherit',
     env: { ...process.env, ...(step.env || {}) },
-    shell: process.platform === 'win32',
+    shell: useShell,
   })
   if (result.error) {
     throw new Error(
