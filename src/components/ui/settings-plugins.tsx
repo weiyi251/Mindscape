@@ -21,6 +21,7 @@ import { getPluginsRootDir } from '@/core/plugin/pluginStoreFile'
 import { PLUGIN_TEXT } from '@/core/plugin/pluginText'
 import type { PluginRecord } from '@/core/plugin/types'
 import { localStorageProvider } from '@/core/storage/LocalFolderProvider'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { usePluginsStore } from '@/core/store/pluginsStore'
 import { confirmDialog } from '@/core/utils/nativeDialogs'
 import { isDesktopRuntime } from '@/core/utils/runtime'
@@ -47,6 +48,7 @@ export function SettingsPluginsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   /** 本地提示（打开目录失败等不属插件操作本身的错误） */
   const [notice, setNotice] = useState<string | null>(null)
+  const canOpenWithSystemApp = supportsCapability('openWithSystemApp')
 
   useEffect(() => {
     void load()
@@ -107,9 +109,13 @@ export function SettingsPluginsPage() {
         <button type="button" className={ACTION_BUTTON} onClick={() => void refresh()}>
           {PLUGIN_TEXT.refresh}
         </button>
-        <button type="button" className={ACTION_BUTTON} onClick={() => void handleOpenDir()}>
-          {PLUGIN_TEXT.openDir}
-        </button>
+        {/* M4（2026-09-21）：插件目录在安卓既没有文件管理器可开、opener 通道也走不通
+            （能力表 `openWithSystemApp` 注释里逐条列了），入口直接不给 */}
+        {canOpenWithSystemApp ? (
+          <button type="button" className={ACTION_BUTTON} onClick={() => void handleOpenDir()}>
+            {PLUGIN_TEXT.openDir}
+          </button>
+        ) : null}
       </div>
 
       {error ? (

@@ -25,6 +25,10 @@ import {
 } from '@/core/registry/menus'
 import { registerAction, resetActions } from '@/core/registry/actionRegistry'
 
+/** 安卓 WebView 的 UA（与 core/system/platformCapabilities.test.ts 同一份） */
+const ANDROID_UA =
+  'Mozilla/5.0 (Linux; Android 14; M2012K11AC Build/UKQ1) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36'
+
 function makeCard(over: Partial<Card> = {}): Card {
   return zCardSchema.parse({
     id: 'card-1',
@@ -63,6 +67,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 // ---------------------------------------------------------------------------
@@ -161,6 +166,29 @@ describe('buildCardMenuFor', () => {
     const ids = idsOf(buildCardMenuFor(makeCard({ type: 'image' })))
     expect(ids).toContain(CARD_ACTION.openOriginal)
     expect(ids).toContain(CARD_ACTION.copy)
+  })
+
+  it('移动端（M4）：图片卡片也不给「打开原图」，其余项不受影响', () => {
+    // 安卓的 opener 通道走不通（能力表 openWithSystemApp 的注释里逐条列了），
+    // 入口直接不进菜单。⚠️ 桌面那条就在上一个用例里，改动这里必须两边都跑。
+    vi.stubGlobal('navigator', { userAgent: ANDROID_UA })
+
+    const ids = idsOf(buildCardMenuFor(makeCard({ type: 'image' })))
+    expect(ids).not.toContain(CARD_ACTION.openOriginal)
+    // 「便签颜色…」只属于便签，图片卡片本来就没有它 —— 与桌面相比少的只有「打开原图」
+    expect(ids).toEqual([
+      CARD_ACTION.remove,
+      CARD_ACTION.bringToFront,
+      CARD_ACTION.sendToBack,
+      CARD_ACTION.addNote,
+      CARD_ACTION.editLabel,
+      CARD_ACTION.connect,
+      CARD_ACTION.copy,
+      CARD_ACTION.move,
+      CARD_ACTION.renameFile,
+      CARD_ACTION.toggleLock,
+      CARD_ACTION.align,
+    ])
   })
 
   it('插件注册的菜单项自动追加在核心项之后', () => {

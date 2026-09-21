@@ -14,6 +14,7 @@
 // ============================================================================
 
 import type { Card } from '@/core/types'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { toErrorMessage } from '@/core/utils/errorMessage'
 import { joinPath } from '@/core/utils/paths'
 
@@ -23,6 +24,12 @@ export const OPEN_CARD_TEXT = {
   noteHasNoFile: '便签没有关联的文件',
   /** 打开失败但降级成功（仅桌面） */
   revealedInExplorer: '系统未关联该文件类型的打开方式，已在资源管理器中定位',
+  /**
+   * 移动端（M4 2026-09-21）：交给系统应用打开的通道在安卓三条都走不通
+   * （能力表 `openWithSystemApp` 的注释里逐条列了）。右键入口已经按能力隐藏，
+   * 这里兜住**双击 / 双击触摸**那条路——它不经过菜单。
+   */
+  noSystemViewer: '手机端没有「用其他应用打开」的通道，图片请在画布上看',
 } as const
 
 export interface OpenCardDeps {
@@ -48,6 +55,12 @@ export interface OpenCardDeps {
  */
 export async function openCardExternally(card: Card, deps: OpenCardDeps): Promise<void> {
   if (!deps.spaceFolder) return
+
+  // M4：移动端根本没有这条通道，别先去撞一次注定失败的 invoke（与菜单入口隐藏互为两道）
+  if (!supportsCapability('openWithSystemApp')) {
+    deps.onError(OPEN_CARD_TEXT.noSystemViewer)
+    return
+  }
 
   const absolutePath =
     card.type === 'note'

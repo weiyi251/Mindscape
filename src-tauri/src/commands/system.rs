@@ -17,8 +17,14 @@
 // 移动端适配 M1（2026-09-21）：
 //   · `reveal_in_explorer` 在移动端直接返回中文「桌面专属」提示 —— Android 没有
 //     「在文件管理器中选中该文件」的概念，opener 的 reveal_item_in_dir 无移动端实现；
-//   · `open_with_default` 与 `read_image_size` 全平台保留（opener 在安卓能拉起系统查看器，
-//     读图头是纯 Rust 逻辑）。
+//   · `read_image_size` 全平台保留（纯 Rust 逻辑，只读文件头）。
+//
+// 移动端适配 M4（2026-09-21）：`open_with_default` 同样改为移动端拒绝。
+//   原计划是「保留，安卓能拉起系统查看器」，读插件源码后否决了：自由函数 `open_path`
+//   在安卓 shell out 找 xdg-open；插件的移动端 API 发裸字符串而 Kotlin 按对象解析；
+//   Kotlin 侧对 `file://` 路径起 ACTION_VIEW 会抛 FileUriExposedException，且空间文件
+//   在本应用私有目录里外部应用也无权读。修好要在 gen/android 里加 FileProvider + 自定义
+//   Kotlin，代价远超收益 —— 前端隐藏入口（`openWithSystemApp`），这里兜住直接 invoke。
 // ============================================================================
 
 use std::path::Path;
@@ -83,8 +89,22 @@ fn read_image_dimensions(target: &Path) -> Result<(u32, u32), String> {
 ///
 /// 借用 tauri-plugin-opener 的 `open_path`（ShellExecute 语义），不用 cmd 拼命令，
 /// 避免路径含空格 / 中文时的引号转义问题。
+///
+/// 移动端 M4（2026-09-21）改为拒绝：安卓的 opener 通道三条硬伤全堵死（见
+/// `src/core/system/platformCapabilities.ts` 里 `openWithSystemApp` 的注释）。
+/// 前端已经不给这个入口，这里是绕过前端直接 invoke 时的第二道。
 #[tauri::command]
 pub fn open_with_default(path: String) -> Result<(), String> {
+    open_with_default_on(path, cfg!(mobile))
+}
+
+/// `open_with_default` 的实现体，`is_mobile` 由 cfg 注入。
+///
+/// 单独拆出来只为了让「移动端先拒绝、桌面照常走」两个分支能在桌面宿主上测到
+/// —— 否则移动分支要 `--target aarch64-linux-android` 才编译得到，跑不了。
+fn open_with_default_on(path: String, is_mobile: bool) -> Result<(), String> {
+    desktop_only_guard("用系统程序打开文件", is_mobile)?;
+
     let target = Path::new(&path);
 
     if !target.exists() {
@@ -277,6 +297,27 @@ mod tests {
         let missing = std::env::temp_dir().join("mindscape-t35-reveal-missing-xyz");
         let error =
             reveal_in_explorer(missing.to_string_lossy().into_owned()).unwrap_err();
+        assert!(error.contains("路径不存在"), "实际错误：{error}");
+    }
+
+    // ---- 移动端 M4（2026-09-21）：安卓上「交给系统应用打开」整条通道断开 ----
+
+    #[test]
+    fn open_with_default_refuses_on_mobile_before_touching_the_path() {
+        // 路径不存在也拿不到「路径不存在」，说明它在任何文件系统/系统调用之前就被挡住了
+        let missing = std::env::temp_dir().join("mindscape-m4-open-mobile");
+        let error = open_with_default_on(missing.to_string_lossy().into_owned(), true)
+            .unwrap_err();
+        assert!(error.contains("用系统程序打开文件"), "实际错误：{error}");
+        assert!(error.contains("仅在桌面版可用"), "实际错误：{error}");
+    }
+
+    #[test]
+    fn open_with_default_still_validates_the_path_on_desktop() {
+        // 红线 R2：桌面分支一个字都不能变 —— 移动端那道闸不能把桌面也挡了
+        let missing = std::env::temp_dir().join("mindscape-m4-open-desktop");
+        let error = open_with_default_on(missing.to_string_lossy().into_owned(), false)
+            .unwrap_err();
         assert!(error.contains("路径不存在"), "实际错误：{error}");
     }
 

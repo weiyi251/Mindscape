@@ -21,7 +21,7 @@ afterEach(() => {
 })
 
 describe('platformCapabilities', () => {
-  it('桌面 UA：八项里只有触屏手势关闭（现状零回归，画布仍走鼠标 + 快捷键）', () => {
+  it('桌面 UA：九项里只有触屏手势关闭（现状零回归，画布仍走鼠标 + 快捷键）', () => {
     expect(platformCapabilities(WINDOWS_UA)).toEqual({
       keyboardShortcuts: true,
       autoUpdate: true,
@@ -31,6 +31,7 @@ describe('platformCapabilities', () => {
       dragAndDropImport: true,
       systemClipboardFiles: true,
       folderPicker: true,
+      openWithSystemApp: true,
     })
   })
 
@@ -44,6 +45,7 @@ describe('platformCapabilities', () => {
       dragAndDropImport: false,
       systemClipboardFiles: false,
       folderPicker: false,
+      openWithSystemApp: false,
     })
   })
 
@@ -51,6 +53,11 @@ describe('platformCapabilities', () => {
     expect(supportsCapability('dragAndDropImport', ANDROID_UA)).toBe(false)
     expect(supportsCapability('systemClipboardFiles', ANDROID_UA)).toBe(false)
     expect(supportsCapability('folderPicker', ANDROID_UA)).toBe(false)
+  })
+
+  it('M4 第四项：「交给系统应用打开」安卓关掉，但**桌面必须仍然为 true**（红线 R2）', () => {
+    expect(supportsCapability('openWithSystemApp', ANDROID_UA)).toBe(false)
+    expect(supportsCapability('openWithSystemApp', WINDOWS_UA)).toBe(true)
   })
 
   it('iOS UA 同样按移动端取值（iOS 后置，但表先按平台而非按系统版本分）', () => {

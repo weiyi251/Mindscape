@@ -22,6 +22,7 @@
 
 import type { Card, Partition } from '@/core/types'
 import type { AlignOperation } from '@/core/geometry/align'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import type { MenuContext, MenuItem } from './pluginCenter'
 import { getPluginMenuItemsForCard } from './pluginCenter'
 import { runAction } from './actionRegistry'
@@ -60,8 +61,10 @@ export const CORE_CARD_MENU_ITEMS: MenuItem[] = [
   {
     id: CARD_ACTION.openOriginal,
     label: '打开原图',
-    // 5.2 / 第九章：图片卡片打开原图；其余类型由「双击 → 系统默认程序打开」承担
-    appliesTo: (card) => card.type === 'image',
+    // 5.2 / 第九章：图片卡片打开原图；其余类型由「双击 → 系统默认程序打开」承担。
+    // M4（2026-09-21）：安卓交给系统应用打开这条路走不通（能力表
+    // `openWithSystemApp` 的注释里有三条硬伤），入口直接不给，而不是点了报错。
+    appliesTo: (card) => card.type === 'image' && supportsCapability('openWithSystemApp'),
     action: (ctx) => runAction(CARD_ACTION.openOriginal, '打开原图', ctx),
   },
   {

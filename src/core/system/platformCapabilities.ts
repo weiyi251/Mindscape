@@ -20,7 +20,8 @@ import { currentUserAgent, isMobileRuntime } from '@/core/utils/runtime'
  * 需要按平台裁剪的能力。
  * M1 先收口三项（快捷键页 / 自动更新 / 文件管理器定位）；
  * M2 补上 hover（悬停改「选中即显示」）与 touchGestures（手势优先 + 兜底按钮，D4）；
- * M4 补齐文件进出渠道的三项（拖入 / 系统剪贴板文件 / 文件夹选择器）。
+ * M4 补齐文件进出渠道的三项（拖入 / 系统剪贴板文件 / 文件夹选择器）与
+ * 「交给系统应用打开」（安卓的 opener 通道走不通，见下表注释）。
  */
 export type PlatformCapability =
   | 'keyboardShortcuts'
@@ -31,6 +32,7 @@ export type PlatformCapability =
   | 'dragAndDropImport'
   | 'systemClipboardFiles'
   | 'folderPicker'
+  | 'openWithSystemApp'
 
 const CAPABILITY_TABLE: Record<'desktop' | 'mobile', Record<PlatformCapability, boolean>> = {
   desktop: {
@@ -43,6 +45,7 @@ const CAPABILITY_TABLE: Record<'desktop' | 'mobile', Record<PlatformCapability, 
     dragAndDropImport: true,
     systemClipboardFiles: true,
     folderPicker: true,
+    openWithSystemApp: true,
   },
   mobile: {
     // 触屏没有物理键盘，自定义快捷键页在移动端没有意义
@@ -66,6 +69,14 @@ const CAPABILITY_TABLE: Record<'desktop' | 'mobile', Record<PlatformCapability, 
     // Tauri 的文件夹对话框明确没有移动端实现（调用即报
     // 「Folder picker is not implemented on mobile」），空间目录改由应用数据目录派生
     folderPicker: false,
+    // 「用系统默认程序打开」（原图 / 插件目录）在安卓做不到，三条都是硬伤：
+    //   ① 我们命令里用的 `tauri_plugin_opener::open_path`（自由函数）直接 shell out，
+    //      安卓没有 xdg-open；② 插件的移动端 `Opener::open_path` 发的是**裸字符串**，
+    //      而 Kotlin `OpenerPlugin.open` 按 `{url, with}` 对象解析；③ 就算拼成 URI，
+    //      Kotlin 侧挂的是 `file://` —— Android 7+ 直接 FileUriExposedException，
+    //      而空间文件在本应用私有目录里，外部应用本来也无权读。
+    // 要做得在 gen/android 里加 FileProvider + 自定义 Kotlin（与「分享接收」同一取舍）
+    openWithSystemApp: false,
   },
 }
 
