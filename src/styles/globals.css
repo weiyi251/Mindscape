@@ -140,4 +140,14 @@
     padding: env(safe-area-inset-top) env(safe-area-inset-right)
       env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
+
+  /*
+   * 整屏浮窗要**自己**再让一次安全区（2026-09-21 真机第一轮：设置面板的 ✕ 点不到）。
+   * `position: fixed` 是按视口定位的，上面 #root 的内边距对它无效，
+   * 于是标题栏又钻到状态栏底下 —— 触发条件由 FloatingModal 的 data-compact 给出。
+   */
+  [data-floating-modal][data-compact='true'] {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
 }

@@ -1,6 +1,6 @@
 // ============================================================================
 // 模块说明（中文）
-// 安全区（safe-area）守卫 —— 锁住「viewport-fit=cover」与「#root 读 env()」这一对。
+// 安全区（safe-area）守卫 —— 锁住「viewport-fit=cover」与「该读 env() 的两处都读了」。
 // 对应移动端真机第一轮（2026-09-21）：顶栏整条钻到安卓状态栏底下。
 //
 // 为什么两条必须一起看：targetSdk 35+ 起安卓强制 edge-to-edge，WebView 铺满整屏，
@@ -53,5 +53,22 @@ describe('安全区留白（安卓 edge-to-edge）', () => {
     const css = globalsCss()
     expect(css).not.toMatch(/height:\s*100vh/)
     expect(css).toMatch(/html,\s*body,\s*#root\s*\{\s*height:\s*100%/s)
+  })
+
+  // `position: fixed` 按视口定位，#root 的内边距管不到它 —— 真机第一轮「设置面板的 ✕
+  // 压在状态栏底下点不到」就是这么来的。整屏浮窗必须自己让一次。
+  it('整屏浮窗（fixed）另有一条安全区规则，且靠 data-compact 触发', () => {
+    const rule =
+      globalsCss().match(/\[data-floating-modal\]\[data-compact='true'\]\s*\{[^}]*\}/)?.[0] ?? ''
+    expect(rule, 'fixed 定位的整屏浮窗没有让安全区').not.toBe('')
+    for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+      expect(rule, `浮窗少了 ${side} 的安全区`).toContain(`env(safe-area-inset-${side})`)
+    }
+    // 属性得真的写在上，否则上面那条规则永远不命中
+    const tsx = fs.readFileSync(
+      path.join(ROOT_DIR, 'src/components/ui/floating-modal.tsx'),
+      'utf8',
+    )
+    expect(tsx).toContain("data-compact={compact ? 'true' : 'false'}")
   })
 })

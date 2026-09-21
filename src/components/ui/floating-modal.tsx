@@ -18,6 +18,11 @@
 // 桌面的 `MODAL_MIN_WIDTH`（400）在手机竖屏上本来就放不下，收敛后必然右侧溢出，
 // 所以直接铺满视口、不圆角、禁掉拖动与缩放手柄（整屏没有可拖的空间），
 // 标题栏与关闭按钮也长到 44px 的拇指尺寸。桌面窗口宽 ≥640 时一切照旧（红线 R2）。
+//
+// ⚠️ 整屏模式还要自己让出**安全区**（真机第一轮：设置面板的 ✕ 压在状态栏底下点不到）：
+// 本面板是 `fixed` 按视口定位的，`#root` 那份 `env(safe-area-inset-*)` 内边距管不到它，
+// 所以另写一条 `[data-floating-modal][data-compact='true']` 的规则（见 globals.css），
+// 靠组件上的 `data-compact` 属性触发。
 // ============================================================================
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -236,6 +241,9 @@ export function FloatingModal({
       <div
         ref={panelRef}
         data-floating-modal=""
+        // 整屏模式要把安全区内边距让出来（见 globals.css 的 [data-compact] 规则）：
+        // 本面板是 `fixed` 按视口定位的，#root 的内边距管不到它。
+        data-compact={compact ? 'true' : 'false'}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -251,7 +259,7 @@ export function FloatingModal({
         <div
           className={cn(
             'flex shrink-0 select-none items-center gap-3 border-b border-border/60 px-3',
-            compact ? 'h-11' : 'h-9 cursor-move',
+            compact ? 'h-12' : 'h-9 cursor-move',
           )}
           style={{ touchAction: 'none' }}
           onPointerDown={beginSession}
@@ -269,8 +277,8 @@ export function FloatingModal({
             aria-label="关闭"
             className={cn(
               'flex shrink-0 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10',
-              // 触屏上 20px 的关闭按钮按不到，长到 36px（M3）
-              compact ? 'h-9 w-9 text-sm' : 'h-5 w-5 text-[11px] leading-none',
+              // 触屏上 20px 的关闭按钮按不到；整屏档给满 44px（与 button.tsx 紧凑档同一口径）
+              compact ? 'h-11 w-11 text-base' : 'h-5 w-5 text-[11px] leading-none',
             )}
           >
             ✕

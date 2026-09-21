@@ -470,7 +470,9 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   // button.test.ts（锁「紧凑档每档 ≥44px + 桌面高度一字不变」两条跨端约束），条目随之删除。
   'src/components/ui/context-menu.tsx': '渲染层（shadcn 生成物）',
   'src/components/ui/card-search.tsx': '渲染层（搜索逻辑在 core/board/search.ts 已测）',
-  'src/components/ui/floating-modal.tsx': '渲染层（几何计算抽到 floatingModalGeometry.ts 已测）',
+  // 注：floating-modal.tsx 曾有本条豁免（几何已抽到 floatingModalGeometry.ts 测过），
+  // 2026-09-21 真机第一轮补 floating-modal.test.tsx（锁「整屏档要标 data-compact，
+  // 安全区那条 CSS 才命中；关闭按钮触屏 44px / 桌面 20px 不串台」），条目随之删除。
   'src/components/ui/icons.tsx': '渲染层（纯 SVG 字形）',
   'src/components/ui/modal.tsx': '渲染层',
   'src/components/ui/prompt-dialog.tsx': '渲染层',
