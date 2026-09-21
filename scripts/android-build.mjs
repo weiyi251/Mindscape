@@ -45,6 +45,16 @@ const CARGO_TOML_PATH = path.join(SRC_TAURI, 'Cargo.toml')
 const NDK_API_LEVEL = 21
 
 /**
+ * cargo 必须显式开 `tauri/custom-protocol`，否则打出来的包**没有界面**。
+ *
+ * tauri 的 build.rs 里 `let dev = !has_feature("custom-protocol")` → `#[cfg(dev)]`；
+ * dev 下 `generate_context!` **不把 `dist/` 打进 .so**，运行时改连 `build.devUrl`（本机 1420）。
+ * 平时这个 feature 由 tauri CLI 自动补，绕过 CLI 手敲 cargo 就得自己加 ——
+ * 漏加的症状：APK 装得上、点开闪一下黑屏就退出（2026-09-21 真机第一轮就是这么撞上的）。
+ */
+export const MOBILE_CARGO_FEATURES = ['tauri/custom-protocol']
+
+/**
  * 四档 ABI 的四份名字。前三份来自生成物 `RustPlugin.kt` 的 targetList / archList / abiList，
  * `wrapper` 是 NDK 里按 API 级别分发的 clang 脚本名前缀 ——
  * ⚠️ armv7 那档对不上：cargo 的 target 是 `armv7-linux-androideabi`，
@@ -252,7 +262,7 @@ export function buildPlan(opts, ctx) {
   if (!opts.skipRust) {
     for (const key of opts.targets) {
       const target = TARGETS[key]
-      const args = ['build', '--target', target.rust, '--lib']
+      const args = ['build', '--target', target.rust, '--lib', '--features', MOBILE_CARGO_FEATURES.join(',')]
       if (opts.profile === 'release') args.push('--release')
       steps.push({
         title: `cargo build --target ${target.rust}（${opts.profile}）`,

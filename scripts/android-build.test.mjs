@@ -191,6 +191,20 @@ describe('buildPlan 步骤编排', () => {
     expect(titles(plan)).toHaveLength(5)
   })
 
+  it('⚠️ 每条 cargo 都必须开 `tauri/custom-protocol`（漏了 = .so 里不打进 dist，装机后黑屏闪退）', () => {
+    const plan = buildPlan(parseArgs(['--universal']), ctx)
+    const cargo = plan.steps.filter((step) => step.cmd === 'cargo')
+    expect(cargo).toHaveLength(4)
+    for (const step of cargo) {
+      expect(step.args.slice(-2)).toEqual(['--features', 'tauri/custom-protocol'])
+    }
+    // release 档：--release 排在 --features 之后，两者都在
+    const signing = { keystore: '/outside/mindscape.keystore', alias: 'mindscape' }
+    const rel = buildPlan(parseArgs(['--release', '--universal']), { ...ctx, signing }).steps.filter((s) => s.cmd === 'cargo')
+    expect(rel[0].args).toContain('--release')
+    expect(rel[0].args.slice(1, 3)).toEqual(['--target', 'aarch64-linux-android'])
+  })
+
   it('universal 时每个架构一条 cargo，链接器 env 各配各的', () => {
     const plan = buildPlan(parseArgs(['--universal']), ctx)
     const cargo = plan.steps.filter((step) => step.cmd === 'cargo')
