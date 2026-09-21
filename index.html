@@ -75,6 +75,21 @@
       ;(function () {
         var reported = false
 
+        // The bundle emits `??` (Chrome 76+). On an older engine the only visible
+        // symptom is a bare "Unexpected token ?", which says nothing about the real
+        // cause, so name it here. UA is printed for every failure: it is the one
+        // fact that cannot be recovered later without a debugging cable.
+        var MIN_CHROME = 76
+
+        function engineHint() {
+          var ua = navigator.userAgent || ''
+          var m = ua.match(/Chrome\/(\d+)/)
+          if (!m) return ''
+          return Number(m[1]) < MIN_CHROME
+            ? '\n内核过旧：WebView 是 Chrome ' + m[1] + '，本应用至少需要 ' + MIN_CHROME + '。'
+            : ''
+        }
+
         function show(title, detail) {
           if (reported) return
           reported = true
@@ -92,7 +107,8 @@
             '</h1>' +
             '<p>Mindscape 前端启动失败。错误原文如下：</p>' +
             '<pre></pre>'
-          host.querySelector('pre').textContent = String(detail)
+          host.querySelector('pre').textContent =
+            String(detail) + '\nUA: ' + (navigator.userAgent || '未知') + engineHint()
         }
 
         window.addEventListener('error', function (event) {
