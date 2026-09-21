@@ -289,8 +289,9 @@ export function SpaceList() {
 
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
-      {/* flex-wrap + min-w-0：窄窗口时标题先收缩、再换行，图标按钮组不会被挤出去 */}
-      <header className="flex flex-wrap items-center justify-between gap-3 gap-y-2 border-b border-border px-8 py-5">
+      {/* flex-wrap + min-w-0：窄窗口时标题先收缩、再换行，图标按钮组不会被挤出去。
+          M3（2026-09-21 移动端）：留白收到 px-4 / py-4，手机宽度下标题与图标组各占一行 */}
+      <header className="flex flex-wrap items-center justify-between gap-3 gap-y-2 border-b border-border px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold">Mindscape 脑海空间</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -383,7 +384,7 @@ export function SpaceList() {
                 void openSpace(space.id)
               }}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start justify-between gap-2 max-sm:flex-wrap">
                 <h2 className="min-w-0 truncate font-medium" title={space.name}>
                   {/* 收藏标记常显（P1-5）：列表靠收藏排序，标记要能看出「为什么它在前面」 */}
                   {space.favorite ? <span className="mr-1 text-primary">★</span> : null}
@@ -395,13 +396,17 @@ export function SpaceList() {
                     零重叠（2026-09-13 截图 3）。⚠️ 不留垂直间隙：鼠标从卡片移向按钮
                     的路径必须连续，一旦有 margin，中途离开卡片 → group-hover 失效 →
                     按钮瞬间消失、永远点不到。整体仅悬停时显示（opacity + pointer-events
-                    一起切换），平时完全不可见；z-20 保证盖过上方相邻卡片（grid 有 gap-4） */}
-                <div className="pointer-events-none absolute bottom-full right-0 z-20 flex items-center gap-0.5 whitespace-nowrap rounded-md border border-border bg-card/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                    一起切换），平时完全不可见；z-20 保证盖过上方相邻卡片（grid 有 gap-4）。
+                    M3（2026-09-21 移动端）：触屏没有 hover（能力表 pointerHover），
+                    四个操作在手机上永远点不到，所以紧凑档改**流内常显** —— max-sm:static
+                    + w-full 让它换到标题下面一行（父行 max-sm:flex-wrap），去掉外挂浮层的
+                    边框/阴影/定位；类名两套互斥出现，Tailwind 仍能扫到字面量 */}
+                <div className="pointer-events-none absolute bottom-full right-0 z-20 flex items-center gap-0.5 whitespace-nowrap rounded-md border border-border bg-card/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 max-sm:static max-sm:w-full max-sm:flex-wrap max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:opacity-100 max-sm:shadow-none max-sm:pointer-events-auto">
                   <button
                     type="button"
                     aria-label={`${space.favorite ? '取消收藏' : '收藏'} ${space.name}`}
                     title={space.favorite ? '取消收藏' : '收藏（排在列表前面）'}
-                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground max-sm:min-h-11 max-sm:px-2"
                     onClick={(event) => {
                       event.stopPropagation()
                       handleToggleFavorite(space)
@@ -413,7 +418,7 @@ export function SpaceList() {
                     type="button"
                     aria-label={`重命名 ${space.name}`}
                     title="重命名（只改显示名，文件夹不动）"
-                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground max-sm:min-h-11 max-sm:px-2"
                     onClick={(event) => {
                       event.stopPropagation()
                       setRenameTarget(space)
@@ -425,7 +430,7 @@ export function SpaceList() {
                     type="button"
                     aria-label={`导出空间布局 ${space.name}`}
                     title="把布局导出到文件夹（生成 mindscape-layout.json）"
-                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground max-sm:min-h-11 max-sm:px-2"
                     onClick={(event) => {
                       event.stopPropagation()
                       void handleExportLayout(space)
@@ -436,7 +441,7 @@ export function SpaceList() {
                   <button
                     type="button"
                     aria-label={`移除空间 ${space.name}`}
-                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
+                    className="rounded px-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive max-sm:min-h-11 max-sm:px-2"
                     onClick={(event) => {
                       event.stopPropagation()
                       void handleDelete(space.id, space.name)

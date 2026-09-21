@@ -9,11 +9,18 @@
 //     stopPropagation，避免画布的全局快捷键（Ctrl+A 全选卡片、Esc 取消选中、
 //     Delete 移除卡片）在「用户其实是在输入框里打字」时误触发；
 //   · 定位交给 panelClassName（同 settings-panel 的做法），画布页传顶部居中。
+//
+// 移动端 M3（2026-09-21）：浮层在手机上（视口宽 < 640 的紧凑档）改三处——
+//   · 三个图标按钮 28px → 44px 点按区（`max-sm:size-11`，与 button.tsx 同一口径）；
+//   · 结果列表高度按视口算（`max-sm:max-h-[40vh]`），固定 14rem 在手机上会把半屏占满；
+//   · 带快捷键的提示按平台能力表换成触屏措辞（文案表 cardSearchText.ts）。
+//   宽度本来就写作 `min(26rem, 100vw-2rem)`，手机上自动贴边，不需要额外断点。
 // ============================================================================
 
 import { useEffect, useRef } from 'react'
 
 import type { CardSearchItem } from '@/core/board/search'
+import { supportsCapability } from '@/core/system/platformCapabilities'
 import { cn } from '@/lib/utils'
 import {
   ChevronDownIcon,
@@ -21,7 +28,13 @@ import {
   CloseIcon,
   SearchIcon,
 } from './icons'
+import { CARD_SEARCH_STATIC_TEXT, CARD_SEARCH_TEXT } from './cardSearchText'
 import { Button } from './button'
+
+/** 有物理键盘才提快捷键（模块级判定：UserAgent 在运行期不会变） */
+const TEXT = supportsCapability('keyboardShortcuts')
+  ? CARD_SEARCH_TEXT.desktop
+  : CARD_SEARCH_TEXT.touch
 
 export interface CardSearchPanelProps {
   open: boolean
@@ -122,13 +135,17 @@ export function CardSearchPanel({
           className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {items.length === 0 ? '0 项' : hasActive ? `${activeIndex + 1} / ${items.length}` : `${items.length} 项`}
+          {items.length === 0
+            ? `0 ${CARD_SEARCH_STATIC_TEXT.countUnit}`
+            : hasActive
+              ? `${activeIndex + 1} / ${items.length}`
+              : `${items.length} ${CARD_SEARCH_STATIC_TEXT.countUnit}`}
         </span>
         <Button
           variant="ghost"
           size="icon"
-          className="size-7"
-          title="上一个（Shift+Enter）"
+          className="size-7 max-sm:size-11"
+          title={TEXT.previous}
           aria-label="上一个命中"
           disabled={!hasActive}
           onClick={() => onStep(-1)}
@@ -138,8 +155,8 @@ export function CardSearchPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="size-7"
-          title="下一个（Enter）"
+          className="size-7 max-sm:size-11"
+          title={TEXT.next}
           aria-label="下一个命中"
           disabled={!hasActive}
           onClick={() => onStep(1)}
@@ -149,8 +166,8 @@ export function CardSearchPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="size-7"
-          title="关闭（Esc）"
+          className="size-7 max-sm:size-11"
+          title={TEXT.close}
           aria-label="关闭搜索"
           onClick={onClose}
         >
@@ -159,10 +176,14 @@ export function CardSearchPanel({
       </div>
 
       {/* 结果列表：命中条目 + 命中字段徽标 + 便签摘录 */}
-      <div className="max-h-56 overflow-y-auto p-1" role="listbox" aria-label="搜索结果">
+      <div
+        className="max-h-56 overflow-y-auto p-1 max-sm:max-h-[40vh]"
+        role="listbox"
+        aria-label="搜索结果"
+      >
         {items.length === 0 ? (
           <p className="px-2.5 py-3 text-xs text-muted-foreground">
-            {query.trim() === '' ? '输入关键字，按 Enter 在命中项之间跳转' : '没有匹配的卡片'}
+            {query.trim() === '' ? TEXT.empty : CARD_SEARCH_STATIC_TEXT.noMatch}
           </p>
         ) : (
           items.map((item, index) => (
@@ -175,6 +196,7 @@ export function CardSearchPanel({
               onClick={() => onPick(index)}
               className={cn(
                 'flex w-full flex-col items-start gap-0.5 rounded px-2.5 py-1.5 text-left',
+                'max-sm:min-h-11 max-sm:py-2',
                 index === activeIndex ? 'bg-accent' : 'hover:bg-accent/50',
               )}
             >

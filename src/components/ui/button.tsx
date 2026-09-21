@@ -21,10 +21,14 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        // max-sm:* kicks in below COMPACT_VIEWPORT_WIDTH (640px) — the same
+        // threshold the floating modal uses to go full-screen. Android phones
+        // report 360–430 CSS px, so every button reaches a thumb-sized box
+        // there while the desktop classes stay byte-identical (red line R2).
+        default: "h-9 px-4 py-2 max-sm:h-11",
+        sm: "h-8 rounded-md px-3 text-xs max-sm:h-11 max-sm:text-sm",
+        lg: "h-10 rounded-md px-8 max-sm:h-12",
+        icon: "h-9 w-9 max-sm:h-11 max-sm:w-11",
       },
     },
     defaultVariants: {

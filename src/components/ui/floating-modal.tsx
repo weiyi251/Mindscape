@@ -13,6 +13,11 @@
 //   · 位置 / 尺寸的收敛规则（最小尺寸、视口边界）全在 floatingModalGeometry.ts
 //     （纯函数 + 单测），本组件只做「读指针 → 调纯函数 → 写 style」。
 //   · 不使用 backdrop-filter（17.11 反模式：WebView2 下严重掉帧）。
+//
+// 移动端（2026-09-21 M3）：视口宽度小于 sm(640) 时进入**整屏模式** ——
+// 桌面的 `MODAL_MIN_WIDTH`（400）在手机竖屏上本来就放不下，收敛后必然右侧溢出，
+// 所以直接铺满视口、不圆角、禁掉拖动与缩放手柄（整屏没有可拖的空间），
+// 标题栏与关闭按钮也长到 44px 的拇指尺寸。桌面窗口宽 ≥640 时一切照旧（红线 R2）。
 // ============================================================================
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -21,7 +26,9 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import {
   clampRect,
+  compactModalRect,
   defaultModalRect,
+  isCompactViewport,
   moveRect,
   parseModalRect,
   resizeRect,
@@ -58,9 +65,10 @@ function applyRect(element: HTMLElement, value: ModalRect) {
   element.style.height = `${value.height}px`
 }
 
-/** 首次渲染的矩形：偏好 → 收敛进视口；坏偏好回落默认 */
+/** 首次渲染的矩形：窄视口直接整屏；否则读偏好并收敛进视口，坏偏好回落默认 */
 function loadInitialRect(storageKey?: string): ModalRect {
   const viewport = viewportSize()
+  if (isCompactViewport(viewport)) return compactModalRect(viewport)
   if (storageKey) {
     try {
       const saved = parseModalRect(localStorage.getItem(storageKey))
@@ -91,6 +99,8 @@ export function FloatingModal({
 }: FloatingModalProps) {
   const panelRef = useRef<HTMLDivElement>(null)
   const [rect, setRect] = useState<ModalRect>(() => loadInitialRect(storageKey))
+  /** 整屏模式（M3 窄视口）：随窗口尺寸变化重算，桌面宽窗口恒 false */
+  const [compact, setCompact] = useState(() => isCompactViewport(viewportSize()))
   /** 最近一次提交的矩形（指针会话的起点也取自它） */
   const committedRef = useRef(rect)
   /** 拖动 / 缩放期间的即时矩形：优先级高于 state，用于对抗过程中的重渲染 */
@@ -105,13 +115,13 @@ export function FloatingModal({
     if (element && target) applyRect(element, target)
   })
 
-  /** 提交矩形：更新 state + 落偏好（只在指针松手时调用） */
+  /** 提交矩形：更新 state + 落偏好（只在指针松手时调用）。persist=false 用于整屏尺寸 */
   const commitRect = useCallback(
-    (next: ModalRect) => {
+    (next: ModalRect, persist = true) => {
       workingRef.current = null
       committedRef.current = next
       setRect(next)
-      if (storageKey) {
+      if (storageKey && persist) {
         try {
           localStorage.setItem(storageKey, serializeModalRect(next))
         } catch {
@@ -122,15 +132,37 @@ export function FloatingModal({
     [storageKey],
   )
 
-  // 窗口尺寸变化：把浮窗拉回可视区（否则会被挤出屏幕外再也点不到）
+  /**
+   * 按当前视口重算矩形：窄视口整屏，否则把浮窗拉回可视区
+   * （否则会被挤出屏幕外再也点不到）。
+   *
+   * `persist`：只有「用户把窗口拉小」这一路才落偏好（沿用改动前的行为）；
+   * 打开时的对齐**不落**——否则一次横竖屏切换就会把用户存好的桌面尺寸写掉。
+   * 整屏尺寸永不落偏好：手机上没有拖动 / 缩放可言，写进去只会污染桌面下次打开的窗口大小。
+   */
+  const syncToViewport = useCallback(
+    (persist: boolean) => {
+      const viewport = viewportSize()
+      const nextCompact = isCompactViewport(viewport)
+      setCompact(nextCompact)
+      commitRect(
+        nextCompact
+          ? compactModalRect(viewport)
+          : clampRect(workingRef.current ?? committedRef.current, viewport),
+        persist && !nextCompact,
+      )
+    },
+    [commitRect],
+  )
+
   useEffect(() => {
     if (!open) return
-    const handleResize = () => {
-      commitRect(clampRect(workingRef.current ?? committedRef.current, viewportSize()))
-    }
+    // 打开时也同步一次：组件常驻挂载，横竖屏切换后 state 里还是上一个方向的尺寸
+    syncToViewport(false)
+    const handleResize = () => syncToViewport(true)
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [open, commitRect])
+  }, [open, syncToViewport])
 
   // Esc 关闭
   useEffect(() => {
@@ -146,6 +178,8 @@ export function FloatingModal({
 
   const beginSession = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return
+    // 整屏模式下没有「拖一拖换个位置」这回事：标题栏只是标题栏（M3）
+    if (compact) return
     sessionRef.current = {
       startRect: workingRef.current ?? committedRef.current,
       originX: event.clientX,
@@ -206,14 +240,19 @@ export function FloatingModal({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'fixed z-40 flex flex-col overflow-hidden rounded-lg border border-border bg-background shadow-xl',
+          'fixed z-40 flex flex-col overflow-hidden border border-border bg-background shadow-xl',
+          // 整屏模式贴边，圆角只会露出一圈不自然的黑边（M3）
+          compact ? 'rounded-none' : 'rounded-lg',
           className,
         )}
         style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
       >
         {/* 标题栏即拖动柄：interactive 的子元素各自 stopPropagation */}
         <div
-          className="flex h-9 shrink-0 cursor-move select-none items-center gap-3 border-b border-border/60 px-3"
+          className={cn(
+            'flex shrink-0 select-none items-center gap-3 border-b border-border/60 px-3',
+            compact ? 'h-11' : 'h-9 cursor-move',
+          )}
           style={{ touchAction: 'none' }}
           onPointerDown={beginSession}
           onPointerMove={handleHeaderPointerMove}
@@ -228,7 +267,11 @@ export function FloatingModal({
             onClick={onClose}
             title="关闭"
             aria-label="关闭"
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] leading-none text-foreground/60 hover:bg-foreground/10"
+            className={cn(
+              'flex shrink-0 items-center justify-center rounded text-foreground/60 hover:bg-foreground/10',
+              // 触屏上 20px 的关闭按钮按不到，长到 36px（M3）
+              compact ? 'h-9 w-9 text-sm' : 'h-5 w-5 text-[11px] leading-none',
+            )}
           >
             ✕
           </button>
@@ -237,31 +280,33 @@ export function FloatingModal({
         {/* 内容区：自身滚动，撑满剩余高度 */}
         <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
 
-        {/* 右下角缩放手柄 */}
-        <div
-          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
-          style={{ touchAction: 'none' }}
-          role="presentation"
-          data-floating-modal-resize=""
-          onPointerDown={beginSession}
-          onPointerMove={handleResizePointerMove}
-          onPointerUp={endSession}
-          onPointerCancel={endSession}
-        >
-          {/* 两道斜线，纯装饰 */}
-          <svg
-            viewBox="0 0 16 16"
-            className="h-4 w-4 text-foreground/30"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.5}
-            strokeLinecap="round"
+        {/* 右下角缩放手柄（整屏模式无可缩放空间，不渲染） */}
+        {compact ? null : (
+          <div
+            className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize"
+            style={{ touchAction: 'none' }}
+            role="presentation"
+            data-floating-modal-resize=""
+            onPointerDown={beginSession}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={endSession}
+            onPointerCancel={endSession}
           >
-            <path d="M15 9 9 15" />
-            <path d="M15 13 13 15" />
-          </svg>
-        </div>
+            {/* 两道斜线，纯装饰 */}
+            <svg
+              viewBox="0 0 16 16"
+              className="h-4 w-4 text-foreground/30"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            >
+              <path d="M15 9 9 15" />
+              <path d="M15 13 13 15" />
+            </svg>
+          </div>
+        )}
       </div>
     </>
   )

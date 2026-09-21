@@ -1745,12 +1745,14 @@ export function Board() {
 
   return (
     <div className="relative flex h-full w-full flex-col bg-background">
-      {/* flex-wrap：窄窗口时按钮换行而不是溢出（2026-09-12 响应式） */}
-      <header className="flex flex-wrap items-center gap-3 gap-y-2 border-b border-border px-5 py-3">
+      {/* flex-wrap：窄窗口时按钮换行而不是溢出（2026-09-12 响应式）。
+          M3（2026-09-21 移动端）：标题块给 flex-1 + basis，手机宽度下它会整块换到
+          第二行（第一行只剩「返回列表 + 右侧图标组」），而不是被挤成 0 宽看不见 */}
+      <header className="flex flex-wrap items-center gap-3 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
         <Button variant="outline" onClick={() => void handleBack()}>
           返回列表
         </Button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 basis-40">
           <h1 className="truncate text-sm font-medium">{space?.name ?? '未命名空间'}</h1>
           <p className="truncate text-[11px] text-muted-foreground" title={space?.folderPath}>
             {space?.folderPath}

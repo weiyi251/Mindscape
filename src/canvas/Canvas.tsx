@@ -1159,13 +1159,14 @@ export function Canvas({
         ))}
       </Viewport>
 
-      {/* 状态条 + 右下角视图按钮（含移动端「框选」模式开关）：见 CanvasOverlay.tsx */}
+      {/* 状态条 + 右下角视图按钮（含移动端「框选」模式开关与搜索入口）：见 CanvasOverlay.tsx */}
       <CanvasOverlay
         cardCount={cards.length}
         zoomLabelRef={zoomLabelRef}
         touch={TOUCH}
         selectMode={selectMode}
         onSelectModeChange={setSelectMode}
+        onSearch={onRequestSearch}
         onFit={() =>
           controllerRef.current?.fitToContent(contentRects(cardsRef.current, partitionsRef.current))
         }

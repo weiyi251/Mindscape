@@ -14,6 +14,9 @@
 //
 // 位置尺寸由 FloatingModal 记忆在 localStorage（键 = floatingModalPrefKey('settings')），
 // 关掉再打开会回到上次拖动的位置；窗口被拉小时会自动收回可视区。
+//
+// 移动端（2026-09-21 M3）：弹窗在窄视口整屏铺满（见 FloatingModal），本组件只跟着
+// 改**布局方向** —— 导航从左侧竖排换成顶部横排，用 sm(640) 断点与浮窗阈值保持一致。
 // ============================================================================
 
 import { useState } from 'react'
@@ -45,9 +48,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       onClose={onClose}
       storageKey={floatingModalPrefKey('settings')}
     >
-      <div className="flex h-full min-h-0 gap-3">
-        {/* 左侧页签：页面多了也能竖着排，不用挤在标题栏里 */}
-        <nav className="flex w-28 shrink-0 flex-col gap-1">
+      {/* 窄屏（手机整屏弹窗）导航换到顶部横排：w-28 的左栏在 360px 宽的屏上要占掉三成。
+          断点用 sm(640)，与 FloatingModal 的整屏阈值同一个数（见 floatingModalGeometry.ts） */}
+      <div className="flex h-full min-h-0 flex-col gap-3 sm:flex-row">
+        {/* 页签：桌面竖排、窄屏横排（页面多了也能滚动，不挤在标题栏里） */}
+        <nav className="flex shrink-0 gap-1 overflow-x-auto sm:w-28 sm:flex-col">
           {pages.map((page) => (
             <button
               key={page.id}
@@ -55,7 +60,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               onClick={() => setPageId(page.id)}
               aria-current={page.id === active.id}
               className={cn(
-                'rounded px-2 py-1.5 text-left text-xs transition-colors',
+                'whitespace-nowrap rounded px-2 py-2 text-left text-xs transition-colors sm:whitespace-normal sm:py-1.5',
                 page.id === active.id
                   ? 'bg-primary/10 text-primary'
                   : 'text-foreground/80 hover:bg-foreground/10 hover:text-foreground',

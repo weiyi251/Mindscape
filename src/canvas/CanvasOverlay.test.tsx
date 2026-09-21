@@ -14,6 +14,7 @@ function Harness({ touch }: { touch: boolean }) {
       touch={touch}
       selectMode={false}
       onSelectModeChange={vi.fn()}
+      onSearch={vi.fn()}
       onFit={vi.fn()}
       onReset={vi.fn()}
     />
@@ -27,12 +28,15 @@ describe('CanvasOverlay（桌面 / 触屏两套浮层）', () => {
     expect(html).toContain(CANVAS_OVERLAY_TEXT.desktopFit)
     expect(html).toContain(CANVAS_OVERLAY_TEXT.desktopReset)
     expect(html).not.toContain('框选中')
+    // 搜索入口只服务触屏：桌面的 Ctrl+F 已经在画布快捷键里，不重复挂按钮
+    expect(html).not.toContain('>搜索<')
   })
 
   it('触屏：换成手势提示与短按钮，不再出现桌面快捷键文案', () => {
     const html = renderToStaticMarkup(<Harness touch />)
     expect(html).toContain(CANVAS_OVERLAY_TEXT.touchHint)
     expect(html).toContain('>框选<')
+    expect(html).toContain('>搜索<')
     expect(html).not.toContain('Ctrl+0')
   })
 

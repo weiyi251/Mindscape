@@ -1,18 +1,22 @@
 // ============================================================================
 // 模块说明（中文）
-// 可拖动浮窗几何的单测。覆盖：默认居中、视口内收敛、拖动位移（含被边界夹住后
-// 回摆跟手）、右下角缩放（左上角固定、最小尺寸、到边缘为止）、偏好读写容错。
+// 可拖动浮窗几何的单测。覆盖：默认居中、视口内收敛、窄视口整屏（M3 移动端）、
+// 拖动位移（含被边界夹住后回摆跟手）、右下角缩放（左上角固定、最小尺寸、到边缘为止）、
+// 偏好读写容错。
 // ============================================================================
 import { describe, expect, it } from 'vitest'
 
 import {
+  COMPACT_VIEWPORT_WIDTH,
   MODAL_DEFAULT_HEIGHT,
   MODAL_DEFAULT_WIDTH,
   MODAL_MARGIN,
   MODAL_MIN_HEIGHT,
   MODAL_MIN_WIDTH,
   clampRect,
+  compactModalRect,
   defaultModalRect,
+  isCompactViewport,
   moveRect,
   parseModalRect,
   resizeRect,
@@ -61,6 +65,53 @@ describe('defaultModalRect（首次打开的默认位置）', () => {
     const value = defaultModalRect(tiny)
     expect(value.width).toBeGreaterThanOrEqual(MODAL_MIN_WIDTH)
     expect(value.height).toBeGreaterThanOrEqual(MODAL_MIN_HEIGHT)
+  })
+})
+
+describe('isCompactViewport / compactModalRect（窄视口整屏，M3 移动端）', () => {
+  it('阈值与 Tailwind 的 sm 断点对齐：639 窄、640 不窄', () => {
+    expect(COMPACT_VIEWPORT_WIDTH).toBe(640)
+    expect(isCompactViewport({ width: 639, height: 900 })).toBe(true)
+    expect(isCompactViewport({ width: COMPACT_VIEWPORT_WIDTH, height: 900 })).toBe(false)
+  })
+
+  it('主流手机竖屏一律判窄（360 / 390 / 412 / 430）', () => {
+    for (const width of [360, 390, 412, 430]) {
+      expect(isCompactViewport({ width, height: 800 })).toBe(true)
+    }
+  })
+
+  it('桌面 1280 不窄（现状零回归）', () => {
+    expect(isCompactViewport(VIEWPORT)).toBe(false)
+  })
+
+  it('宽度读不到（NaN）按窄处理，不给桌面弹出全屏窗的反向风险留口子', () => {
+    expect(isCompactViewport({ width: Number.NaN, height: 800 })).toBe(true)
+  })
+
+  it('整屏矩形 = 铺满视口：原点 0,0、尺寸等于视口，不留 margin', () => {
+    expect(compactModalRect({ width: 390, height: 844 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 390,
+      height: 844,
+    })
+  })
+
+  it('窄视口下不再被 MODAL_MIN_WIDTH 顶出去（手机宽度小于 400 是常态）', () => {
+    const value = compactModalRect({ width: 360, height: 640 })
+    expect(value.width).toBe(360)
+    expect(value.width).toBeLessThan(MODAL_MIN_WIDTH)
+    expect(value.x + value.width).toBeLessThanOrEqual(360)
+  })
+
+  it('尺寸非法（NaN / 负数）→ 0，不把 NaN 写进 style', () => {
+    expect(compactModalRect({ width: Number.NaN, height: -100 })).toEqual({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+    })
   })
 })
 

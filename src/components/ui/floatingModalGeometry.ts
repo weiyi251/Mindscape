@@ -35,6 +35,38 @@ export const MODAL_DEFAULT_HEIGHT = 440
 /** 默认垂直位置：略高于正中（视觉上比几何居中舒服，且给下方留出空间） */
 const DEFAULT_TOP_RATIO = 0.42
 
+/**
+ * 窄视口阈值 = Tailwind 的 `sm`（640px）。
+ *
+ * 分工（2026-09-21 移动端适配 M3）：**布局**换向（如设置面板的导航从左侧改到顶部）
+ * 交给 CSS 断点，**尺寸**必须在这里算 —— 浮窗的 left/top/width/height 是内联样式，
+ * 媒体查询管不到。两边用同一个 640 阈值，才会「一起切换」而不会出现
+ * 「导航已经横过来了、窗体却还是桌面尺寸」的错位。
+ */
+export const COMPACT_VIEWPORT_WIDTH = 640
+
+/**
+ * 是否窄到该整屏铺满。
+ * 只看宽度：`MODAL_MIN_WIDTH`（400）在手机竖屏（360 ~ 430 CSS px）上本来就放不下，
+ * 收敛逻辑会退化成「宽度顶到最小值、右侧溢出屏幕」—— 必须换一条路径。
+ */
+export function isCompactViewport(viewport: ViewportSize): boolean {
+  return finite(viewport.width, 0) < COMPACT_VIEWPORT_WIDTH
+}
+
+/**
+ * 窄视口下的矩形：铺满整屏（不留 MODAL_MARGIN、也不受 MIN / DEFAULT 尺寸约束）。
+ * 手机上「贴边 + 无圆角」才是正常形态，8px 缝隙反而露出一圈遮罩。
+ */
+export function compactModalRect(viewport: ViewportSize): ModalRect {
+  return {
+    x: 0,
+    y: 0,
+    width: Math.max(0, finite(viewport.width, 0)),
+    height: Math.max(0, finite(viewport.height, 0)),
+  }
+}
+
 /** 数值兜底：NaN / Infinity → fallback */
 function finite(value: number, fallback: number): number {
   return Number.isFinite(value) ? value : fallback

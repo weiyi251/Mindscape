@@ -8,9 +8,14 @@
 // 而框选是批量选中 / 批量拖动的唯一入口，所以必须留一个按钮兜底（D4）。
 //
 // 本组件不做判定：是否渲染由 Canvas 按平台能力表（touchGestures）决定，
-// 三个动作也全部由上层传入，这里只负责「够大的按钮 + 中文短标签」。
+// 四个动作也全部由上层传入，这里只负责「够大的按钮 + 中文短标签」。
 // 标签集中在 canvasOverlayText.ts（AGENTS.md：中文文案进常量表；同时让本文件
 // 只导出组件，满足 fast-refresh 规则）。
+//
+// M3（2026-09-21）补「搜索」入口：桌面的搜索浮层只有 Ctrl+F 一个入口，触屏没有键盘
+// 就永远打不开，因此按 D4 在这里兜一个按钮（`onSearch` 未传时不渲染）。
+// ⚠️ 半透明底一律用纯色（bg-card/90），**不用 backdrop-blur**：那会落到
+// backdrop-filter，17.11 明令禁止（WebView2 下严重掉帧）。
 // ============================================================================
 
 import { cn } from '@/lib/utils'
@@ -18,12 +23,14 @@ import { CANVAS_TOUCH_TOOLBAR_TEXT } from './canvasOverlayText'
 
 const BUTTON_CLASS =
   'min-h-[44px] min-w-[56px] rounded-lg border border-border bg-card/90 px-3 text-sm ' +
-  'text-muted-foreground shadow-sm backdrop-blur-sm'
+  'text-muted-foreground shadow-sm'
 
 export interface CanvasTouchToolbarProps {
   /** 「选择模式」是否开启：开启后单指拖空白 = 框选而不是平移 */
   selectMode: boolean
   onSelectModeChange: (next: boolean) => void
+  /** 打开搜索浮层（桌面等价动作是 Ctrl+F）；不传则不渲染该按钮 */
+  onSearch?: () => void
   /** 缩放到全部内容（与桌面 Ctrl+Alt+0 同一个动作） */
   onFit: () => void
   /** 复原视图 100%（与桌面 Ctrl+0 同一个动作） */
@@ -33,6 +40,7 @@ export interface CanvasTouchToolbarProps {
 export function CanvasTouchToolbar({
   selectMode,
   onSelectModeChange,
+  onSearch,
   onFit,
   onReset,
 }: CanvasTouchToolbarProps) {
@@ -49,6 +57,11 @@ export function CanvasTouchToolbar({
       >
         {selectMode ? CANVAS_TOUCH_TOOLBAR_TEXT.selectOn : CANVAS_TOUCH_TOOLBAR_TEXT.select}
       </button>
+      {onSearch ? (
+        <button type="button" className={BUTTON_CLASS} onClick={onSearch}>
+          {CANVAS_TOUCH_TOOLBAR_TEXT.search}
+        </button>
+      ) : null}
       <button type="button" className={BUTTON_CLASS} onClick={onFit}>
         {CANVAS_TOUCH_TOOLBAR_TEXT.fit}
       </button>

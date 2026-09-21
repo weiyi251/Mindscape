@@ -34,6 +34,8 @@ export interface CanvasOverlayProps {
   /** 「选择模式」（框选）是否开启，仅触屏渲染 */
   selectMode: boolean
   onSelectModeChange: (next: boolean) => void
+  /** 打开搜索浮层（触屏右下角的 Ctrl+F 替身）；桌面不渲染该按钮 */
+  onSearch?: () => void
   /** 缩放到全部内容 */
   onFit: () => void
   /** 复原视图 100% */
@@ -46,6 +48,7 @@ export function CanvasOverlay({
   touch,
   selectMode,
   onSelectModeChange,
+  onSearch,
   onFit,
   onReset,
 }: CanvasOverlayProps) {
@@ -80,6 +83,7 @@ export function CanvasOverlay({
           <CanvasTouchToolbar
             selectMode={selectMode}
             onSelectModeChange={onSelectModeChange}
+            onSearch={onSearch}
             onFit={onFit}
             onReset={onReset}
           />

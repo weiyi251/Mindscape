@@ -465,7 +465,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/canvas/Selection.tsx': '渲染层',
   'src/canvas/SnapGuide.tsx': '渲染层',
   'src/canvas/Viewport.tsx': '渲染层',
-  'src/components/ui/button.tsx': '渲染层（shadcn 生成物）',
+  // 注：button.tsx 曾有本条豁免（shadcn 生成物），2026-09-21 移动端 M3 补了
+  // button.test.ts（锁「紧凑档每档 ≥44px + 桌面高度一字不变」两条跨端约束），条目随之删除。
   'src/components/ui/context-menu.tsx': '渲染层（shadcn 生成物）',
   'src/components/ui/card-search.tsx': '渲染层（搜索逻辑在 core/board/search.ts 已测）',
   'src/components/ui/floating-modal.tsx': '渲染层（几何计算抽到 floatingModalGeometry.ts 已测）',

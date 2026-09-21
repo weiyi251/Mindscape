@@ -12,16 +12,18 @@ export const CANVAS_OVERLAY_TEXT = {
   /** 桌面操作提示（快捷键口径） */
   desktopHint: '滚轮缩放 · 拖空白平移 · 拖卡片移动 · Ctrl+拖框选',
   /** 触屏操作提示（M2 手势口径，与桌面完全不同一套） */
-  touchHint: '双指捏合缩放 · 单指拖平移 · 长按出菜单 · 框选见右下角',
+  touchHint: '双指捏合缩放 · 单指拖平移 · 长按出菜单 · 框选/搜索见右下角',
   cardsCount: '张',
   desktopFit: '适应内容（Ctrl+Alt+0）',
   desktopReset: '复原视图（Ctrl+0）',
 }
 
-/** 移动端紧凑工具条（触屏没有 Ctrl，框选必须由按钮进入 —— 决策 D4） */
+/** 移动端紧凑工具条（触屏没有 Ctrl，框选与搜索都必须由按钮进入 —— 决策 D4） */
 export const CANVAS_TOUCH_TOOLBAR_TEXT = {
   select: '框选',
   selectOn: '框选中',
+  /** 搜索浮层在桌面只有 Ctrl+F；触屏没有键盘，右下角补一个入口（M3） */
+  search: '搜索',
   fit: '适应',
   reset: '复位',
 }
