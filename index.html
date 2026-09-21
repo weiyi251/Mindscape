@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover：安卓 edge-to-edge 下让视口铺满整屏，好让 CSS 读到
+         env(safe-area-inset-*)。不写这一项 env() 恒为 0，顶栏就会被状态栏压住。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Mindscape 脑海空间</title>
     <!-- 防止「黑屏无信息」：兜底层自带内联样式，不依赖 Tailwind / 任何构建产物 -->
     <style>

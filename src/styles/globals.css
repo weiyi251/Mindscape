@@ -128,4 +128,16 @@
     user-select: none;
     overflow: hidden;
   }
+
+  /*
+   * 安全区留白（2026-09-21 真机第一轮：顶栏整条钻到状态栏底下）。
+   * targetSdk 35+ 起安卓强制 edge-to-edge，WebView 铺满整屏，页面顶部不再有
+   * 系统让出来的那一条；把系统栏 / 刘海的尺寸留给 #root 内边距，页面自身不用改。
+   * 前提：index.html 的 viewport-fit=cover —— 没有它 env() 恒为 0。
+   * 不带刘海、非 edge-to-edge 的机器（含桌面 WebView2）env() 为 0，等于零改动。
+   */
+  #root {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
 }
