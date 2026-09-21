@@ -45,6 +45,11 @@ vite.config.ts.timestamp-*.mjs
 # 公钥是纯文本，直接写在 tauri.conf.json 的 plugins.updater.pubkey 里，不需要文件。
 *.key
 
+# 安卓 APK 签名 keystore（docs/移动端发布流程.md §1）：与桌面 updater 私钥同等对待 ——
+# 丢了就断掉所有老用户的覆盖升级通道，所以必须放仓库外。这里只作误放保险。
+*.keystore
+*.jks
+
 # 本机 git 事故备份与 ZCode 会话工具配置（个人数据，不入库）
 .git.bak-*/
 .zcodeignore
