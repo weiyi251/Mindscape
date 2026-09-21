@@ -25,9 +25,28 @@ import type { PickedFile } from './ingestFlow'
 
 export interface ImportFilesButtonProps {
   onFiles: (files: PickedFile[]) => void | Promise<void>
+  /** 悬停提示（默认「从本机选择文件加入当前空间」；空间列表页复用时换成自己的话） */
+  title?: string
+  /** 读屏文案（aria-label，同时也是按钮的唯一语义来源——它是纯图标按钮） */
+  label?: string
+  /** 选择器的 accept（默认图片优先 + 全部兜底；导入布局文件时只要 .json） */
+  accept?: string
+  /** 是否多选（导入布局文件只需要一份） */
+  multiple?: boolean
 }
 
-export function ImportFilesButton({ onFiles }: ImportFilesButtonProps) {
+/**
+ * 移动端「选文件」按钮。默认参数是画布页的「导入文件」场景；
+ * 空间列表页的「导入空间」（选一个 mindscape-layout.json）复用同一个通道，只换文案与 accept，
+ * 免得两处各写一遍隐藏 input 的坑（连选同一份文件要重置 value）。
+ */
+export function ImportFilesButton({
+  onFiles,
+  title = IMPORT_FILES_TEXT.title,
+  label = IMPORT_FILES_TEXT.label,
+  accept = IMPORT_FILE_ACCEPT,
+  multiple = true,
+}: ImportFilesButtonProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -42,8 +61,8 @@ export function ImportFilesButton({ onFiles }: ImportFilesButtonProps) {
       <input
         ref={inputRef}
         type="file"
-        multiple
-        accept={IMPORT_FILE_ACCEPT}
+        multiple={multiple}
+        accept={accept}
         className="hidden"
         data-import-files=""
         onChange={handleChange}
@@ -52,8 +71,8 @@ export function ImportFilesButton({ onFiles }: ImportFilesButtonProps) {
         variant="outline"
         size="icon"
         className="shrink-0"
-        title={IMPORT_FILES_TEXT.title}
-        aria-label={IMPORT_FILES_TEXT.label}
+        title={title}
+        aria-label={label}
         onClick={() => inputRef.current?.click()}
       >
         <ImportIcon />

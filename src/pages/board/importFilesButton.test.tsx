@@ -37,4 +37,21 @@ describe('ImportFilesButton 标记', () => {
     expect(html).toContain(`aria-label="${IMPORT_FILES_TEXT.label}"`)
     expect(html).toContain(`title="${IMPORT_FILES_TEXT.title}"`)
   })
+
+  it('文案与 accept 可换、可单选（空间列表页借它导入一个布局文件）', () => {
+    const html = renderToStaticMarkup(
+      <ImportFilesButton
+        onFiles={vi.fn()}
+        title="选一个 mindscape-layout.json"
+        label="导入空间"
+        accept=".json"
+        multiple={false}
+      />,
+    )
+
+    expect(html).not.toContain('multiple=""')
+    expect(html).toContain('accept=".json"')
+    expect(html).toContain('aria-label="导入空间"')
+    expect(html).toContain('title="选一个 mindscape-layout.json"')
+  })
 })

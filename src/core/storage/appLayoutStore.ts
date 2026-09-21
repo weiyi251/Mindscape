@@ -142,14 +142,47 @@ export async function adoptExportedLayout(
 
   // copy_file 遇到同名文件会自动加序号，所以以**返回值**为真实落地路径
   const copiedTo = await provider.copyFile(joinPath(sourceDir, EXPORTED_LAYOUT_FILE), layoutsDir)
-  const raw = await readTextFile(copiedTo)
+  return takeOverLayoutFile(provider, spaceId, layoutsDir, copiedTo)
+}
+
+/**
+ * 收到的是**字节**而不是源文件夹（移动端 M4 / D3 方案 A：Android 选择器给内容不给
+ * 路径，见 pages/spaceList/mobileSpaceFlow.ts）。落地口径与 `adoptExportedLayout`
+ * 完全一致，因此两条路导入进来的布局没有差别。
+ */
+export async function adoptLayoutBytes(
+  provider: StorageProvider,
+  spaceId: string,
+  bytes: Uint8Array,
+): Promise<'ok' | 'invalid'> {
+  assertDesktopRuntime()
+
+  const layoutsDir = await getLayoutsDir()
+  await provider.createDir(layoutsDir)
+
+  // 同样以返回值为准：write_file_bytes 遇重名会加 _1
+  const written = await provider.writeFileBytes(layoutsDir, EXPORTED_LAYOUT_FILE, bytes)
+  return takeOverLayoutFile(provider, spaceId, layoutsDir, written)
+}
+
+/**
+ * 内容已经躺在软件目录里：校验 → 合法就改名成 `<空间 id>.json`；
+ * 不是合法布局就删掉这一份（不让软件目录里留垃圾），返回 'invalid'。
+ */
+async function takeOverLayoutFile(
+  provider: StorageProvider,
+  spaceId: string,
+  layoutsDir: string,
+  filePath: string,
+): Promise<'ok' | 'invalid'> {
+  const raw = await readTextFile(filePath)
 
   if (!parseLayout(raw).ok) {
-    await provider.deleteFile(copiedTo)
+    await provider.deleteFile(filePath)
     return 'invalid'
   }
 
-  await rename(copiedTo, joinPath(layoutsDir, layoutFileName(spaceId)))
+  await rename(filePath, joinPath(layoutsDir, layoutFileName(spaceId)))
   return 'ok'
 }
 

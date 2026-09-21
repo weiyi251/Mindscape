@@ -15,6 +15,14 @@
 // 2026-09-13 追加：主题切换也从面板里搬出来，变成设置左侧的太阳 / 月亮纯图标按钮
 //   （与空间内顶栏保持一致的顺序与外观）。
 //
+// 移动端适配 M4（2026-09-21，D3 方案 A）：本页有四处碰「系统文件夹」，移动端挑不了
+// （Tauri 文件夹对话框无移动端实现），一律按能力表 `folderPicker` 分叉。
+// 判定与文案都收在 pages/spaceList/mobileSpaceFlow.ts（node 可单测），本文件只做接线：
+//   · 新建空间：文件夹按空间名派生到应用数据目录（core/storage/mobileSpaces.ts）；
+//   · 导出布局：落在 <dataDir>/Mindscape/exports/<空间名>；
+//   · 导入空间：改走系统文件选择器选一个 mindscape-layout.json（M4 第一步的字节通道）；
+//   · 顶栏副标题：不再提 %APPDATA%。
+//
 // 实现任务：T1.1 / T1.2（阶段一）。
 // ============================================================================
 
@@ -35,6 +43,7 @@ import { sortSpacesForList } from '@/core/storage/spacesFile'
 import {
   EXPORTED_LAYOUT_FILE,
   adoptExportedLayout,
+  adoptLayoutBytes,
   exportedLayoutExists,
   localLayoutStore,
   removeExportedLayout,
@@ -42,6 +51,18 @@ import {
 import { alertDialog, confirmDialog } from '@/core/utils/nativeDialogs'
 import { basenameOf } from '@/core/utils/paths'
 import { useSpacesStore } from '@/core/store/spacesStore'
+import { supportsCapability } from '@/core/system/platformCapabilities'
+import { resolveMobileExportDir, resolveMobileSpaceDir, spaceDirName } from '@/core/storage/mobileSpaces'
+import { ImportFilesButton } from '@/pages/board/importFilesButton'
+import { itemBytes } from '@/pages/board/ingestFlow'
+import type { PickedFile } from '@/pages/board/ingestFlow'
+import {
+  LAYOUT_FILE_ACCEPT,
+  SPACE_FLOW_TEXT,
+  planExportTarget,
+  planSpaceFolder,
+  readLayoutFileForImport,
+} from '@/pages/spaceList/mobileSpaceFlow'
 
 /** 自定义类型的哨兵值（选中它时展开输入框） */
 const CUSTOM_TYPE = '__custom__'
@@ -55,10 +76,7 @@ async function importLayoutInto(spaceId: string, sourceDir: string): Promise<voi
   const result = await adoptExportedLayout(localStorageProvider, spaceId, sourceDir)
 
   if (result === 'invalid') {
-    await alertDialog(
-      `「${EXPORTED_LAYOUT_FILE}」不是合法的布局文件，已忽略。空间已经建好，画布会重新铺开。`,
-      '导入空间',
-    )
+    await alertDialog(SPACE_FLOW_TEXT.importedInvalid, '导入空间')
     return
   }
 
@@ -112,10 +130,19 @@ export function SpaceList() {
   const [busy, setBusy] = useState(false)
   /** 导入空间时选中的源文件夹（里面有 mindscape-layout.json）；null 表示普通新建 */
   const [layoutSource, setLayoutSource] = useState<string | null>(null)
+  /**
+   * 移动端导入空间时选中的布局**字节**（M4 / D3 方案 A）。
+   * 安卓的选择器给内容不给路径，所以这里存的是字节而不是文件夹；
+   * 与 layoutSource 二选一（同一时刻只有一个平台分支在用）。
+   */
+  const [layoutBytes, setLayoutBytes] = useState<Uint8Array | null>(null)
   /** 正在重命名的空间（P1-5）；null 表示改名弹窗关闭 */
   const [renameTarget, setRenameTarget] = useState<Space | null>(null)
 
   const effectiveType = typeChoice === CUSTOM_TYPE ? customType.trim() : typeChoice
+
+  /** 能不能弹系统文件夹对话框（移动端为 false）：本页四处分支都只看这一个判定 */
+  const canPickFolder = supportsCapability('folderPicker')
 
   const resetForm = useCallback(() => {
     setName('')
@@ -124,6 +151,7 @@ export function SpaceList() {
     setFolderPath('')
     setFormError(null)
     setLayoutSource(null)
+    setLayoutBytes(null)
   }, [])
 
   const handlePickFolder = useCallback(async () => {
@@ -149,10 +177,6 @@ export function SpaceList() {
       setFormError('空间名称不能为空')
       return
     }
-    if (folderPath === '') {
-      setFormError('请选择空间文件夹')
-      return
-    }
     if (effectiveType === '') {
       setFormError('请填写自定义类型')
       return
@@ -160,9 +184,27 @@ export function SpaceList() {
 
     setBusy(true)
     try {
-      const created = await createSpace({ name, type: effectiveType, folderPath })
-      // 导入空间：把源文件夹里的 mindscape-layout.json 收进软件目录（P1-2）
-      if (layoutSource) await importLayoutInto(created.id, layoutSource)
+      // 落点：桌面沿用用户挑的文件夹（没挑还是那句「请选择空间文件夹」）；
+      // 移动端挑不了文件夹，按空间名派生到应用数据目录。
+      // ⚠️ 派生目录可能先建出来、随后 createSpace 因重名失败 —— 那里只剩一个空文件夹，
+      // 不去删它（铁律③「不静默删除」），下次同名空间正好复用。
+      const planned = await planSpaceFolder(
+        { canPickFolder, resolveMobileDir: resolveMobileSpaceDir },
+        name,
+        folderPath,
+      )
+      if (!planned.ok) {
+        setFormError(planned.error)
+        return
+      }
+      const created = await createSpace({ name, type: effectiveType, folderPath: planned.folderPath })
+      // 导入空间：桌面收源文件夹里的那份（P1-2），移动端收选择器给到的字节（M4）
+      if (layoutBytes) {
+        const result = await adoptLayoutBytes(localStorageProvider, created.id, layoutBytes)
+        if (result === 'invalid') await alertDialog(SPACE_FLOW_TEXT.importedInvalid, '导入空间')
+      } else if (layoutSource) {
+        await importLayoutInto(created.id, layoutSource)
+      }
       setDialogOpen(false)
       resetForm()
     } catch (error) {
@@ -170,7 +212,7 @@ export function SpaceList() {
     } finally {
       setBusy(false)
     }
-  }, [createSpace, effectiveType, folderPath, layoutSource, name, resetForm])
+  }, [canPickFolder, createSpace, effectiveType, folderPath, layoutBytes, layoutSource, name, resetForm])
 
   const handleDelete = useCallback(
     async (id: string, spaceName: string) => {
@@ -207,13 +249,23 @@ export function SpaceList() {
         return
       }
 
-      const target = await open({
-        directory: true,
-        multiple: false,
-        title: `把「${space.name}」的布局导出到哪个文件夹`,
-        defaultPath: space.folderPath,
-      })
-      if (typeof target !== 'string') return
+      const target = await planExportTarget(
+        {
+          canPickFolder,
+          pickDir: async () => {
+            const chosen = await open({
+              directory: true,
+              multiple: false,
+              title: `把「${space.name}」的布局导出到哪个文件夹`,
+              defaultPath: space.folderPath,
+            })
+            return typeof chosen === 'string' ? chosen : null
+          },
+          resolveMobileExportDir,
+        },
+        space.name,
+      )
+      if (target === null) return
 
       const written = await localStorageProvider.writeFileBytes(
         target,
@@ -221,13 +273,31 @@ export function SpaceList() {
         new TextEncoder().encode(raw),
       )
       await alertDialog(
-        `布局已导出：\n${written}\n\n` +
-          `把生成的文件（或整个文件夹）给到别人，对方用「导入空间」选中它即可还原摆放与连线。`,
+        canPickFolder ? SPACE_FLOW_TEXT.exportedDesktop(written) : SPACE_FLOW_TEXT.exportedMobile(written),
         '导出布局',
       )
     } catch (error) {
       await alertDialog(error instanceof Error ? error.message : String(error), '导出布局失败')
     }
+  }, [canPickFolder])
+
+  /**
+   * 移动端「导入空间」（M4 / D3 方案 A）：系统文件选择器给的是内容字节而不是文件夹，
+   * 所以这里先把布局读出来校验，再打开与桌面同一个新建弹窗（名字预填、可改）。
+   * 校验失败只提示、不建空间 —— 别在列表里留下建了一半的空空间。
+   */
+  const handleImportPickedLayout = useCallback(async (files: PickedFile[]) => {
+    const result = await readLayoutFileForImport({ readBytes: itemBytes }, files[0])
+    if (!result.ok) {
+      await alertDialog(result.error, '导入空间')
+      return
+    }
+    setLayoutBytes(result.bytes)
+    setLayoutSource(null)
+    setFolderPath('')
+    setName(result.suggestedName)
+    setFormError(null)
+    setDialogOpen(true)
   }, [])
 
   /**
@@ -295,7 +365,7 @@ export function SpaceList() {
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold">Mindscape 脑海空间</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            把文件夹变成思考空间 · 空间记录存于 %APPDATA%\Mindscape\spaces.json
+            {canPickFolder ? SPACE_FLOW_TEXT.subtitleDesktop : SPACE_FLOW_TEXT.subtitleMobile}
           </p>
         </div>
         {/* 图标按钮组：＋ 新建空间 / ⚙ 设置（面板与空间内同一个组件，挂在按钮下沿）。
@@ -315,15 +385,27 @@ export function SpaceList() {
           >
             <PlusIcon />
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            title={`导入空间（选带 ${EXPORTED_LAYOUT_FILE} 的文件夹）`}
-            aria-label="导入空间"
-            onClick={() => void handleImportSpace()}
-          >
-            <ImportIcon />
-          </Button>
+          {/* 导入空间：桌面挑「含 mindscape-layout.json 的文件夹」；移动端挑不了文件夹，
+              换成系统文件选择器直接选那个文件本身（M4 / D3 方案 A，两者都是 ImportIcon） */}
+          {canPickFolder ? (
+            <Button
+              variant="outline"
+              size="icon"
+              title={`导入空间（选带 ${EXPORTED_LAYOUT_FILE} 的文件夹）`}
+              aria-label="导入空间"
+              onClick={() => void handleImportSpace()}
+            >
+              <ImportIcon />
+            </Button>
+          ) : (
+            <ImportFilesButton
+              onFiles={(files) => void handleImportPickedLayout(files)}
+              title={SPACE_FLOW_TEXT.importLayoutTitle}
+              label={SPACE_FLOW_TEXT.importLayoutLabel}
+              accept={LAYOUT_FILE_ACCEPT}
+              multiple={false}
+            />
+          )}
           {/* 切换深浅色模式（2026-09-13）：从设置面板搬到顶栏，纯图标（太阳 / 月亮） */}
           <Button
             variant="outline"
@@ -370,7 +452,7 @@ export function SpaceList() {
           <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-20 text-center">
             <p className="text-sm text-muted-foreground">还没有空间</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              点右上角的 ＋ 按钮新建空间，选一个已有文件夹即可开始
+              {canPickFolder ? SPACE_FLOW_TEXT.emptyHintDesktop : SPACE_FLOW_TEXT.emptyHintMobile}
             </p>
           </div>
         ) : null}
@@ -547,20 +629,26 @@ export function SpaceList() {
 
         <div className="space-y-1.5">
           <span className="text-xs font-medium">空间文件夹</span>
-          <div className="flex items-center gap-2">
-            <input
-              className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="尚未选择"
-              value={folderPath}
-              readOnly
-              title={folderPath}
-            />
-            <Button variant="outline" onClick={() => void handlePickFolder()}>
-              选择…
-            </Button>
-          </div>
+          {/* 移动端没有文件夹对话框，「选择…」摆出来也只会报错，直接不给（M4） */}
+          {canPickFolder ? (
+            <div className="flex items-center gap-2">
+              <input
+                className="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1.5 text-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder="尚未选择"
+                value={folderPath}
+                readOnly
+                title={folderPath}
+              />
+              <Button variant="outline" onClick={() => void handlePickFolder()}>
+                选择…
+              </Button>
+            </div>
+          ) : null}
           <p className="text-[11px] text-muted-foreground">
-            可以直接选已有文件夹；布局存在软件目录里，不会往这个文件夹里写任何文件
+            {canPickFolder
+              ? SPACE_FLOW_TEXT.folderHintDesktop
+              : // 预览用的是同一个 spaceDirName：说明文字不许跟真实落点各说各话
+                SPACE_FLOW_TEXT.folderHintMobile(spaceDirName(name.trim()))}
           </p>
         </div>
 

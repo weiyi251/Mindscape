@@ -13,18 +13,20 @@ import { createEmptyLayout } from '@/core/types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const { fsState, listDirMock, createDirMock, copyFileMock, deleteFileMock } = vi.hoisted(() => ({
-  fsState: {
-    files: new Map<string, string>(),
-    /** 用户文件夹里的文件（copy_file 的源）；与软件目录的 files 分开存，便于断言「源没被动」 */
-    sourceFiles: new Map<string, string>(),
-    trace: [] as string[],
-  },
-  listDirMock: vi.fn(),
-  createDirMock: vi.fn(),
-  copyFileMock: vi.fn(),
-  deleteFileMock: vi.fn(),
-}))
+const { fsState, listDirMock, createDirMock, copyFileMock, deleteFileMock, writeFileBytesMock } =
+  vi.hoisted(() => ({
+    fsState: {
+      files: new Map<string, string>(),
+      /** 用户文件夹里的文件（copy_file 的源）；与软件目录的 files 分开存，便于断言「源没被动」 */
+      sourceFiles: new Map<string, string>(),
+      trace: [] as string[],
+    },
+    listDirMock: vi.fn(),
+    createDirMock: vi.fn(),
+    copyFileMock: vi.fn(),
+    deleteFileMock: vi.fn(),
+    writeFileBytesMock: vi.fn(),
+  }))
 
 vi.mock('@tauri-apps/plugin-fs', () => ({
   exists: async (filePath: string) => fsState.files.has(filePath),
@@ -59,6 +61,7 @@ const {
   LEGACY_LAYOUT_FILE,
   LAYOUTS_DIR_NAME,
   adoptExportedLayout,
+  adoptLayoutBytes,
   createAppLayoutStore,
   exportedLayoutExists,
   getLayoutsDir,
@@ -67,12 +70,13 @@ const {
   removeExportedLayout,
 } = await import('./appLayoutStore')
 
-/** 假 provider：只实现 appLayoutStore 用到的四个方法 */
+/** 假 provider：只实现 appLayoutStore 用到的五个方法 */
 const provider = {
   createDir: createDirMock,
   listDir: listDirMock,
   copyFile: copyFileMock,
   deleteFile: deleteFileMock,
+  writeFileBytes: writeFileBytesMock,
 } as any
 
 const store = createAppLayoutStore(provider)
@@ -87,6 +91,7 @@ beforeEach(() => {
   createDirMock.mockReset()
   copyFileMock.mockReset()
   deleteFileMock.mockReset()
+  writeFileBytesMock.mockReset()
 
   // copy_file 的模拟：把源内容按**原名**落进目标目录，返回真实落地路径
   copyFileMock.mockImplementation(async (src: string, destDir: string) => {
@@ -94,6 +99,13 @@ beforeEach(() => {
     const target = `${destDir}\\${name}`
     fsState.files.set(target, fsState.sourceFiles.get(src) ?? '')
     fsState.trace.push(`copy:${src}->${target}`)
+    return target
+  })
+  // write_file_bytes 的模拟：同上，字节按**原名**落进目标目录并返回真实路径
+  writeFileBytesMock.mockImplementation(async (destDir: string, name: string, bytes: Uint8Array) => {
+    const target = `${destDir}\\${name}`
+    fsState.files.set(target, new TextDecoder().decode(bytes))
+    fsState.trace.push(`writeBytes:${target}`)
     return target
   })
   deleteFileMock.mockImplementation(async (filePath: string) => {
@@ -282,5 +294,40 @@ describe('removeExportedLayout', () => {
     await removeExportedLayout(provider, SOURCE_DIR)
 
     expect(fsState.sourceFiles.has(SOURCE_FILE)).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 移动端导入（M4 / D3 方案 A：选择器只给字节，不给源文件夹）
+// ---------------------------------------------------------------------------
+
+describe('adoptLayoutBytes', () => {
+  const bytesOf = (text: string): Uint8Array => new TextEncoder().encode(text)
+
+  it('字节写进软件目录后改名成 <空间 id>.json，与目录版同一落地口径', async () => {
+    await expect(adoptLayoutBytes(provider, 's_9', bytesOf(VALID_LAYOUT))).resolves.toBe('ok')
+
+    expect(createDirMock).toHaveBeenCalledWith(LAYOUTS_DIR)
+    expect(writeFileBytesMock).toHaveBeenCalledWith(LAYOUTS_DIR, EXPORTED_LAYOUT_FILE, expect.any(Uint8Array))
+    expect(fsState.files.get(`${LAYOUTS_DIR}\\s_9.json`)).toBe(VALID_LAYOUT)
+    expect(fsState.files.has(`${LAYOUTS_DIR}\\${EXPORTED_LAYOUT_FILE}`)).toBe(false)
+  })
+
+  it('内容不是合法布局 → 删掉刚写入的那份并返回 invalid', async () => {
+    await expect(adoptLayoutBytes(provider, 's_9', bytesOf('不是 JSON'))).resolves.toBe('invalid')
+
+    expect(fsState.files.has(`${LAYOUTS_DIR}\\${EXPORTED_LAYOUT_FILE}`)).toBe(false)
+    expect(fsState.files.has(`${LAYOUTS_DIR}\\s_9.json`)).toBe(false)
+  })
+
+  it('write_file_bytes 因重名加序号时也以返回值为准', async () => {
+    writeFileBytesMock.mockImplementationOnce(async () => {
+      const target = `${LAYOUTS_DIR}\\${EXPORTED_LAYOUT_FILE}_1`
+      fsState.files.set(target, VALID_LAYOUT)
+      return target
+    })
+
+    await expect(adoptLayoutBytes(provider, 's_9', bytesOf(VALID_LAYOUT))).resolves.toBe('ok')
+    expect(fsState.files.get(`${LAYOUTS_DIR}\\s_9.json`)).toBe(VALID_LAYOUT)
   })
 })
