@@ -9,7 +9,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { DESKTOP_ONLY_MESSAGE, assertDesktopRuntime, isDesktopRuntime } from '@/core/utils/runtime'
+import { DESKTOP_ONLY_MESSAGE, assertDesktopRuntime, isDesktopRuntime, isMobileRuntime } from '@/core/utils/runtime'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -51,5 +51,35 @@ describe('assertDesktopRuntime', () => {
   it('桌面环境 → 不抛错', () => {
     vi.stubGlobal('window', { __TAURI_INTERNALS__: {} })
     expect(() => assertDesktopRuntime()).not.toThrow()
+  })
+})
+
+describe('isMobileRuntime（2026-09-21 移动端适配 M1）', () => {
+  it('Android WebView UA → true', () => {
+    expect(
+      isMobileRuntime(
+        'Mozilla/5.0 (Linux; Android 14; M2012K11AC Build/UKQ1) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.0.0 Mobile Safari/537.36',
+      ),
+    ).toBe(true)
+  })
+
+  it('iOS WKWebView UA → true', () => {
+    expect(
+      isMobileRuntime(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Safari/604.1',
+      ),
+    ).toBe(true)
+  })
+
+  it('桌面 WebView2 UA → false（不含移动端标识）', () => {
+    expect(
+      isMobileRuntime(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0',
+      ),
+    ).toBe(false)
+  })
+
+  it('空串（node 环境）→ false', () => {
+    expect(isMobileRuntime('')).toBe(false)
   })
 })

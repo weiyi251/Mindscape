@@ -36,3 +36,15 @@ export function assertDesktopRuntime(): void {
   if (isDesktopRuntime()) return
   throw new Error(DESKTOP_ONLY_MESSAGE)
 }
+
+/**
+ * 当前是否运行在移动端（Android / iOS 的 Tauri 窗口，2026-09-21 移动端适配 M1）。
+ *
+ * 注意与 `isDesktopRuntime()` 的关系：Tauri 移动端**同样**有 `__TAURI_INTERNALS__`
+ * （invoke / fs 命令都可用），所以「是不是 Tauri」不能用桌面判定表达；这里改看
+ * UserAgent —— Android WebView / iOS WKWebView 的 UA 都含平台标识，桌面 WebView2
+ * 不含。注入 userAgent 参数便于单测（node 环境没有 navigator）。
+ */
+export function isMobileRuntime(userAgent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent): boolean {
+  return /Android|iPhone|iPad|Mobile/i.test(userAgent)
+}
