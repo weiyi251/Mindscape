@@ -13,6 +13,12 @@
 //           不自行拼 cmd 命令、不引入新依赖；错误统一翻译成中文（17.5 铁律）。
 //
 // 铁律（17.5）：只做「安全执行 + 明确报错」，不做业务判断。
+//
+// 移动端适配 M1（2026-09-21）：
+//   · `reveal_in_explorer` 在移动端直接返回中文「桌面专属」提示 —— Android 没有
+//     「在文件管理器中选中该文件」的概念，opener 的 reveal_item_in_dir 无移动端实现；
+//   · `open_with_default` 与 `read_image_size` 全平台保留（opener 在安卓能拉起系统查看器，
+//     读图头是纯 Rust 逻辑）。
 // ============================================================================
 
 use std::path::Path;
@@ -89,9 +95,27 @@ pub fn open_with_default(path: String) -> Result<(), String> {
         .map_err(|error| format!("打开失败：{path}（{error}）"))
 }
 
+/// 桌面专属能力的统一拒绝口径（纯函数，便于单测；2026-09-21 移动端适配 M1）。
+///
+/// 前端有平台能力表（`src/core/system/platformCapabilities.ts`）负责不显示这些入口，
+/// 这里是**第二道**：绕过前端直接 invoke（插件、脚本、未来的其它前端）也必须拿到
+/// 中文提示，而不是底层插件那句英文 `not implemented on mobile`。
+fn desktop_only_guard(feature: &str, is_mobile: bool) -> Result<(), String> {
+    if is_mobile {
+        return Err(format!("{feature}仅在桌面版可用，移动端没有对应的系统能力"));
+    }
+    Ok(())
+}
+
 /// 在资源管理器中定位文件（T3.5 的降级方案：系统未关联打开方式时提示后调用）。
+///
+/// 移动端直接拒绝：Android 没有「在文件管理器中选中该文件」这一概念
+/// （opener 的 `reveal_item_in_dir` 无移动端实现）。前端的能力表已不触发此调用，
+/// 这里兜住直接 invoke 的情况。
 #[tauri::command]
 pub fn reveal_in_explorer(path: String) -> Result<(), String> {
+    desktop_only_guard("在文件夹中定位文件", cfg!(mobile))?;
+
     let target = Path::new(&path);
 
     if !target.exists() {
@@ -254,5 +278,21 @@ mod tests {
         let error =
             reveal_in_explorer(missing.to_string_lossy().into_owned()).unwrap_err();
         assert!(error.contains("路径不存在"), "实际错误：{error}");
+    }
+
+    // ---- 移动端 M1（2026-09-21）：桌面专属能力的拒绝口径 ----
+    // 宿主测试跑在桌面 cfg 下（`cfg!(mobile)` 恒为 false），所以这里测的是纯函数的两个分支；
+    // 安卓上的真实分叉由 `cargo check --target aarch64-linux-android` 保证编译期正确。
+
+    #[test]
+    fn desktop_only_guard_names_the_feature_in_chinese() {
+        let error = desktop_only_guard("在文件夹中定位文件", true).unwrap_err();
+        assert!(error.contains("在文件夹中定位文件"), "实际错误：{error}");
+        assert!(error.contains("仅在桌面版可用"), "实际错误：{error}");
+    }
+
+    #[test]
+    fn desktop_only_guard_lets_desktop_through() {
+        assert!(desktop_only_guard("在文件夹中定位文件", false).is_ok());
     }
 }

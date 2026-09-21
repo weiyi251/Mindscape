@@ -33,6 +33,9 @@
 ///   · 逐项校验「存在且是文件」：目录、失效路径全部剔除；
 ///   · 全部无效 → Err（中文，列出被剔除的路径）；
 ///   · 部分无效 → 保留有效项（部分成功也值得粘贴，与批量移动同精神）。
+// Only the Windows backend reaches this; the non-Windows stub answers a fixed
+// message, so on android targets the function is legitimately unreferenced.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 pub fn validate_file_paths(paths: &[String]) -> Result<Vec<std::path::PathBuf>, String> {
     if paths.is_empty() {
         return Err("没有可复制到系统剪贴板的文件".to_string());

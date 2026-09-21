@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "mobile",
+  "description": "移动端（安卓 / iOS）能力声明（2026-09-21 移动端适配 M1，从 default.json 拆出）。与桌面同一套 fs + dialog 权限：$DATA 在安卓解析为应用私有目录（/data/user/0/<包名>/files），故 fs:scope 覆盖 core/storage/mobileSpaces.ts 落下的 <dataDir>/Mindscape/spaces/** —— 这正是 D3 方案 A「移动端空间放应用数据目录」的权限前提。刻意不含 updater:default 与 process:allow-restart：APK 走侧载分发，没有自动更新渠道，对应插件在 lib.rs 里也只在桌面装配（cfg(not(mobile))）；不含 opener:allow-open-path：前端从不调用 opener 的 JS 接口，「打开原图」走我们自己的 Rust 命令（tauri_plugin_opener 的 Rust API 不需要能力授权）；不含 core:window:allow-close：移动端没有关闭窗口这回事",
+  "windows": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "fs:read-files",
+    "fs:write-files",
+    "fs:allow-read-dir",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$DATA/Mindscape/**" }]
+    }
+  ]
+}

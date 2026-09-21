@@ -9,21 +9,32 @@
 //     它走 fs 插件（17.10 声明的 fs 权限就是为此），详见 core/storage/spacesFile.ts
 //
 // 本模块只做「装配」，不含任何业务判断（17.5 铁律）。
+//
+// 2026-09-21 移动端适配（M1）：装配按平台分叉 ——
+//   · updater / process 两个插件**只在桌面装配**（APK 侧载没有更新渠道，
+//     capabilities 也据此拆成 default.json（桌面）与 mobile.json（安卓/iOS））；
+//   · 其余命令与插件全平台装配：`cargo check --target aarch64-linux-android`
+//     在 M0 已验证零改动通过（clipboard-win 的 cfg(windows) 隔离有效）。
 // ============================================================================
 
 mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        // 应用内检查更新。检查端点与签名公钥配置在 tauri.conf.json 的 plugins.updater，
-        // 这里只负责装配（17.5 铁律：本模块不含业务判断）。
+        .plugin(tauri_plugin_fs::init());
+
+    // 应用内检查更新。检查端点与签名公钥配置在 tauri.conf.json 的 plugins.updater，
+    // 这里只负责装配（17.5 铁律：本模块不含业务判断）。
+    // 更新安装完成后重启应用 —— process 插件只为这一步服务，与 updater 同进同退。
+    #[cfg(not(mobile))]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        // 更新安装完成后重启应用
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             commands::fs_ops::list_dir,
             commands::fs_ops::create_dir,
