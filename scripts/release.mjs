@@ -22,6 +22,11 @@
 // 生成后的发布步骤：
 //   把 latest.json 与安装包一起上传到 GitHub Release（tag 必须是 v 开头的版本号），
 //   endpoints 指向 .../releases/latest/download/latest.json，客户端即可发现新版本。
+//   ⚠️ 上传资产必须包含 4 个文件，缺一不可：
+//      latest.json / Mindscape_<版本>_x64-setup.exe / 同名的 .exe.sig / Mindscape_<版本>_x64_en-US.msi
+//      —— MSI 侧的 .msi.sig 也要一并上传（2026-09-28 补齐：此前 Release 上只有 NSIS 的签名，
+//         MSI 资产没有签名，拿它做离线安装时无从校验）。自动更新通道只认 NSIS 那一套
+//         （latest.json 的 windows-x86_64 只有一个 url），MSI 供全新安装 / 离线分发用。
 // ============================================================================
 
 import fs from 'node:fs'
@@ -29,6 +34,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+
+import { readUpdaterSignature } from './updater-signature.mjs'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CONFIG_PATH = path.join(ROOT, 'src-tauri', 'tauri.conf.json')
@@ -88,7 +95,10 @@ function findUpdaterArtifact() {
     )
   }
 
-  return { fileName: setupFile, signature: fs.readFileSync(sigPath, 'utf8').trim() }
+  // ⚠️ .sig 是「单行 base64」，不是明文四行 —— 形态与所属文件名的校验都在
+  //    readUpdaterSignature 里（2026-09-28：曾把正确形态误判成坏的，别再手写）
+  const raw = fs.readFileSync(sigPath, 'utf8')
+  return { fileName: setupFile, signature: readUpdaterSignature(raw, { expectFile: setupFile }) }
 }
 
 function writeManifest() {
@@ -118,8 +128,11 @@ function writeManifest() {
   console.log(`   签名长度：${signature.length} 字符`)
   console.log('')
   console.log('下一步（发布）：')
-  console.log(`   1. 把 latest.json 与 ${fileName} 一起上传到 GitHub Release（tag = v${version}）`)
+  console.log(`   1. 上传到 Release（tag = v${version}）：latest.json、${fileName}、${fileName}.sig、`)
+  console.log(`      ${productName}_${version}_x64_en-US.msi、${productName}_${version}_x64_en-US.msi.sig`)
   console.log('   2. 确认该 Release 是「最新正式版」（非草稿、非预发布），否则 latest/download 会 404')
+  console.log('   3. 自动更新通道只有 NSIS（latest.json 的 windows-x86_64 只能填一个 url）：')
+  console.log('      MSI 安装的机器不会走自动更新，需要下载新版 MSI 覆盖安装')
 }
 
 function build() {
