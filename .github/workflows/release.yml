@@ -54,7 +54,10 @@ jobs:
           workspaces: src-tauri
 
       # createUpdaterArtifacts 关掉后就不再去找签名私钥（私钥不在 CI 上，见文件头说明）
+      # ⚠️ 必须 shell: bash —— 默认的 PowerShell 会把单引号 JSON 里的双引号吃掉，
+      #    CLI 收到 `{bundle:{createUpdaterArtifacts:false}}` 报「key must be a string」
       - name: 构建安装包
+        shell: bash
         run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: 上传 NSIS 安装包
@@ -74,6 +77,11 @@ jobs:
   android:
     name: 移动 · 安卓 APK（debug 签名）
     runs-on: ubuntu-latest
+    env:
+      # ubuntu 镜像自带 Android SDK；NDK 版本号与开发机一致（26.3.11579264）
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.3.11579264
+      NDK_HOME: /usr/local/lib/android/sdk/ndk/26.3.11579264
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -109,12 +117,13 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: 安装安卓 SDK / NDK
-        uses: android-actions/setup-android@v3
-
-      # setup-android 只带基础 SDK；NDK 与 build-tools 要按需补装（NDK 版本号与本机一致）
-      - name: 补装 NDK 与 build-tools
-        run: sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
+      # ⚠️ 不用 android-actions/setup-android@v3：它会去装已经下架的 `tools` 包，
+      #    在带 cmdline-tools 16.0 的新镜像上必然失败（Failed to find package 'tools'）。
+      #    ubuntu 镜像本身就带 SDK，缺的只是 NDK 与 build-tools，用 sdkmanager 补即可。
+      - name: 接受许可并补装 NDK / build-tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
 
       # gen/android 是 CLI 生成物、不入库（.gitignore），换环境必须重新 init
       - name: 生成安卓工程
