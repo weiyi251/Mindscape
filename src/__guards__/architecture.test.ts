@@ -486,8 +486,8 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/plugin-detail.tsx': '渲染层',
   'src/components/ui/plugin-dialog-host.tsx': '渲染层（状态在 core/store/pluginUiStore.ts 已测）',
   'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
-  'src/plugins/colorCard/dialog.tsx':
-    '插件界面（渲染层）：取值 / 校验 / 文件名 / 写盘编排全在 options.ts、png.ts、save.ts 里，均已单测',
+  // 注：colorCard/dialog.tsx 曾有本条豁免（渲染层），2026-09-28 补 dialog.test.tsx
+  // （锁「窄屏触控目标 ≥44px 且必须写在 max-sm: 前缀下，桌面尺寸一字不改」），条目随之删除。
   // 注：待办卡片界面 view.tsx 曾有本条豁免，2026-09-18 补了 view.test.tsx
   // （静态渲染断言：多行控件 / 无 truncate / 行与连线点标记齐备），条目随之删除。
   'src/pages/Board.tsx': '渲染层',
