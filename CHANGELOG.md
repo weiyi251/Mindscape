@@ -5,6 +5,41 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.10.0] - 2026-09-28
+
+### 新增
+
+- **移动端（安卓）适配首发** —— 同一套代码同时跑桌面与安卓，按运行时能力自动切换：
+  - **平台能力表** —— 「这台设备上有没有这个能力」统一由 `core/system/platformCapabilities.ts`
+    裁决；判定必须用 `isMobileRuntime()`（走 UA），因为 `isDesktopRuntime()` 在安卓上也返回 true
+  - **移动端空间目录** —— 安卓走应用私有目录，不去动用户的文件夹（D3 方案 A）
+  - **手势与交互** —— 双指捏合缩放、长按出右键菜单、框选模式、软键盘弹出时画布让位
+  - **响应式界面** —— 紧凑视口改整屏弹窗、触控目标统一提到 44px、搜索入口下沉到移动端够得着的地方
+  - **文件导入** —— 移动端没有拖入，改用系统文件选择器
+  - **跨应用剪贴板** —— 按平台改道，移动端只走文本
+  - **能力降级** —— 自动更新、「打开原图」在移动端做不到，入口直接隐藏并给出说明
+- **移动端设置界面透气化** —— 顶部让出状态栏安全区（`max(28px, env(safe-area-inset-top))`
+  兜底，不吃透 `env()` 的内核自动回落）；只有一个设置页时不再画那条导航；手写按钮在窄屏
+  统一提到 44px，桌面尺寸一字不改
+- **启动兜底页自带诊断** —— 打不开时页面直接打印 UA，并在内核低于 Chrome 76 时讲清原因
+  （安卓 WebView 硬底线：Chrome 76 能跑、87 才顺）
+
+### 修复
+
+- **移动端单指拖动被误判成缩放** —— 幽灵手指两处堵掉
+- **顶栏被安卓状态栏压住** —— `viewport-fit=cover` + `#root` 安全区内边距
+- **底部浮层挤成一团** —— 竖排两行，小地图让位
+- **整屏浮窗自己让出安全区** —— 设置面板的 ✕ 不再压在状态栏底下
+- **安卓包里没有界面** —— cargo 必须开 `tauri/custom-protocol`，否则 `.so` 不嵌 `dist/`；
+  真机第一轮就撞上（装得上、点开闪一下黑屏就退）
+- **更新签名形态** —— `.sig` 的结构与所属文件名校验收进 `scripts/updater-signature.mjs`
+  （此前误把正确的「单行 base64」当成坏资产），发版清单补齐 MSI 侧的 `.msi.sig`
+
+### 变更
+
+- 版本号 0.9.0 → 0.10.0
+- 新增 `pnpm android`：安卓构建入口（debug / release / universal 四档架构，release 走外挂签名）
+
 ## [0.9.0] - 2026-09-21
 
 ### 新增
@@ -415,7 +450,8 @@
 - 缩略图采用无损 WebP，照片类缩略图体积约为 JPEG q80 的 2 ~ 4 倍
 - 早期版本存在卡片 id 撞号，加载时会自动重编号修复；被重编号卡片上的原有连线端点可能失配（渲染层有兜底，不会崩溃）
 
-[Unreleased]: https://github.com/weiyi251/Mindscape/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/weiyi251/Mindscape/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/weiyi251/Mindscape/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/weiyi251/Mindscape/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/weiyi251/Mindscape/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/weiyi251/Mindscape/compare/v0.6.0...v0.7.0
