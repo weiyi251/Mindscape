@@ -142,12 +142,31 @@
   }
 
   /*
+   * ⚠️ 兜底下限（2026-09-28，用户真机第三轮：「文字还是贴在手机屏幕顶部」）。
+   * 有一批 WebView **不转发** env(safe-area-inset-*)（开了 viewport-fit=cover 也恒为 0），
+   * 上面那条在这种机器上等于没写。窄视口（= FloatingModal 的整屏阈值 640）下给 top / bottom
+   * 加一条下限，标题栏就不再压进状态栏。
+   * 两条同名声明并列是刻意的：**不支持 max() 的老内核会直接丢弃第二条**，自动回落到上面
+   * 那条 env() 写法（清单 §3.11 记的那句「真机上仍压着就改 max(...)」此刻正式落地）。
+   * 桌面主窗口最小 900px，不会命中这个媒体查询。
+   */
+  @media not all and (min-width: 640px) {
+    #root {
+      padding-top: max(28px, env(safe-area-inset-top));
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+  }
+
+  /*
    * 整屏浮窗要**自己**再让一次安全区（2026-09-21 真机第一轮：设置面板的 ✕ 点不到）。
    * `position: fixed` 是按视口定位的，上面 #root 的内边距对它无效，
    * 于是标题栏又钻到状态栏底下 —— 触发条件由 FloatingModal 的 data-compact 给出。
+   * 末尾两条同样是 (2026-09-28) 兜底：compact 只在窄视口出现，桌面永不受影响。
    */
   [data-floating-modal][data-compact='true'] {
     padding: env(safe-area-inset-top) env(safe-area-inset-right)
       env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding-top: max(28px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 }

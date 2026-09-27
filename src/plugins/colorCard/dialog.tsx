@@ -44,13 +44,14 @@ import { isPathWithin, saveColorCard } from './save'
 import type { SaveColorCardResult } from './save'
 import { COLOR_CARD_TEXT } from './text'
 
-/** 文本输入框统一样式（语义 token，深浅色都跟随主题） */
+/** 文本输入框统一样式（语义 token，深浅色都跟随主题）。
+ *  max-sm：窄屏把行高抬到能舒服点中的 44px 档（2026-09-28 移动端第三轮） */
 const FIELD_CLASS =
-  'w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary'
+  'w-full rounded border border-border bg-background px-2 py-1 text-xs text-foreground outline-none focus:border-primary max-sm:min-h-[44px] max-sm:px-3 max-sm:text-sm'
 
-/** 小按钮统一样式 */
+/** 小按钮统一样式（窄屏同样给满 44px；桌面靠 max-sm 前缀隔离，尺寸一字不变） */
 const SMALL_BUTTON =
-  'rounded border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-muted disabled:opacity-50'
+  'rounded border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-muted disabled:opacity-50 max-sm:flex max-sm:min-h-[44px] max-sm:items-center max-sm:justify-center max-sm:px-3 max-sm:text-xs'
 
 /** 预设按钮（比例 / 长边两组共用）：选中态高亮，让用户一眼看出当前是哪一组值 */
 function presetButtonClass(active: boolean): string {
@@ -59,9 +60,9 @@ function presetButtonClass(active: boolean): string {
     .join(' ')
 }
 
-/** 主按钮 */
+/** 主按钮（窄屏同样抬到 44px） */
 const PRIMARY_BUTTON =
-  'rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50'
+  'rounded bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50 max-sm:flex max-sm:min-h-[44px] max-sm:items-center max-sm:justify-center max-sm:px-4 max-sm:text-sm'
 
 function SectionTitle({ children }: { children: string }) {
   return <h3 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</h3>
@@ -189,7 +190,7 @@ export function ColorCardDialog({ api, spacePath }: ColorCardDialogProps) {
           </div>
           <input
             type="color"
-            className="h-8 w-10 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+            className="h-8 w-10 shrink-0 cursor-pointer rounded border border-border bg-transparent max-sm:h-11 max-sm:w-14"
             value={options.color}
             onChange={(event) => pickColor(event.target.value)}
             title={COLOR_CARD_TEXT.colorPickerLabel}
@@ -205,7 +206,7 @@ export function ColorCardDialog({ api, spacePath }: ColorCardDialogProps) {
                 key={preset.id}
                 type="button"
                 className={[
-                  'h-6 w-6 rounded border transition-transform hover:scale-110',
+                  'h-6 w-6 rounded border transition-transform hover:scale-110 max-sm:h-10 max-sm:w-10',
                   preset.color === options.color ? 'border-primary' : 'border-border',
                 ].join(' ')}
                 style={{ backgroundColor: preset.color }}

@@ -6,6 +6,7 @@
 // 真正的动作由父组件（settings-plugins.tsx）负责（含用户确认框）。
 // ============================================================================
 
+import { cn } from '@/lib/utils'
 import { canReload, canUninstall, hasNoContributions } from '@/core/plugin/lifecycle'
 import {
   contributionsLine,
@@ -23,22 +24,29 @@ export interface PluginDetailProps {
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  // 窄屏：标签列放宽到 20（4 个字符的名最小值够用）、行高提到 24px、字号 12px
   return (
-    <div className="flex gap-2 text-[11px] leading-5">
-      <span className="w-16 shrink-0 text-muted-foreground">{label}</span>
+    <div className="flex gap-2 text-xs leading-6 sm:text-[11px] sm:leading-5">
+      <span className="w-20 shrink-0 text-muted-foreground sm:w-16">{label}</span>
       <span className="min-w-0 flex-1 break-all text-foreground">{value}</span>
     </div>
   )
 }
+
+/** 详情里的两个操作按钮：窄屏给满 44px 触控高度（桌面回落原尺寸） */
+const DETAIL_ACTION_BASE =
+  'flex min-h-[44px] items-center justify-center rounded border px-3 text-xs transition-colors sm:min-h-0 sm:px-2 sm:py-0.5 sm:text-[11px]'
 
 export function PluginDetail({ plugin, pending, onUninstall, onReload }: PluginDetailProps) {
   const contributions = contributionsLine(plugin.contributions)
   const configKeys = Object.keys(plugin.config)
 
   return (
-    <div className="mt-1 space-y-2 rounded border border-border bg-muted/40 px-2 py-2">
+    <div className="mt-2 space-y-2.5 rounded border border-border bg-muted/40 px-3 py-3 sm:mt-1 sm:px-2 sm:py-2">
       {plugin.description ? (
-        <p className="text-[11px] leading-snug text-muted-foreground">{plugin.description}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
+          {plugin.description}
+        </p>
       ) : null}
 
       <div>
@@ -60,19 +68,23 @@ export function PluginDetail({ plugin, pending, onUninstall, onReload }: PluginD
 
       {/* 出错时把完整原因放进详情（列表行里可能被截断） */}
       {plugin.detail && plugin.state !== 'active' ? (
-        <p className="text-[11px] leading-snug text-destructive">{plugin.detail}</p>
+        <p className="text-xs leading-relaxed text-destructive sm:text-[11px] sm:leading-snug">
+          {plugin.detail}
+        </p>
       ) : null}
       {plugin.state === 'active' && hasNoContributions(plugin.contributions) ? (
-        <p className="text-[11px] leading-snug text-muted-foreground">已启用（未注册任何内容）</p>
+        <p className="text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
+          已启用（未注册任何内容）
+        </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+      <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0.5">
         {canReload(plugin) ? (
           <button
             type="button"
             disabled={pending}
             onClick={() => onReload(plugin)}
-            className="rounded border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-muted"
+            className={cn(DETAIL_ACTION_BASE, 'border-border text-foreground hover:bg-muted')}
           >
             {PLUGIN_TEXT.reload}
           </button>
@@ -83,18 +95,21 @@ export function PluginDetail({ plugin, pending, onUninstall, onReload }: PluginD
             type="button"
             disabled={pending}
             onClick={() => onUninstall(plugin)}
-            className="rounded border border-destructive/40 px-2 py-0.5 text-[11px] text-destructive transition-colors hover:bg-destructive/10"
+            className={cn(
+              DETAIL_ACTION_BASE,
+              'border-destructive/40 text-destructive hover:bg-destructive/10',
+            )}
           >
             {PLUGIN_TEXT.uninstall}
           </button>
         ) : (
-          <span className="text-[11px] leading-snug text-muted-foreground">
+          <span className="text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
             {PLUGIN_TEXT.builtinNotice}
           </span>
         )}
       </div>
 
-      <p className="text-[11px] leading-snug text-muted-foreground">
+      <p className="text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
         {plugin.source === 'external'
           ? PLUGIN_TEXT.externalVersionNote(plugin.version)
           : PLUGIN_TEXT.builtinVersionNote(plugin.version)}

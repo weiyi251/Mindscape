@@ -50,26 +50,30 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     >
       {/* 窄屏（手机整屏弹窗）导航换到顶部横排：w-28 的左栏在 360px 宽的屏上要占掉三成。
           断点用 sm(640)，与 FloatingModal 的整屏阈值同一个数（见 floatingModalGeometry.ts） */}
-      <div className="flex h-full min-h-0 flex-col gap-3 sm:flex-row">
-        {/* 页签：桌面竖排、窄屏横排（页面多了也能滚动，不挤在标题栏里） */}
-        <nav className="flex shrink-0 gap-1 overflow-x-auto sm:w-28 sm:flex-col">
-          {pages.map((page) => (
-            <button
-              key={page.id}
-              type="button"
-              onClick={() => setPageId(page.id)}
-              aria-current={page.id === active.id}
-              className={cn(
-                'whitespace-nowrap rounded px-2 py-2 text-left text-xs transition-colors sm:whitespace-normal sm:py-1.5',
-                page.id === active.id
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-foreground/80 hover:bg-foreground/10 hover:text-foreground',
-              )}
-            >
-              {page.label}
-            </button>
-          ))}
-        </nav>
+      <div className="flex h-full min-h-0 flex-col gap-4 sm:flex-row sm:gap-3">
+        {/* 只有一张可见页时**连导航条都不渲染**（2026-09-28 用户反馈「太满」）：
+            手机上它是一条几十像素高、只能点一个按钮的横条 —— 桌面左右分栏仍照旧。
+            页签本身在窄屏长到 44px 的拇指尺寸（同 button.tsx 紧凑档口径）。 */}
+        {pages.length > 1 ? (
+          <nav className="flex shrink-0 gap-1 overflow-x-auto sm:w-28 sm:flex-col">
+            {pages.map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => setPageId(page.id)}
+                aria-current={page.id === active.id}
+                className={cn(
+                  'min-h-[44px] whitespace-nowrap rounded px-3 text-left text-sm transition-colors sm:min-h-0 sm:whitespace-normal sm:px-2 sm:py-1.5 sm:text-xs',
+                  page.id === active.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-foreground/80 hover:bg-foreground/10 hover:text-foreground',
+                )}
+              >
+                {page.label}
+              </button>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="min-w-0 flex-1 overflow-auto">
           <ActivePage />

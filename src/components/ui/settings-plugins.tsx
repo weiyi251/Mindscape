@@ -28,9 +28,11 @@ import { isDesktopRuntime } from '@/core/utils/runtime'
 import { PluginDetail } from './plugin-detail'
 import { PluginListItem } from './plugin-list-item'
 
-/** 小按钮统一样式（刷新 / 打开目录） */
+/** 小按钮统一样式（刷新 / 打开目录）。
+ *  窄屏给满 44px 触控高度（M3 的 button.tsx 只覆盖了 Button 组件，
+ *  这里的手写按钮自己满足条件；`min-h` 用 sm 挡回去，桌面高度一字不变） */
 const ACTION_BUTTON =
-  'rounded border border-border px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-muted'
+  'flex min-h-[44px] items-center justify-center rounded border border-border px-3 text-xs text-foreground transition-colors hover:bg-muted sm:min-h-0 sm:px-2 sm:py-0.5 sm:text-[11px]'
 
 export function SettingsPluginsPage() {
   const plugins = usePluginsStore((state) => state.plugins)
@@ -102,10 +104,13 @@ export function SettingsPluginsPage() {
   }, [])
 
   return (
-    <div className="space-y-2">
-      <p className="text-[11px] leading-snug text-muted-foreground">{PLUGIN_TEXT.pageHint}</p>
+    // 窄屏：分组之间留更大间距、正文字号从 11px 提到 12px（「太满」的一半来自这些信息密度）
+    <div className="space-y-3 sm:space-y-2">
+      <p className="text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
+        {PLUGIN_TEXT.pageHint}
+      </p>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-2">
         <button type="button" className={ACTION_BUTTON} onClick={() => void refresh()}>
           {PLUGIN_TEXT.refresh}
         </button>
@@ -119,17 +124,17 @@ export function SettingsPluginsPage() {
       </div>
 
       {error ? (
-        <p className="rounded border border-destructive/40 bg-destructive/5 px-2 py-1.5 text-[11px] leading-snug text-destructive">
+        <p className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs leading-relaxed text-destructive sm:px-2 sm:py-1.5 sm:text-[11px] sm:leading-snug">
           {error}
         </p>
       ) : null}
       {actionError ? (
-        <p className="rounded border border-destructive/40 bg-destructive/5 px-2 py-1.5 text-[11px] leading-snug text-destructive">
+        <p className="rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs leading-relaxed text-destructive sm:px-2 sm:py-1.5 sm:text-[11px] sm:leading-snug">
           {actionError}
         </p>
       ) : null}
       {notice ? (
-        <p className="rounded border border-border bg-muted/40 px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+        <p className="rounded border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground sm:px-2 sm:py-1.5 sm:text-[11px] sm:leading-snug">
           {notice}
         </p>
       ) : null}
@@ -139,15 +144,15 @@ export function SettingsPluginsPage() {
       ) : null}
 
       {plugins.length === 0 && status !== 'loading' ? (
-        <div className="rounded border border-border px-2 py-3">
-          <p className="text-xs text-muted-foreground">{PLUGIN_TEXT.empty}</p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+        <div className="rounded border border-border px-3 py-4 sm:px-2 sm:py-3">
+          <p className="text-sm text-muted-foreground sm:text-xs">{PLUGIN_TEXT.empty}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-[11px] sm:leading-snug">
             {PLUGIN_TEXT.emptyExternalHint}
           </p>
         </div>
       ) : null}
 
-      <div className="space-y-1.5">
+      <div className="space-y-2.5 sm:space-y-1.5">
         {plugins.map((plugin) => (
           <div key={plugin.id}>
             <PluginListItem

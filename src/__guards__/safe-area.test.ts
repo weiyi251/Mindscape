@@ -31,9 +31,15 @@ function globalsCss(): string {
   return fs.readFileSync(path.join(ROOT_DIR, 'src/styles/globals.css'), 'utf8')
 }
 
-/** `#root` 的**安全区那条**规则（另一条 `html, body, #root { height }` 不算） */
+/** `#root` 那条**纯 env()** 声明（不含媒体查询里的兜底） */
 function rootPaddingRule(css: string): string {
   return css.match(/#root\s*\{[^}]*\bpadding[^}]*\}/)?.[0] ?? ''
+}
+
+/** 窄视口的兜底媒体查询块（`@media not all and (min-width: 640px)`，与 Tailwind 的 sm 同界） */
+function narrowViewportBlock(css: string): string {
+  // 块体一直取到缩进两格的收尾大括号（globals.css 里 @layer 内层的写法）
+  return css.match(/@media not all and \(min-width: 640px\)\s*\{[\s\S]*?\n {2}\}/)?.[0] ?? ''
 }
 
 describe('安全区留白（安卓 edge-to-edge）', () => {
@@ -70,5 +76,30 @@ describe('安全区留白（安卓 edge-to-edge）', () => {
       'utf8',
     )
     expect(tsx).toContain("data-compact={compact ? 'true' : 'false'}")
+  })
+
+  // 2026-09-28 第三轮真机：上述两条都齐了，用户仍反馈「文字贴在手机屏幕顶部」——
+  // 有一部分 WebView 根本不转发 env(safe-area-inset-*)，声明了 viewport-fit=cover 也恒为 0。
+  // 于是要有下限；但**不能**让不支持 max() 的老内核因整条声明失效而倒退回零，
+  // 所以必须是「先一条纯 env()，再一条 max()」的层叠写法。
+  it('env() 不被转发时仍有兜底下限（max() 写法，且必须叠在纯 env() 声明之后）', () => {
+    const css = globalsCss()
+
+    const floatingRule =
+      css.match(/\[data-floating-modal\]\[data-compact='true'\]\s*\{[\s\S]*?\}/)?.[0] ?? ''
+    expect(floatingRule).not.toBe('')
+    expect(floatingRule).toContain('max(28px, env(safe-area-inset-top))')
+    // 顺序必须是 env 在前、max 在后：反过来的话不支持 max() 的内核会把整块丢掉
+    expect(floatingRule.indexOf('env(safe-area-inset-top)')).toBeLessThan(
+      floatingRule.indexOf('max(28px, env(safe-area-inset-top))'),
+    )
+
+    // 页面本体（#root）同理，但只能在窄视口里给 —— 桌面 env() 也是 0，全局加会凭空吃掉 28px
+    const media = narrowViewportBlock(css)
+    expect(media, '缺 @media not all and (min-width: 640px) 的兜底块').not.toBe('')
+    expect(media).toContain('max(28px, env(safe-area-inset-top))')
+    expect(rootPaddingRule(css), '#root 的基础规则不得直接写死下限（会伤到桌面）').not.toContain(
+      'max(28px',
+    )
   })
 })

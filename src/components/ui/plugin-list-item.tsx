@@ -34,13 +34,16 @@ export function PluginListItem({
   const problematic = isProblematic(plugin.state)
 
   return (
-    <div className="rounded border border-border px-2 py-1.5">
+    // 窄屏：行盒加高、左右留白给到 12px、字号提一档（2026-09-28「太满」）
+    <div className="rounded border border-border px-3 py-2.5 sm:px-2 sm:py-1.5">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-foreground">{plugin.name}</div>
+          <div className="truncate text-sm font-medium text-foreground sm:text-xs">
+            {plugin.name}
+          </div>
           <div
             className={cn(
-              'truncate text-[11px]',
+              'truncate text-xs sm:text-[11px]',
               problematic ? 'text-destructive' : 'text-muted-foreground',
             )}
           >
@@ -53,7 +56,8 @@ export function PluginListItem({
           disabled={!toggleEnabled || pending}
           onClick={() => onToggle(plugin)}
           className={cn(
-            'shrink-0 rounded border border-border px-2 py-0.5 text-[11px] transition-colors',
+            // 两个按钮在窄屏都给满 44px 触控高度（桌面回落到原来的 py-0.5）
+            'flex min-h-[44px] shrink-0 items-center justify-center rounded border border-border px-3 text-xs transition-colors sm:min-h-0 sm:px-2 sm:py-0.5 sm:text-[11px]',
             toggleEnabled && !pending
               ? 'text-foreground hover:bg-muted'
               : 'cursor-default text-muted-foreground',
@@ -66,7 +70,7 @@ export function PluginListItem({
           type="button"
           onClick={() => onToggleDetail(plugin)}
           aria-expanded={expanded}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex min-h-[44px] shrink-0 items-center justify-center rounded px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:min-h-0 sm:px-1.5 sm:py-0.5 sm:text-[11px]"
         >
           {expanded ? '收起' : PLUGIN_TEXT.detail}
         </button>
@@ -74,7 +78,9 @@ export function PluginListItem({
 
       {/* 不可用 / 出错时，行内直接给出中文原因，不必展开详情 */}
       {problematic && plugin.detail ? (
-        <p className="mt-1 text-[11px] leading-snug text-destructive">{plugin.detail}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-destructive sm:mt-1 sm:text-[11px] sm:leading-snug">
+          {plugin.detail}
+        </p>
       ) : null}
     </div>
   )

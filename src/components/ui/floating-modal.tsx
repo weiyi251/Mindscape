@@ -267,7 +267,10 @@ export function FloatingModal({
           onPointerUp={endSession}
           onPointerCancel={endSession}
         >
-          <span className="shrink-0 text-[13px] font-medium text-foreground/90">{title}</span>
+          {/* 触屏没有精细指针，13px 的标题在小屏上偏挤（compact 与 airy 同一口径） */}
+          <span className="shrink-0 text-base font-medium text-foreground/90 sm:text-[13px]">
+            {title}
+          </span>
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">{headerExtra}</div>
           <button
             type="button"
@@ -285,8 +288,10 @@ export function FloatingModal({
           </button>
         </div>
 
-        {/* 内容区：自身滚动，撑满剩余高度 */}
-        <div className="min-h-0 flex-1 overflow-auto p-3">{children}</div>
+        {/* 内容区：自身滚动，撑满剩余高度。
+            窄屏给足呼吸：左右 16px、底部多留一截，滚到底不会再贴着屏边
+            （2026-09-28 用户反馈「太满」）；桌面仍是原来的 p-3 */}
+        <div className="min-h-0 flex-1 overflow-auto p-4 pb-10 sm:p-3">{children}</div>
 
         {/* 右下角缩放手柄（整屏模式无可缩放空间，不渲染） */}
         {compact ? null : (

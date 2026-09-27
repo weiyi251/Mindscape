@@ -476,11 +476,13 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   'src/components/ui/icons.tsx': '渲染层（纯 SVG 字形）',
   'src/components/ui/modal.tsx': '渲染层',
   'src/components/ui/prompt-dialog.tsx': '渲染层',
-  'src/components/ui/settings-panel.tsx': '渲染层',
+  // 注：settings-panel.tsx 曾有本条豁免，2026-09-28 补 settings-panel.test.tsx
+  // （锁「只有一张可见页时整条导航都不渲染 / 多页照旧」），条目随之删除。
   'src/components/ui/settings-shortcuts.tsx': '渲染层（键位匹配/冲突检测在 core/shortcuts/keys.ts 已测）',
   'src/components/ui/settings-update.tsx': '渲染层（版本状态在 core/store/updaterStore.ts 已测）',
   'src/components/ui/update-dialog.tsx': '渲染层',
-  'src/components/ui/plugin-list-item.tsx': '渲染层（可用性判定在 core/plugin/lifecycle.ts 已测）',
+  // 注：plugin-list-item.tsx 曾有本条豁免，2026-09-28 补 plugin-list-item.test.tsx
+  // （锁「窄屏两个按钮 ≥44px + 桌面用 sm: 回落原尺寸」），条目随之删除。
   'src/components/ui/plugin-detail.tsx': '渲染层',
   'src/components/ui/plugin-dialog-host.tsx': '渲染层（状态在 core/store/pluginUiStore.ts 已测）',
   'src/components/ui/settings-plugins.tsx': '渲染层（状态与编排在 core/store/pluginsStore.ts 已测）',
