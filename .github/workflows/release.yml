@@ -122,8 +122,11 @@ jobs:
       #    ubuntu 镜像本身就带 SDK，缺的只是 NDK 与 build-tools，用 sdkmanager 补即可。
       - name: 接受许可并补装 NDK / build-tools
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
+          # sdkmanager 不在 PATH 上（只在 cmdline-tools/<版本>/bin 里），必须先定位
+          SM=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | head -1)
+          echo "sdkmanager = $SM"
+          yes | "$SM" --licenses > /dev/null 2>&1 || true
+          "$SM" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
 
       # gen/android 是 CLI 生成物、不入库（.gitignore），换环境必须重新 init
       - name: 生成安卓工程
