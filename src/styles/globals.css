@@ -121,8 +121,18 @@
     height: 100%;
   }
 
-  body {
-    @apply bg-background text-foreground;
+  html {
+    /* 底色必须放 html 而不是 body：壁纸垫底层是 fixed -z-10（见 appearance-background），
+       按 CSS 绘制顺序，body 的背景画在负 z 定位元素**之后**会把它完全盖住 ——
+       表现为「设置了壁纸但中间看不到」。根元素背景画在最底，负 z 层在其上可见。 */
+    @apply bg-background;
+  }
+
+  /* 用 html > body 提高特异性：index.html 的启动兜底样式给 body 上了实色
+     #f5f3ef（防黑屏，不能删），挂载后必须确定性盖过它 —— 不能赌样式表注入顺序 */
+  html > body {
+    @apply text-foreground;
+    background-color: transparent;
     /* 桌面应用：禁用文本选中与橡皮筋滚动，避免拖拽画布时误选文字 */
     -webkit-user-select: none;
     user-select: none;
