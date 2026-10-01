@@ -58,6 +58,8 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 
 ## 3. 已完成功能与当前进度
 
+- **毛玻璃外观系统（2026-10-01，未发版）**：设置面板新增「外观」页（桌面页签第二位、安卓首位，双端可见）。可调项：透明度（5~95%，默认 75%）、模糊强度（0~40px，默认 14px，仅作用于弹窗/菜单等覆盖层）、色彩鲜艳度（×1.0~2.0，默认 ×1.15）、深浅色各一份玻璃底色（取色器，浅色默认 `#F8F6F2`、深色默认 `#262321`）、边框高光强度（0~100%，默认 55%，深色自动收敛为 0.4 倍）、阴影四档（无/弱/中/强，默认「中」）、背景图（存 `%APPDATA%\Mindscape\appearance\`，偏好只记文件名）与背景压暗（0~60%，默认 30%，无壁纸时禁用）。**分层玻璃化解 17.11 backdrop-filter 掉帧**：`.glass-panel`（设置面板/菜单/搜索浮层/对话框等覆盖层）完整毛玻璃含 blur；`.glass-chip`（状态条/触屏工具条/小地图/顶栏等画布常驻浮件）只接管底色与阴影不模糊；FloatingModal 拖动中经 `.glass-dragging` 临时关模糊（零 state，直写 classList）。配置整体存 localStorage `mindscape-appearance`（try/catch），8 个 CSS 变量由 JS 低频写入 documentElement，深浅色切换不经 JS（globals.css 内 `:root`/`.dark` 换 tint 与边框系数）；`@supports not (backdrop-filter)` 实色回落。核心模块 `src/core/appearance/{glassTypes,glassAppearance,wallpaper,appearanceStore}.ts` + 设置页/背景层两组件，43 例新测试
+- 全量基线（2026-10-01，毛玻璃外观后）：Vitest **1774 passed / 155 文件**（43 新增）、tsc 0 错、eslint 0 error（1 条既有 warning）、cargo test **69 passed**（本轮未改 Rust）、vite build 通过（JS 506.63 kB / gzip 159.64 kB，CSS 34.18 kB / gzip 6.91 kB）
 - **T0 ~ T3 全部工单已完成**（准备层 / 文件夹铺画布与平移缩放 / 拖拽缩放分区撤销重做 / 连线备注便签拖入粘贴）
 - v0.1.0（2026-09-12）：首个公开预览版
 - v0.2.0（2026-09-12）：应用内检查更新（启动静默检查 + 空间列表页手动入口 + minisign 签名校验）；`pnpm release` 发版脚本
@@ -136,13 +138,13 @@ scripts/                   generate-icon.mjs（图标生成，零依赖）/ rele
 pnpm install        # 安装依赖（沙箱内需 nodeLinker: hoisted，见 pnpm-workspace.yaml）
 pnpm tauri dev      # 开发模式启动桌面应用
 pnpm typecheck      # tsc --noEmit
-pnpm test           # vitest run（834 tests）
+pnpm test           # vitest run（1774 tests / 155 文件，已固化串行，见 §8 第 12 条）
 pnpm lint           # eslint
 pnpm build          # tsc + vite build
 pnpm tauri build    # 打包（工具链缓存在 %LOCALAPPDATA%\tauri\{WixTools314,NSIS}，免联网）
 pnpm release        # 发版：签名打包 + latest.json（--manifest-only 可只重生成清单）
 pnpm icon           # 重新生成图标（scripts/generate-icon.mjs，零第三方依赖）
-cd src-tauri && cargo test   # Rust 测试（43 passed）
+cd src-tauri && cargo test   # Rust 测试（69 passed，须 MSVC 就绪，见 §4 第 7 条）
 ```
 
 - **安卓 target 编译验证（M0 起，M1 复用）**：`src-tauri` 下没有 `.cargo/config.toml`，跑 android target 必须自己给 NDK 工具链环境变量：
@@ -196,6 +198,7 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 12. **vitest 必须串行跑 + 临时目录用系统 Temp 的全新目录**（2026-10-01 定稿，取代旧结论）：①并发收集时沙箱文件代理（node-brokered-fs-shim）会拖垮 worker —— collect 8s→57s、抛 EPERM 未处理错误（exit=1），**最坏情况整文件静默丢弃**（architecture.test.ts 14 例消失但报告显示全 passed）→ 已在 vite.config.ts 固化 `test.fileParallelism: false`，`pnpm test` 即串行，149 文件 / 1731 例全过约 63s；②「Test Files 数对得上」还不够 —— 必须对磁盘测试文件清单（`find` 出来比对日志 ✓ 列表）；③临时目录 `.workbuddy/tmp` 与 `D:\ms-vitest-tmp` 实测都会出现 ssr 缓存损坏（EPERM 静默少跑），跑法是每次用 `C:\Users\lenovo\AppData\Local\Temp\` 下**全新**目录（`TEMP`/`TMP`/`TMPDIR` 三个都设），换目录即愈，旧目录不必删（批量删除会被安全钩子拦）
 13. **cargo 的 `link.exe` 会被 Git 的 coreutils 抢走**：Git 的 `…\PortableGit\…\usr\bin\link.exe` 排在 PATH 前面时，rustc 调 link 命中它，报 `link: extra operand … Try 'link --help'`，几十个 build script 一起 "编译失败"（看着像代码坏了）。`.workbuddy/gate.mjs` 已自动把 `*git*\usr\bin` 从 PATH 剔除（注意本机实际是 `PortableGit\versions\…\usr\bin`，正则别只写 `\Git\usr\bin`）。剔完后 MSVC 已装（§4 第 7 条，2026-10-01 起），若再报 `linker 'link.exe' not found` 则优先核对 VS 安装完整性（vswhere + `VC\Tools\MSVC\*\bin\Hostx64\x64\link.exe`）
 14. **`.workbuddy/gate.mjs` / `gates-all.mjs` 里的 cwd 已改为按脚本位置推导**：此前硬编码 `E:\Mindscape`，仓库迁到 `D:\Workspace\Mindscape` 后每次都跑到不存在的目录失败。新增同类脚本请一律用 `fileURLToPath(import.meta.url)` 推根目录
+15. **vite build 别直接跑 `node node_modules/vite/bin/vite.js build`**（2026-10-01 实测）：会报 `index.html?html-proxy&inline-css&index=0.css No matching HTML proxy module found`（index.html 确有内联 style，重试也失败，原因未深究）；同一份代码经 `node .workbuddy/gate.mjs build`（cmd.exe → pnpm build）稳定通过。构建验证一律走 gate.mjs
 
 ## 9. 变更记录
 
@@ -365,3 +368,6 @@ cd src-tauri && cargo test   # Rust 测试（43 passed）
 | 2026-10-01 | ece544c | `src-tauri/Cargo.toml`、`src-tauri/Cargo.lock`、`src/__guards__/rustBuildGraph.test.ts`（新增，3 例）、`HANDOVER.md` | **修复：装好 MSVC 后 `cargo run` / `pnpm tauri dev` 仍起不来 —— schemars 连锁炸 E0107（`IndexMap<K, V>` 两参写法 vs indexmap 1.9.3 无默认泛型的三参必填）**。①三层剥洋葱：真机先报 `linker 'link.exe' not found`（Git coreutils 同名工具抢位 + MSVC 未装，§4 第 7 条）→ 装 VS Build Tools 2022 后换 schemars E0107：indexmap 1.9.3 的 build.rs 只在「std feature 已启用」或 autocfg 探针成功时才 emit `has_std`，该 cfg 决定 `IndexMap` 有没有默认泛型参数，而 schemars 0.8.2x 用两参写法引用 → 探针一旦失败就连锁炸。②**两次误判记档**：把 indexmap+std 写进普通依赖段无效（resolver v2 下构建依赖图与普通依赖图 feature 互不统一，tauri-build/tauri-plugin 经构建依赖引入的 schemars 管不到，实测出现两个 build script 槽位）；一度判「E0107 只是沙箱假象」，用户第二轮截图证明真机终端同样炸 —— 根因是探测本身不可靠，与沙箱无关。③**正解**：收编进构建依赖段并启用 `features=["std"]`（同版本已在依赖图里，非新引库），build.rs 走硬路径跳过探针 → cargo test **69 passed 全绿**（沙箱内也能过，硬路径不需要起子进程）。④守卫 3 例锁配置；写守卫时自己踩了「注释里出现段名字面量被 section() 误命中」的坑，注释措辞已改为「构建依赖段 / 普通依赖段」 | 用户 2026-10-01 报「启动不了，一直报错」+ 两轮截图 |
 | 2026-10-01 | b476151 | `vite.config.ts`、`HANDOVER.md` | **修复：vitest 并发跑会静默丢整文件 —— 门禁假绿险些过关**。①现象：三次全量跑稳定 148 文件 / 1717 例「全 passed」但 exit=1（1 个 EPERM Unhandled Error）；对照磁盘文件清单与日志 ✓ 列表，缺的正是 `architecture.test.ts`（14 例整文件消失，报告却显示全 passed）。②根因：沙箱文件代理在并发收集时拖垮 worker（collect 8s→57s、写 ssr 缓存抛 EPERM），被分配到异常 worker 的文件被静默丢；单独跑该文件 14 例全过，排除文件自身问题。③改法：`test.fileParallelism: false` 固化进 vite.config.ts，串行后 **149 文件 / 1731 例全过、exit=0**，全量约 63s；1717+14=1731 账平。④教训：**「文件数全 passed」不代表没丢文件，必须对磁盘清单**；v0.10.0 基线 1728 很可能同样是并发丢文件后的数字，新基线为串行 1731 | 交付前 vitest exit=1 久久对不平，深挖发现不是环境噪音而是假绿 |
 | 2026-10-01 | （本次） | `HANDOVER.md` | §4 第 7 条改「MSVC 已解决」、§8 第 12/13 条按 2026-10-01 实测重写（vitest 串行 + 全新临时目录）；§9 回填 cd4a515 commit 号、记入 ece544c / b476151 两条 | AGENTS.md 规则 ①③ |
+| 2026-10-01 | 8e49158 | `src/core/appearance/`（glassTypes / glassAppearance / wallpaper / appearanceStore + 4 测试，新增） | **毛玻璃外观核心系统**：①`glassTypes` 类型 + `GLASS_DEFAULTS`（透明度 0.75 / 模糊 14px / 鲜艳 1.15 / 浅底 `#F8F6F2` / 深底 `#262321` / 边框 0.55 / 阴影 medium / 无壁纸 / 压暗 0.3）+ `GLASS_LIMITS` 越界收边 + 坏字段回落归一化（向前兼容）+ hex→RGB 三元组；②`glassAppearance` 配置 ↔ 8 个 CSS 变量映射（`applyGlassToCss` 逐条 setProperty）+ localStorage 读写（key `mindscape-appearance`，try/catch，与 mindscape-theme 同一先例）；③`wallpaper` 背景图存 `%APPDATA%\Mindscape\appearance\`（fs:scope `$DATA` 白名单内，**零 Rust 改动**），偏好只记文件名（遵守「资源绝对路径不落盘」），保存先删旧再写（防重选同名被加 `_1`），读取走 plugin-fs → Blob → objectURL，全链路吞错；④`appearanceStore`（Zustand）`setGlass` = 归一化 → 落盘 → 应用 CSS → set，壁纸文件名变化自动刷新且带竞态防护（读盘期间改名则 revoke 丢弃）；深浅色底色各存一份、切换不经 JS（CSS 变量在 globals.css `:root`/`.dark` 内换）；35 例测试（12+6+9+8） | 用户要求重新设计界面外观：高度自定义毛玻璃风格 |
+| 2026-10-01 | 37d83c8 | `src/components/ui/{settings-appearance.tsx, appearance-background.tsx}`（新增）+ `settingsText.ts`、`settingsPages.ts(+test)`、`globals.css`、`App.tsx`、`main.tsx`、`floating-modal.tsx`、`menu-list.tsx`、`context-menu.tsx`、`card-search.tsx`、`modal.tsx`、`prompt-dialog.tsx`、`CanvasOverlay.tsx`、`CanvasTouchToolbar.tsx`、`MiniMap.tsx`、`Board.tsx`、`SpaceList.tsx`、`Viewport.tsx`、`architecture.test.ts` | **毛玻璃接入全界面**：①设置面板新增「外观」页（页签第二位，无 requires 双端可见）——五条滑杆（min/max/step 有测试与 GLASS_LIMITS 对账）、深浅底色取色行、阴影四档 aria-pressed 按钮、壁纸 file input（M4 模式 `event.target.value=''`）、压暗滑杆无壁纸时禁用；②`appearance-background` `fixed inset-0 -z-10` 垫底层，无壁纸不渲染任何节点，遮罩走 `.glass-bg-dim` 类（组件不写颜色字面量）；③globals.css 分层玻璃化解 17.11 掉帧：`.glass-panel`（覆盖层完整毛玻璃 blur+saturate+白高光边+双层阴影）、`.glass-chip`（画布常驻浮件只接管底色与阴影、保留原 border-border 灰边）、`.glass-dragging`（FloatingModal 拖动中临时关模糊，零 state 直写 classList）、`@supports not (backdrop-filter)` 实色回落；顺手消掉 MiniMap 与视图提示条的历史遗留常驻 `backdrop-blur-sm`；④13 处挂点接线（6 组件挂 panel、5 处挂 chip、Viewport/Board 根去 `bg-background` 透出壁纸）；⑤守卫规则 3 豁免 `glassTypes.ts`（用户挑选的数据，与 partitions.ts 同理）；main.tsx 启动时应用已存偏好。门禁：**1774 passed / 155 文件**（43 新增）、tsc 0 错、eslint 0 error（1 固有 warning）、build JS 506.63 kB / gzip 159.64、cargo 69 passed（未改 Rust） | 同上（毛玻璃外观系统 UI 侧落地） |
+| 2026-10-01 | （本次） | `HANDOVER.md` | §3 新增毛玻璃外观系统条目与全量基线（1774/155、build 506.63 kB）；§6 两处过时计数修正（vitest 834→1774、cargo 43→69）；§8 追加第 15 条（vite build 直跑报 HTML proxy module 错，构建验证一律走 gate.mjs）；§9 记入 8e49158 / 37d83c8 两条 | AGENTS.md 规则 ①③ |
