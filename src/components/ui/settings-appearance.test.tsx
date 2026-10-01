@@ -78,4 +78,12 @@ describe('外观页控件与配置的对应', () => {
     expect(html).toContain('未设置背景图片')
     expect(html).toContain('disabled=""')
   })
+
+  it('触控目标：滑杆与取色器在移动档给足 44px 高（清单 §3 硬标准，防回归）', () => {
+    const html = render()
+    // 滑杆：h-11 = 44px，整行高度都是热区（轨道本身仍是细的）
+    expect(html).toContain('class="h-11 w-full accent-primary"')
+    // 取色器：移动档 h-11，sm: 起回桌面档的 h-8 w-14
+    expect(html).toContain('h-11 w-16 cursor-pointer')
+  })
 })

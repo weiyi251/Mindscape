@@ -64,6 +64,8 @@ function sliderRow(options: {
         <span className="text-foreground/80">{options.label}</span>
         <span className="text-xs tabular-nums text-muted-foreground">{options.display}</span>
       </div>
+      {/* 高度给足 44px 触控目标（移动端清单 §3 硬标准）：range 的轨道仍是细的，
+          但点击/拖动热区是整行高度 —— Chromium 系（WebView2 / 安卓 WebView）行为一致 */}
       <input
         type="range"
         min={options.min}
@@ -72,7 +74,7 @@ function sliderRow(options: {
         value={options.value}
         disabled={options.disabled === true}
         onChange={(event) => options.onChange(Number(event.target.value))}
-        className="w-full accent-primary"
+        className="h-11 w-full accent-primary"
         aria-label={options.label}
       />
       {options.hint ? <p className="text-xs leading-5 text-muted-foreground">{options.hint}</p> : null}
@@ -93,7 +95,7 @@ function colorRow(label: string, value: string, onChange: (next: string) => void
         type="color"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-8 w-14 cursor-pointer rounded border border-input bg-transparent p-0.5"
+        className="h-11 w-16 cursor-pointer rounded border border-input bg-transparent p-0.5 sm:h-8 sm:w-14"
         aria-label={label}
       />
     </div>
