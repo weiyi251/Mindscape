@@ -2210,6 +2210,7 @@ version = "0.10.0"
 dependencies = [
  "clipboard-win",
  "image",
+ "indexmap 1.9.3",
  "serde",
  "serde_json",
  "tauri",

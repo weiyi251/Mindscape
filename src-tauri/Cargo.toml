@@ -16,6 +16,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# indexmap 1.9.3 是 schemars（tauri-build / tauri-plugin 的**构建依赖**传递引入）的依赖：
+# 其 build.rs 只在「std feature 已启用」或「autocfg 探针成功」时才设 has_std，而 has_std
+# 决定 `IndexMap<K, V, S = RandomState>` 有没有默认泛型 —— schemars 0.8.2x 用两参写法，
+# 探针一旦失败就连锁炸 E0107（2026-10-01 本机实测）。⚠️ 必须放在 build-dependencies 段：
+# resolver v2 下构建依赖图的 feature 与普通依赖图**互不统一**，写进普通依赖段管不到
+# schemars。同一版本已在依赖图里，此处只是收编并启用 std，非新引库。
+indexmap = { version = "1.9.3", features = ["std"] }
 
 [dependencies]
 # protocol-asset：启用 assetProtocol（17.10）以通过 tauri:// 通道直接显示本地图片。
@@ -41,7 +48,6 @@ image = { version = "0.25", default-features = false, features = [
     "gif",
     "bmp",
 ] }
-
 
 # 跨平台依赖到此为止；平台特有依赖见下方 target 段。
 
