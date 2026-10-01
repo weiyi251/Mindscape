@@ -30,6 +30,7 @@ describe('GLASS_DEFAULTS 默认外观', () => {
       shadow: 'medium',
       bgFileName: null,
       bgDim: 0.3,
+      canvasGlass: true,
     })
   })
 

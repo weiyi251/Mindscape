@@ -53,6 +53,9 @@ export function glassCssVariables(a: GlassAppearance): Record<string, string> {
     '--glass-border': String(a.borderAlpha),
     '--glass-shadow': String(SHADOW_OPACITY[a.shadow]),
     '--glass-bg-dim': String(a.bgDim),
+    // 画布整面玻璃比面板更透：面板上要放文字，画布上浮的是自带实色底的卡片。
+    // 取面板 alpha 的 0.4 倍并封顶 0.5 —— alpha 拉满时画布也不至于糊成一片。
+    '--glass-canvas-alpha': String(Math.min(0.5, Math.round(a.alpha * 0.4 * 100) / 100)),
   }
 }
 

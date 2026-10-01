@@ -86,4 +86,12 @@ describe('外观页控件与配置的对应', () => {
     // 取色器：移动档 h-11，sm: 起回桌面档的 h-8 w-14
     expect(html).toContain('h-11 w-16 cursor-pointer')
   })
+
+  it('画布毛玻璃开关：默认开启（aria-pressed），关闭态如实渲染', () => {
+    const html = render()
+    // 默认 canvasGlass: true → 开关 aria-pressed 且文案「已开启」
+    expect(html).toContain('aria-pressed="true"')
+    expect(html).toContain('毛玻璃覆盖在背景之上')
+    expect(html).toContain('已开启')
+  })
 })

@@ -26,6 +26,8 @@ describe('glassCssVariables 配置 → CSS 变量', () => {
       '--glass-border': '0.55',
       '--glass-shadow': '0.2',
       '--glass-bg-dim': '0.3',
+      // 画布玻璃 = 面板 alpha 的 0.4 倍（0.75 × 0.4 = 0.3），封顶 0.5
+      '--glass-canvas-alpha': '0.3',
     })
   })
 
@@ -49,6 +51,8 @@ describe('glassCssVariables 配置 → CSS 变量', () => {
     expect(variables['--glass-border']).toBe('0')
     expect(variables['--glass-shadow']).toBe('0.32')
     expect(variables['--glass-bg-dim']).toBe('0.6')
+    // 0.5 × 0.4 = 0.2；画布 alpha 联动面板透明度
+    expect(variables['--glass-canvas-alpha']).toBe('0.2')
   })
 })
 
@@ -60,7 +64,7 @@ describe('applyGlassToCss', () => {
         written[name] = value
       },
     })
-    expect(Object.keys(written)).toHaveLength(8)
+    expect(Object.keys(written)).toHaveLength(9)
     expect(written['--glass-alpha']).toBe('0.75')
   })
 })

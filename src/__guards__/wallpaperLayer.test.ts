@@ -23,15 +23,23 @@ const css = readFileSync(cssPath, 'utf8')
 
 describe('壁纸垫底层可见性（CSS 层叠守卫）', () => {
   it('body 规则块必须透明：不得含 bg-background 或不透明背景色', () => {
-    const bodyBlock = css.match(/html > body \{[\s\S]*?\n  \}/)
+    const bodyBlock = css.match(/html > body \{[\s\S]*?\n {2}\}/)
     expect(bodyBlock).not.toBeNull()
     expect(bodyBlock![0]).toContain('transparent')
     expect(bodyBlock![0]).not.toContain('bg-background')
   })
 
   it('html 规则块带 bg-background（壁纸之下的主题底色兜底）', () => {
-    const htmlBlock = css.match(/\n  html \{[\s\S]*?\n  \}/)
+    const htmlBlock = css.match(/\n {2}html \{[\s\S]*?\n {2}\}/)
     expect(htmlBlock).not.toBeNull()
     expect(htmlBlock![0]).toContain('bg-background')
+  })
+
+  it('画布玻璃层存在且含模糊（毛玻璃覆盖在背景之上；背衬是静态壁纸，性能安全）', () => {
+    expect(css).toContain('.glass-canvas-layer')
+    const layerBlock = css.match(/\.glass-canvas-layer \{[\s\S]*?\n {2}\}/)
+    expect(layerBlock).not.toBeNull()
+    expect(layerBlock![0]).toContain('backdrop-filter: blur(var(--glass-blur))')
+    expect(layerBlock![0]).toContain('--glass-canvas-alpha')
   })
 })

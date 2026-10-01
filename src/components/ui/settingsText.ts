@@ -76,6 +76,12 @@ export const APPEARANCE_TEXT = {
   shadowSoft: '轻',
   shadowMedium: '中',
   shadowStrong: '重',
+  /* 画布毛玻璃（覆盖在背景之上的整面玻璃） */
+  canvasTitle: '画布毛玻璃',
+  canvasToggleLabel: '毛玻璃覆盖在背景之上',
+  canvasOn: '已开启',
+  canvasOff: '已关闭',
+  canvasHint: '在背景与内容之间铺一层磨砂玻璃，画布区域也带毛玻璃质感。若在低端设备上拖动卡片卡顿，可关闭此项。',
   /* 背景图 */
   bgPick: '选择图片',
   bgChange: '更换图片',

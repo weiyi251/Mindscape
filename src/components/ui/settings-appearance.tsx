@@ -215,6 +215,29 @@ export function SettingsAppearancePage() {
         </div>
       </section>
 
+      {/* ---- 画布毛玻璃（覆盖在背景之上的整面玻璃）---- */}
+      <section className="space-y-3">
+        {sectionTitle(APPEARANCE_TEXT.canvasTitle)}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-foreground/80">{APPEARANCE_TEXT.canvasToggleLabel}</span>
+          <button
+            type="button"
+            aria-pressed={glass.canvasGlass}
+            onClick={() => setGlass({ canvasGlass: !glass.canvasGlass })}
+            className={cn(
+              // 移动端 44px 触控目标（清单 §3 硬标准），sm: 起回桌面档
+              'min-h-[44px] rounded border px-4 text-xs sm:min-h-0 sm:py-1.5',
+              glass.canvasGlass
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border text-foreground/70 hover:bg-foreground/10 hover:text-foreground',
+            )}
+          >
+            {glass.canvasGlass ? APPEARANCE_TEXT.canvasOn : APPEARANCE_TEXT.canvasOff}
+          </button>
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">{APPEARANCE_TEXT.canvasHint}</p>
+      </section>
+
       {/* ---- 背景图片 ---- */}
       <section className="space-y-3">
         {sectionTitle(APPEARANCE_TEXT.bgTitle)}

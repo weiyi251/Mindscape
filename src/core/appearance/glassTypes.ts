@@ -52,6 +52,12 @@ export interface GlassAppearance {
   bgFileName: string | null
   /** 背景图黑色遮罩强度（0 ~ 0.6） */
   bgDim: number
+  /**
+   * 画布毛玻璃（2026-10-02 用户需求「毛玻璃要覆盖在背景之上」）：
+   * 在壁纸与内容之间铺一层全窗玻璃（背衬是静态壁纸，模糊不随卡片拖动重算，
+   * 性能远好于把 backdrop-filter 落在画布内容上）。低端设备若拖动卡顿可关。
+   */
+  canvasGlass: boolean
 }
 
 /** 默认外观：出来即是协调的毛玻璃观感，深浅两色都可直接使用 */
@@ -65,6 +71,7 @@ export const GLASS_DEFAULTS: GlassAppearance = {
   shadow: 'medium',
   bgFileName: null,
   bgDim: 0.3,
+  canvasGlass: true,
 }
 
 /** 各数值参数的取值范围（设置页滑杆的 min/max 也从这里取，保证两处一致） */
@@ -146,5 +153,6 @@ export function normalizeGlassAppearance(raw: unknown): GlassAppearance {
     shadow,
     bgFileName: typeof bg === 'string' && bg.length > 0 ? bg : null,
     bgDim: clampNumber(source.bgDim, GLASS_LIMITS.bgDim.min, GLASS_LIMITS.bgDim.max, GLASS_DEFAULTS.bgDim),
+    canvasGlass: typeof source.canvasGlass === 'boolean' ? source.canvasGlass : GLASS_DEFAULTS.canvasGlass,
   }
 }
