@@ -316,7 +316,7 @@ export function Viewport({
     <div
       ref={rootRef}
       {...{ [CANVAS_ROOT_ATTR]: '' }}
-      className={cn('relative h-full w-full touch-none overflow-hidden bg-background', className)}
+      className={cn('relative h-full w-full touch-none overflow-hidden', className)}
     >
       {/* stage 即「世界坐标系」的载体：它的 transform 就是 viewport 变换 */}
       <div ref={stageRef} data-canvas-stage className="absolute left-0 top-0 origin-top-left">

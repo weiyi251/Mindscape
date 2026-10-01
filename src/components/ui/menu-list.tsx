@@ -49,7 +49,7 @@ export function MenuList({ items, ctx, className, onAfterAction }: MenuListProps
     <div
       role="menu"
       className={cn(
-        'min-w-[168px] rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md',
+        'min-w-[168px] rounded-md border glass-panel py-1 text-popover-foreground',
         className,
       )}
     >

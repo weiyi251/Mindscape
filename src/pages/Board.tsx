@@ -1705,11 +1705,11 @@ export function Board() {
   // -------------------------------------------------------------------------
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-background">
+    <div className="relative flex h-full w-full flex-col">
       {/* flex-wrap：窄窗口时按钮换行而不是溢出（2026-09-12 响应式）。
           M3（2026-09-21 移动端）：标题块给 flex-1 + basis，手机宽度下它会整块换到
           第二行（第一行只剩「返回列表 + 右侧图标组」），而不是被挤成 0 宽看不见 */}
-      <header className="flex flex-wrap items-center gap-3 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
+      <header className="glass-chip flex flex-wrap items-center gap-3 gap-y-2 border-b border-border px-4 py-3 sm:px-5">
         <Button variant="outline" onClick={() => void handleBack()}>
           返回列表
         </Button>
@@ -1900,7 +1900,7 @@ export function Board() {
             {!minimapVisible ? (
               <button
                 type="button"
-                className="absolute bottom-12 right-3 z-20 flex h-7 items-center rounded-md border border-border bg-background/80 px-2 text-[11px] text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-background"
+                className="absolute bottom-12 right-3 z-20 flex h-7 items-center rounded-md border border-border glass-chip px-2 text-[11px] text-muted-foreground hover:bg-muted"
                 onClick={() => handleMinimapVisibleChange(true)}
               >
                 小地图

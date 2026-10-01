@@ -165,7 +165,7 @@ export function MiniMap({ cards, partitions, onJump, registerRedraw, onCollapse 
   return (
     <div
       className={cn(
-        'absolute right-3 z-20 overflow-hidden rounded-lg border border-border bg-background/90 shadow-md backdrop-blur-sm',
+        'absolute right-3 z-20 overflow-hidden rounded-lg border border-border glass-chip',
         // 触屏底部是「状态条 + 工具条」竖排两行（约 100px 高），bottom-12 会被压在下面
         TOUCH ? 'bottom-28' : 'bottom-12',
       )}

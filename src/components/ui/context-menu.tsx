@@ -76,7 +76,7 @@ export function ContextMenu({ state, onClose }: ContextMenuProps) {
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[160px] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md"
+      className="fixed z-50 min-w-[160px] rounded-md border glass-panel p-1 text-popover-foreground"
       style={{ left: x, top: y }}
       onContextMenu={(event) => event.preventDefault()}
     >

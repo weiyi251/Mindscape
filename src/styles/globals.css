@@ -169,4 +169,77 @@
     padding-top: max(28px, env(safe-area-inset-top));
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
+
+  /*
+   * 毛玻璃外观（2026-10-01 用户需求：「高度自定义的毛玻璃风格」）。
+   * 变量由 core/appearance/glassAppearance.ts 按设置写入 <html>（低频，不碰 17.3）；
+   * 底色深浅切换不经过 JS：JS 同时写 light / dark 两份，这里按主题挑一份 ——
+   * 切主题无需重新 apply，两个取色器也互不覆盖。
+   */
+  :root {
+    --glass-tint: var(--glass-tint-light);
+    /* 深色下白边高光会扎眼，强度自动收敛（非用户可调项） */
+    --glass-border-scale: 1;
+  }
+
+  .dark {
+    --glass-tint: var(--glass-tint-dark);
+    --glass-border-scale: 0.4;
+  }
+}
+
+@layer components {
+  /*
+   * 覆盖层玻璃（设置面板 / 菜单 / 搜索浮层 / 对话框）：完整毛玻璃。
+   * 只用在「打开时画布不交互」的浮窗上 —— backdrop-filter 落在高频重绘区域
+   * （画布常驻浮件）是 17.11 的掉帧教训，那里的浮件一律用 .glass-chip。
+   */
+  .glass-panel {
+    background-color: rgb(var(--glass-tint) / var(--glass-alpha));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    border-color: rgb(255 255 255 / calc(var(--glass-border) * var(--glass-border-scale)));
+    box-shadow:
+      0 8px 28px rgb(20 22 20 / var(--glass-shadow)),
+      0 1px 3px rgb(20 22 20 / calc(var(--glass-shadow) * 0.5));
+  }
+
+  /*
+   * 浮件玻璃（画布状态条 / 触屏工具条 / 小地图 / 顶栏 / 提示条）：
+   * 只接管底色与阴影，**不模糊也不动边框** —— 画布每一帧都在变，模糊采样必须
+   * 避开（17.11）；边框沿用组件自己的 border-border（贴边条的白高光边看不清，
+   * 顶栏与内容的分隔线也会跟着消失）。
+   */
+  .glass-chip {
+    background-color: rgb(var(--glass-tint) / var(--glass-alpha));
+    box-shadow: 0 4px 14px rgb(20 22 20 / calc(var(--glass-shadow) * 0.6));
+  }
+
+  /*
+   * 面板拖动中临时关掉模糊（FloatingModal 的拖柄加 / 移除该类，零 state）：
+   * 拖动时玻璃区域逐帧位移，每帧全区域重采样是 WebView2 掉帧的正主场景。
+   */
+  .glass-dragging,
+  .glass-dragging .glass-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /*
+   * 背景图遮罩层：颜色走变量（组件里不写颜色字面量，architecture 规则 3），
+   * 用户按壁纸明暗拖滑杆，保证面板 / 顶栏文字在深浅两种壁纸下都可读。
+   */
+  .glass-bg-dim {
+    background-color: rgb(0 0 0 / var(--glass-bg-dim));
+  }
+
+  /*
+   * 不支持 backdrop-filter 的环境（老内核）：整层玻璃退化为实色底 ——
+   * 可读性永远优先于质感，边框与阴影照旧。
+   */
+  @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+    .glass-panel {
+      background-color: rgb(var(--glass-tint));
+    }
+  }
 }

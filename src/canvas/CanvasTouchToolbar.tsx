@@ -14,16 +14,16 @@
 //
 // M3（2026-09-21）补「搜索」入口：桌面的搜索浮层只有 Ctrl+F 一个入口，触屏没有键盘
 // 就永远打不开，因此按 D4 在这里兜一个按钮（`onSearch` 未传时不渲染）。
-// ⚠️ 半透明底一律用纯色（bg-card/90），**不用 backdrop-blur**：那会落到
-// backdrop-filter，17.11 明令禁止（WebView2 下严重掉帧）。
+// ⚠️ 半透明底一律走 .glass-chip（外观系统的玻璃浮件：纯 rgba 底，**没有
+// backdrop-filter**）——落到 backdrop-filter 上，17.11 明令禁止（WebView2 下严重掉帧）。
 // ============================================================================
 
 import { cn } from '@/lib/utils'
 import { CANVAS_TOUCH_TOOLBAR_TEXT } from './canvasOverlayText'
 
 const BUTTON_CLASS =
-  'min-h-[44px] min-w-[56px] rounded-lg border border-border bg-card/90 px-3 text-sm ' +
-  'text-muted-foreground shadow-sm'
+  'min-h-[44px] min-w-[56px] rounded-lg border border-border glass-chip px-3 text-sm ' +
+  'text-muted-foreground'
 
 export interface CanvasTouchToolbarProps {
   /** 「选择模式」是否开启：开启后单指拖空白 = 框选而不是平移 */

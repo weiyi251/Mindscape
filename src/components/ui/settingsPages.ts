@@ -10,17 +10,18 @@
 // 新增设置页：只在 SETTINGS_PAGES 加一项；若该页依赖桌面能力，补 `requires`。
 // ============================================================================
 
+import { SettingsAppearancePage } from './settings-appearance'
 import { SettingsPluginsPage } from './settings-plugins'
 import { SettingsShortcutsPage } from './settings-shortcuts'
 import { SettingsUpdatePage } from './settings-update'
-import { SETTINGS_TEXT } from './settingsText'
+import { SETTINGS_TEXT, APPEARANCE_TEXT } from './settingsText'
 import { currentUserAgent } from '@/core/utils/runtime'
 import { supportsCapability } from '@/core/system/platformCapabilities'
 import type { PlatformCapability } from '@/core/system/platformCapabilities'
 import type { ReactNode } from 'react'
 
 /** 设置页标识（新增页面时在这里补一个字面量） */
-export type SettingsPageId = 'shortcuts' | 'update' | 'plugins'
+export type SettingsPageId = 'appearance' | 'shortcuts' | 'update' | 'plugins'
 
 export interface SettingsPage {
   id: SettingsPageId
@@ -39,12 +40,14 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     Component: SettingsShortcutsPage,
     requires: 'keyboardShortcuts',
   },
+  // 外观页双端可见（无 requires）：毛玻璃与壁纸在桌面 / 安卓上都可调
+  { id: 'appearance', label: APPEARANCE_TEXT.pageAppearance, Component: SettingsAppearancePage },
   { id: 'update', label: SETTINGS_TEXT.pageUpdate, Component: SettingsUpdatePage, requires: 'autoUpdate' },
   { id: 'plugins', label: SETTINGS_TEXT.pagePlugins, Component: SettingsPluginsPage },
 ]
 
 /**
- * 当前平台可见的设置页。移动端三项里只剩「插件」：
+ * 当前平台可见的设置页。移动端剩「外观」与「插件」：
  * 没有物理键盘（快捷键页无意义）、APK 侧载没有 updater 渠道（更新页无意义）。
  */
 export function visibleSettingsPages(userAgent: string = currentUserAgent()): SettingsPage[] {

@@ -95,7 +95,7 @@ export function CardSearchPanel({
         }
       }}
       className={cn(
-        'absolute z-30 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border bg-card shadow-lg',
+        'absolute z-30 w-[min(26rem,calc(100vw-2rem))] overflow-hidden rounded-lg border glass-panel',
         panelClassName,
       )}
     >

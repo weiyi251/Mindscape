@@ -24,6 +24,8 @@ import { Board } from '@/pages/Board'
 import { DesktopRequired } from '@/pages/DesktopRequired'
 import { SpaceList } from '@/pages/SpaceList'
 import { UpdateDialog } from '@/components/ui/update-dialog'
+import { AppearanceBackground } from '@/components/ui/appearance-background'
+import { useAppearanceStore } from '@/core/appearance/appearanceStore'
 import { isDesktopRuntime } from '@/core/utils/runtime'
 import { supportsCapability } from '@/core/system/platformCapabilities'
 import { useSpacesStore } from '@/core/store/spacesStore'
@@ -47,6 +49,12 @@ export default function App() {
     void load()
   }, [load, desktop])
 
+  // 启动时按偏好加载背景壁纸（CSS 变量已在 main.tsx 渲染前就位，这里只管读文件换 URL）
+  useEffect(() => {
+    if (!desktop) return
+    void useAppearanceStore.getState().refreshWallpaper()
+  }, [desktop])
+
   // 启动静默检查更新。走 getState() 而非订阅，避免把更新状态引进本组件的渲染依赖。
   // 移动端不发起：APK 侧载渠道没有 updater 机制（平台能力表 autoUpdate = false）
   useEffect(() => {
@@ -61,6 +69,8 @@ export default function App() {
 
   return (
     <>
+      {/* 用户壁纸垫底（无壁纸时不渲染任何节点，观感与此前完全一致） */}
+      <AppearanceBackground />
       {currentSpaceId ? <Board /> : <SpaceList />}
       <UpdateDialog />
     </>

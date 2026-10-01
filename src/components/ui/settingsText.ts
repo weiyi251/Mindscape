@@ -48,6 +48,48 @@ export const SHORTCUTS_TEXT = {
   conflictBadge: '冲突',
 } as const
 
+/**
+ * 「外观」页的文案常量表（2026-10-01 毛玻璃外观）。
+ * 页签在 SETTINGS_TEXT.pageAppearance；本表是该页内部的全部可见文字。
+ */
+export const APPEARANCE_TEXT = {
+  pageAppearance: '外观',
+  /* 分区标题 */
+  glassTitle: '毛玻璃',
+  colorTitle: '玻璃颜色',
+  frameTitle: '边框与阴影',
+  bgTitle: '背景图片',
+  /* 滑杆行 */
+  alphaLabel: '透明度',
+  blurLabel: '模糊强度',
+  blurHint: '模糊只作用于弹窗与菜单；画布上的小浮条保持低耗渲染，不受此项影响。',
+  saturateLabel: '色彩鲜艳度',
+  borderLabel: '边框高光',
+  dimLabel: '背景压暗',
+  dimHint: '壁纸较花哨时压暗一档，文字更清楚。',
+  /* 取色器 */
+  tintLightLabel: '浅色底色',
+  tintDarkLabel: '深色底色',
+  /* 阴影档位 */
+  shadowLabel: '阴影',
+  shadowNone: '无',
+  shadowSoft: '轻',
+  shadowMedium: '中',
+  shadowStrong: '重',
+  /* 背景图 */
+  bgPick: '选择图片',
+  bgChange: '更换图片',
+  bgRemove: '移除背景',
+  bgEmpty: '未设置背景图片',
+  bgAccept: 'image/*',
+  /* 恢复默认 */
+  resetAll: '恢复全部默认',
+  /* 错误提示（选图校验） */
+  errNotImage: '只支持 jpg / png / webp / gif / bmp 图片',
+  errTooLarge: '图片超过 20MB 上限，压缩后再试',
+  errSave: '背景图保存失败，请重试',
+} as const
+
 /** 检查更新区块的状态行文案（纯函数，可脱离 DOM 单测） */
 export function updateStatusLine(status: UpdateStatus, version: string): string {
   switch (status) {

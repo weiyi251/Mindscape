@@ -65,7 +65,7 @@ export function PromptDialog({ state, onClose }: { state: PromptDialogState | nu
       }}
     >
       <div
-        className="w-80 rounded-md border border-border bg-card p-3 shadow-md"
+        className="w-80 rounded-md border glass-panel p-3"
         onPointerDown={(event) => event.stopPropagation()}
       >
         <p className="mb-2 text-xs font-medium text-foreground">{state.title}</p>

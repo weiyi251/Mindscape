@@ -16,23 +16,23 @@ const WINDOWS_UA =
 const idsOf = (userAgent: string) => visibleSettingsPages(userAgent).map((page) => page.id)
 
 describe('visibleSettingsPages', () => {
-  it('桌面：三页齐全且顺序不变（现状零回归）', () => {
-    expect(idsOf(WINDOWS_UA)).toEqual(['shortcuts', 'update', 'plugins'])
+  it('桌面：四页齐全且顺序不变（外观页插入第二位）', () => {
+    expect(idsOf(WINDOWS_UA)).toEqual(['shortcuts', 'appearance', 'update', 'plugins'])
   })
 
-  it('Android：快捷键页与更新页整页隐藏，只剩插件页', () => {
-    expect(idsOf(ANDROID_UA)).toEqual(['plugins'])
+  it('Android：快捷键页与更新页整页隐藏，剩外观与插件两页', () => {
+    expect(idsOf(ANDROID_UA)).toEqual(['appearance', 'plugins'])
   })
 
   it('默认页取第一张可见页（移动端不会停在快捷键页上）', () => {
-    expect(visibleSettingsPages(ANDROID_UA)[0].id).toBe('plugins')
+    expect(visibleSettingsPages(ANDROID_UA)[0].id).toBe('appearance')
   })
 
   it('上次选的页在移动端不可见时回落到第一张可见页', () => {
     const pages = visibleSettingsPages(ANDROID_UA)
     const active = pages.find((page) => page.id === 'shortcuts') ?? pages[0]
 
-    expect(active.id).toBe('plugins')
+    expect(active.id).toBe('appearance')
   })
 })
 

@@ -22,7 +22,7 @@ import { FpsMeter } from './FpsMeter'
 import { CanvasTouchToolbar } from './CanvasTouchToolbar'
 
 const DESKTOP_BUTTON_CLASS =
-  'rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground'
+  'rounded border border-border glass-chip px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground'
 
 export interface CanvasOverlayProps {
   /** 卡片总数（状态条左侧） */
@@ -55,7 +55,7 @@ export function CanvasOverlay({
   const status = (
     <div
       className={cn(
-        'pointer-events-none flex items-center gap-3 rounded border border-border bg-card/90 px-2 py-1 text-xs text-muted-foreground shadow-sm',
+        'pointer-events-none flex items-center gap-3 rounded border border-border glass-chip px-2 py-1 text-xs text-muted-foreground',
         // 触屏上整句提示窄屏放不下，允许换行且不遮内容
         touch ? 'flex-wrap gap-y-1' : 'absolute bottom-3 left-3',
       )}

@@ -358,10 +358,10 @@ export function SpaceList() {
   )
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-background">
+    <div className="relative flex h-full w-full flex-col">
       {/* flex-wrap + min-w-0：窄窗口时标题先收缩、再换行，图标按钮组不会被挤出去。
           M3（2026-09-21 移动端）：留白收到 px-4 / py-4，手机宽度下标题与图标组各占一行 */}
-      <header className="flex flex-wrap items-center justify-between gap-3 gap-y-2 border-b border-border px-4 py-4 sm:px-8 sm:py-5">
+      <header className="glass-chip flex flex-wrap items-center justify-between gap-3 gap-y-2 border-b border-border px-4 py-4 sm:px-8 sm:py-5">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold">Mindscape 脑海空间</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">

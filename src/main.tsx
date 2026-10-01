@@ -10,10 +10,16 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App'
 import { bootstrapPlugins } from '@/plugins'
 import { applyTheme, loadTheme } from '@/core/utils/theme'
+import { applyGlassToCss, loadGlassAppearance } from '@/core/appearance/glassAppearance'
 import '@/styles/globals.css'
 
 // 渲染前恢复上次的主题偏好，避免深色用户启动时闪一帧浅色
 applyTheme(loadTheme())
+
+// 渲染前恢复毛玻璃外观的 CSS 变量（2026-10-01 外观系统）：与主题同一时机，
+// 变量在首帧就位，玻璃面板不会闪一次默认观感。壁纸文件的读取是异步的，
+// 由 App 挂载后的 refreshWallpaper 负责，晚一拍加载不算闪。
+applyGlassToCss(loadGlassAppearance())
 
 // 插件系统启动（登记内置插件 + 读 plugins.json + 扫描外部插件目录）。
 // 刻意不 await：init 里有磁盘 I/O，阻塞首帧去等它只是让启动变慢；

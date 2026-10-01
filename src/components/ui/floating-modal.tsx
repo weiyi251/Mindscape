@@ -185,6 +185,9 @@ export function FloatingModal({
     if (event.button !== 0) return
     // 整屏模式下没有「拖一拖换个位置」这回事：标题栏只是标题栏（M3）
     if (compact) return
+    // 拖动中临时关掉模糊（globals.css 的 .glass-dragging）：玻璃区域逐帧位移时
+    // 每帧全区域重采样是 WebView2 掉帧的正主场景。直写 classList，零 state。
+    panelRef.current?.classList.add('glass-dragging')
     sessionRef.current = {
       startRect: workingRef.current ?? committedRef.current,
       originX: event.clientX,
@@ -222,6 +225,8 @@ export function FloatingModal({
   const endSession = (event: ReactPointerEvent<HTMLElement>) => {
     if (!sessionRef.current) return
     sessionRef.current = null
+    // 拖动结束恢复模糊（与 beginSession 的 add 成对）
+    panelRef.current?.classList.remove('glass-dragging')
     // setPointerCapture 的元素在 pointerup 后会自动释放；重复释放会抛错，故做判断
     if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
@@ -248,7 +253,9 @@ export function FloatingModal({
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'fixed z-40 flex flex-col overflow-hidden border border-border bg-background shadow-xl',
+          // 毛玻璃面板（2026-10-01）：底色/模糊/边框/阴影由 .glass-panel 接管
+          // （CSS 变量见 core/appearance/），这里只留布局与圆角
+          'fixed z-40 flex flex-col overflow-hidden border glass-panel',
           // 整屏模式贴边，圆角只会露出一圈不自然的黑边（M3）
           compact ? 'rounded-none' : 'rounded-lg',
           className,

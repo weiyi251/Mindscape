@@ -52,7 +52,7 @@ export function Modal({ open, title, onClose, children, footer, className }: Mod
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'w-full max-w-md rounded-lg border border-border bg-card p-5 text-card-foreground shadow-lg',
+          'w-full max-w-md rounded-lg border glass-panel p-5 text-card-foreground',
           className,
         )}
         // 阻止冒泡，避免点击面板内部也触发遮罩的关闭

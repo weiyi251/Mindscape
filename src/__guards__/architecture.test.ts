@@ -215,6 +215,7 @@ const RAW_COLOR_ALLOWLIST: Record<string, string> = {
   'src/canvas/MiniMap.tsx': 'canvas 2D 的 fillStyle 只能收具体颜色；hex 是读不到 CSS 变量时的兜底',
   'src/plugins/demo/demoPlugin.ts': '示例插件的默认分区色，属数据默认值',
   'src/plugins/colorCard/options.ts': '色板预设：hex 是给用户挑的数据（与 partitions.ts 同理），不是组件样式',
+  'src/core/appearance/glassTypes.ts': '玻璃 tint 默认值：hex 是给用户挑的数据（与 partitions.ts 同理），不是组件样式',
 }
 
 describe('规则 3：不得硬编码配色', () => {
