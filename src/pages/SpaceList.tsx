@@ -431,7 +431,9 @@ export function SpaceList() {
       {/* 设置弹窗（2026-09-13 改弹窗模式）：可拖动标题栏移动、右下角缩放 */}
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      <main className="flex-1 overflow-auto px-8 py-6">
+      {/* M3 起手机上留白收窄（px-4 与顶栏同款）：此前 main 只有桌面档 px-8，
+          顶栏 16px / 卡片 32px 两套缩进并存，手机上卡片看起来整体偏右（2026-10-01 用户反馈） */}
+      <main className="flex-1 overflow-auto px-4 py-4 sm:px-8 sm:py-6">
         {corruptedNotice ? (
           <div className="mb-4 rounded border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
             {corruptedNotice}
