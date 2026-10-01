@@ -72,5 +72,11 @@ export default defineConfig(() => ({
     // scripts/ 那一份是构建脚本里的纯逻辑（安卓架构映射、任务名、版本号）——
     // 真跑一次几十分钟，能在编译期判的字符串就别交给机器等
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'scripts/**/*.test.mjs'],
+    // ⚠️ 必须串行执行测试文件（2026-10-01 实测）：并发收集时本机沙箱的文件代理
+    // （node-brokered-fs-shim）在高并发下会拖垮 worker —— collect 阶段从 8s 涨到
+    // 57s、抛 EPERM 未处理错误（exit=1），最坏情况是**静默丢弃个别测试文件**
+    // （architecture.test.ts 整文件 14 例消失，但报告仍显示全 passed），门禁假绿。
+    // 串行后 149 文件 1731 例全过、exit=0、全量约 63s，可接受。
+    fileParallelism: false,
   },
 }))
