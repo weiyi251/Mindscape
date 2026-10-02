@@ -20,8 +20,8 @@ describe('visibleSettingsPages', () => {
     expect(idsOf(WINDOWS_UA)).toEqual(['shortcuts', 'appearance', 'update', 'plugins'])
   })
 
-  it('Android：快捷键页与更新页整页隐藏，剩外观与插件两页', () => {
-    expect(idsOf(ANDROID_UA)).toEqual(['appearance', 'plugins'])
+  it('Android：只有快捷键页隐藏，剩外观 / 更新 / 插件三页（更新页页内自分流，2026-10-03）', () => {
+    expect(idsOf(ANDROID_UA)).toEqual(['appearance', 'update', 'plugins'])
   })
 
   it('默认页取第一张可见页（移动端不会停在快捷键页上）', () => {

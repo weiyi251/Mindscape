@@ -42,13 +42,15 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
   // 外观页双端可见（无 requires）：毛玻璃与壁纸在桌面 / 安卓上都可调
   { id: 'appearance', label: APPEARANCE_TEXT.pageAppearance, Component: SettingsAppearancePage },
-  { id: 'update', label: SETTINGS_TEXT.pageUpdate, Component: SettingsUpdatePage, requires: 'autoUpdate' },
+  // 版本更新页双端可见（2026-10-03 用户要求）：页内自分流 —— 桌面走 updater 检查，
+  // 移动端显示当前版本并引导到发布页下载 APK（安卓侧载没有 updater 渠道）
+  { id: 'update', label: SETTINGS_TEXT.pageUpdate, Component: SettingsUpdatePage },
   { id: 'plugins', label: SETTINGS_TEXT.pagePlugins, Component: SettingsPluginsPage },
 ]
 
 /**
- * 当前平台可见的设置页。移动端剩「外观」与「插件」：
- * 没有物理键盘（快捷键页无意义）、APK 侧载没有 updater 渠道（更新页无意义）。
+ * 当前平台可见的设置页。移动端剩「外观 / 更新 / 插件」三页：
+ * 只有快捷键页隐藏 —— 没有物理键盘，改绑与冲突检测都无意义。
  */
 export function visibleSettingsPages(userAgent: string = currentUserAgent()): SettingsPage[] {
   return SETTINGS_PAGES.filter((page) => supportsCapability(page.requires, userAgent))

@@ -480,7 +480,7 @@ const UNTESTED_ALLOWLIST: Record<string, string> = {
   // 注：settings-panel.tsx 曾有本条豁免，2026-09-28 补 settings-panel.test.tsx
   // （锁「只有一张可见页时整条导航都不渲染 / 多页照旧」），条目随之删除。
   'src/components/ui/settings-shortcuts.tsx': '渲染层（键位匹配/冲突检测在 core/shortcuts/keys.ts 已测）',
-  'src/components/ui/settings-update.tsx': '渲染层（版本状态在 core/store/updaterStore.ts 已测）',
+  // 注：settings-update.tsx 曾有本条豁免，2026-10-03 补 settings-update.test.tsx（移动端分流）后删除
   'src/components/ui/update-dialog.tsx': '渲染层',
   // 注：plugin-list-item.tsx 曾有本条豁免，2026-09-28 补 plugin-list-item.test.tsx
   // （锁「窄屏两个按钮 ≥44px + 桌面用 sm: 回落原尺寸」），条目随之删除。

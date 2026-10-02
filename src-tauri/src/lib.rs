@@ -54,6 +54,8 @@ pub fn run() {
             commands::system::read_image_size,
             commands::system::open_with_default,
             commands::system::reveal_in_explorer,
+            // 版本更新页「打开发布页」：双端可用，安卓侧载用它引导下载新 APK（2026-10-03）
+            commands::system::open_release_page,
             commands::clipboard::write_clipboard_files,
             commands::clipboard::write_clipboard_files_and_text,
             commands::clipboard::write_clipboard_text,

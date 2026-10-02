@@ -115,6 +115,25 @@ fn open_with_default_on(path: String, is_mobile: bool) -> Result<(), String> {
         .map_err(|error| format!("打开失败：{path}（{error}）"))
 }
 
+/// 应用发布页（GitHub Releases 的 latest 固定链接）。
+///
+/// URL 固定在 Rust 侧、命令不收前端参数：即使前端被注入，也只能打开这个
+/// 写死的地址，不能唤起浏览器去任意 URL。
+pub const RELEASE_PAGE_URL: &str = "https://github.com/weiyi251/Mindscape/releases/latest";
+
+/// 在系统浏览器里打开发布页（双端可用）。
+///
+/// 安卓侧载没有 updater 渠道（lib.rs 里 updater 插件只在桌面装配），
+/// 版本更新页在移动端用它引导用户到发布页下载新 APK 覆盖安装；
+/// 桌面端自动更新失败时也可手动兜底。走 opener 的 Rust API，
+/// 不需要 capabilities 授权（与 open_with_default 同一模式）。
+/// 注意：这里刻意**不**套 `desktop_only_guard` —— 本命令就是给移动端用的。
+#[tauri::command]
+pub fn open_release_page() -> Result<(), String> {
+    tauri_plugin_opener::open_url(RELEASE_PAGE_URL, None::<&str>)
+        .map_err(|error| format!("打开发布页失败：{error}"))
+}
+
 /// 桌面专属能力的统一拒绝口径（纯函数，便于单测；2026-09-21 移动端适配 M1）。
 ///
 /// 前端有平台能力表（`src/core/system/platformCapabilities.ts`）负责不显示这些入口，
@@ -335,5 +354,15 @@ mod tests {
     #[test]
     fn desktop_only_guard_lets_desktop_through() {
         assert!(desktop_only_guard("在文件夹中定位文件", false).is_ok());
+    }
+
+    #[test]
+    fn release_page_url_points_to_projects_latest_release() {
+        // 守卫常量而非真开浏览器：URL 必须是本仓库发布页的固定链接，
+        // 防止将来手滑改成别的站点（命令不收前端参数，这是唯一入口）。
+        assert_eq!(
+            RELEASE_PAGE_URL,
+            "https://github.com/weiyi251/Mindscape/releases/latest"
+        );
     }
 }

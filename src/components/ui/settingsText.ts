@@ -31,6 +31,11 @@ export const SETTINGS_TEXT = {
   latestVersion: '最新版本',
   checkNow: '检查更新',
   unknownVersion: '未知',
+  /* 版本更新页 · 移动端（安卓侧载没有 updater 渠道，引导去发布页下载 APK） */
+  updateMobileHint:
+    '安卓端没有应用内自动更新。升级方式：打开发布页，下载最新的 APK 覆盖安装（空间数据保留，不受影响）。',
+  openReleasePage: '打开发布页',
+  openReleaseFailed: '打开发布页失败，请检查网络后重试',
 } as const
 
 /** 「自定义快捷键」页的文案常量表 */
