@@ -244,12 +244,32 @@
   }
 
   /*
+   * 画布整面玻璃（2026-10-02 用户需求「毛玻璃要覆盖在背景之上」）：
+   * 铺在壁纸与全部内容之间（壁纸 -z-20、本层 -z-10、内容正常流）。
+   * 性能关键：它的背衬只有静态壁纸 —— 卡片 / 画布都在本层**之上**活动，
+   * 合成器不需要因为内容移动而重采样本层，与把 blur 落在画布浮件上（17.11）
+   * 是两码事。底色取 --glass-canvas-alpha（面板 alpha 的 0.4 倍，封顶 0.5）：
+   * 画布上浮的卡片自带实色底，玻璃可以更透，壁纸才「透得出来」。
+   * 无边框无阴影（全窗铺满，边框没有意义）。
+   */
+  .glass-canvas-layer {
+    background-color: rgb(var(--glass-tint) / var(--glass-canvas-alpha, 0.3));
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  }
+
+  /*
    * 不支持 backdrop-filter 的环境（老内核）：整层玻璃退化为实色底 ——
    * 可读性永远优先于质感，边框与阴影照旧。
    */
   @supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
     .glass-panel {
       background-color: rgb(var(--glass-tint));
+    }
+    /* 画布玻璃退化为半透明底色（不做实色：整窗全遮会把壁纸完全埋掉） */
+    .glass-canvas-layer {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
     }
   }
 }
